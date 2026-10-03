@@ -6,7 +6,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const BUILD = 'api-r1.0'
+const BUILD = 'api-r1.1'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -149,29 +149,54 @@ async function recipes() {
   return must(await svc.from('recipes').select('id,title,category').order('title').limit(3000))
 }
 
+/* Recipe card = Brigade's BR-UI02 card (PREP | COST | STRUCTURE), same data and same FC05 cost engine.
+   Staff never receive price, cost or margin fields: they are stripped here, server-side. */
+const BOM_COLS = 'bom_id,parent_recipe_id,quantity,unit,notes,component_type,item_id,sub_recipe_id,sort_order,prep_task_id,ingredients(name,name_it,name_es),recipes!recipe_bom_sub_recipe_id_fkey(id,title,base_servings,base_weight_g,base_weight,weight_unit,serving_weight_g,serving_qty,serving_unit,yield_text)'
+const MONEY = /price|cost|margin|revenue|markup/i
+function stripMoney(o: any) { const x: any = {}; Object.keys(o || {}).forEach(k => { if (!MONEY.test(k)) x[k] = o[k] }); return x }
+const isUuid = (id: string) => /^[0-9a-f-]{36}$/.test(id)
+
 async function recipe(u: User, id: string) {
-  if (!/^[0-9a-f-]{36}$/.test(id)) throw bad('bad_id')
-  const cols = 'id,title,category,yield_text,prep_time_minutes,ingredients,procedure,procedure_en,equipment,shelf_life_days' + (u.role === 'chef' ? ',selling_price,food_cost_pct' : '')
-  const [r, steps, bom, y, preps] = await Promise.all([
-    svc.from('recipes').select(cols).eq('id', id).maybeSingle().then(must),
-    svc.from('recipe_steps').select('step_number,title,instruction_en,timer_seconds').eq('recipe_id', id).order('step_number').then(must),
-    svc.from('recipe_bom').select('component_type,item_id,sub_recipe_id,quantity,unit,notes,sort_order').eq('parent_recipe_id', id).order('sort_order').then(must),
-    svc.from('recipe_yield').select('portions,yield_qty,yield_dim,has_yield').eq('id', id).maybeSingle().then(must),
+  if (!isUuid(id)) throw bad('bad_id')
+  const [r, steps, bom, preps, usedIn] = await Promise.all([
+    svc.from('recipes').select('*').eq('id', id).maybeSingle().then(must),
+    svc.from('recipe_steps').select('*').eq('recipe_id', id).order('step_number').then(must),
+    svc.from('recipe_bom').select(BOM_COLS).eq('parent_recipe_id', id).order('sort_order').then(must),
     svc.from('prep_tasks').select('id,name,unit').eq('recipe_id', id).not('archived', 'is', true).then(must),
+    svc.from('recipe_bom').select('parent_recipe_id').eq('sub_recipe_id', id).then(must),
   ]) as any[]
   if (!r) throw new HttpError(404, 'not_found')
-  const ingIds = [...new Set(bom.filter((b: any) => b.item_id).map((b: any) => b.item_id))]
-  const subIds = [...new Set(bom.filter((b: any) => b.sub_recipe_id).map((b: any) => b.sub_recipe_id))]
-  const [ings, subs] = await Promise.all([
-    ingIds.length ? svc.from('ingredients').select('id,name').in('id', ingIds).then(must) : [],
-    subIds.length ? svc.from('recipes').select('id,title').in('id', subIds).then(must) : [],
-  ]) as any[]
-  const iN: any = {}; ings.forEach((i: any) => { iN[i.id] = i.name })
-  const sN: any = {}; subs.forEach((s: any) => { sN[s.id] = s.title })
-  const components = bom.map((b: any) => b.sub_recipe_id
-    ? { name: sN[b.sub_recipe_id] || 'Sub-recipe', qty: b.quantity, unit: b.unit, note: b.notes, recipe_id: b.sub_recipe_id }
-    : { name: iN[b.item_id] || 'Ingredient', qty: b.quantity, unit: b.unit, note: b.notes })
-  return { recipe: r, steps, components, yield: y, preps }
+  const parents = [...new Set(usedIn.map((x: any) => x.parent_recipe_id))]
+  const used = parents.length ? must(await svc.from('recipes').select('id,title').in('id', parents).order('title')) : []
+  const rec = u.role === 'chef' ? r : stripMoney(r)
+  return { recipe: rec, steps: steps.map(stripMoney), bom, preps, used_in: used, can_cost: u.role === 'chef' }
+}
+
+// STRUCTURE: the sub-recipe BOMs at every level (max 6) and the names of linked preps — reads only.
+async function recipeTree(u: User, id: string) {
+  if (!isUuid(id)) throw bad('bad_id')
+  const byParent: Record<string, any[]> = {}
+  let frontier = [id]
+  for (let depth = 0; depth < 7 && frontier.length; depth++) {
+    const ask = frontier.filter(x => !(x in byParent))
+    if (!ask.length) break
+    const rows = must(await svc.from('recipe_bom').select(BOM_COLS).in('parent_recipe_id', ask).order('sort_order')) as any[]
+    ask.forEach(x => { byParent[x] = [] })
+    rows.forEach(r => byParent[r.parent_recipe_id].push(r))
+    frontier = [...new Set(rows.filter(r => r.component_type === 'RECIPE' && r.sub_recipe_id).map(r => r.sub_recipe_id))]
+  }
+  const prepIds = [...new Set(Object.values(byParent).flat().map((r: any) => r.prep_task_id).filter((x: any) => x != null))]
+  const preps = prepIds.length ? must(await svc.from('prep_tasks').select('id,name').in('id', prepIds)) : []
+  return { byParent, preps }
+}
+
+// COST: FC05 engine (food_cost.recipe_breakdown) via app_recipe_cost — Chef only.
+async function recipeCost(u: User, id: string) {
+  if (u.role !== 'chef') throw forbid()
+  if (!isUuid(id)) throw bad('bad_id')
+  const r = await svc.rpc('app_recipe_cost', { p_recipe_id: id })
+  if (r.error) throw r.error
+  return { ok: true, breakdown: r.data }
 }
 
 async function prepDetail(u: User, id: number) {
@@ -264,6 +289,8 @@ Deno.serve(async (req: Request) => {
       case 'shift': out = await shift(u); break
       case 'recipes': out = { recipes: await recipes() }; break
       case 'recipe': out = await recipe(u, String(body.id || '')); break
+      case 'recipe_tree': out = await recipeTree(u, String(body.id || '')); break
+      case 'recipe_cost': out = await recipeCost(u, String(body.id || '')); break
       case 'prep': out = await prepDetail(u, Number(body.id)); break
       case 'planner': out = await planner(u); break
       case 'catering': out = await catering(u); break

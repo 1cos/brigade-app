@@ -279,3 +279,46 @@ textarea.search{height:auto;min-height:120px;padding:12px 14px;resize:vertical}
 .msg .txt{font-size:18px;margin-top:2px;white-space:pre-wrap}
 .msg.unread .txt{font-weight:650}
 .testbar{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--warn)}
+
+/* ===== Recipe card (BR-UI02 layout) in the V020-B theme: same tokens, same font ===== */
+.rc-sticky{position:sticky;top:-18px;z-index:5;background:var(--bg);margin:0 -16px;padding:10px 16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
+.rc-amt{background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:6px 12px}
+.rc-row{display:flex;align-items:center;gap:12px}
+.rc-row label{display:flex;flex-direction:column;line-height:1.15;flex:none;min-width:78px}
+.rc-row label b{font-size:16px}
+.rc-row label small{font-size:13px;color:var(--tx2);white-space:nowrap}
+#rcAmount{width:92px;height:52px;flex:none;border-radius:14px;border:2px solid var(--c,var(--rest));background:var(--surf);color:var(--tx);text-align:center;font-family:var(--fd);font-weight:800;font-size:22px;font-variant-numeric:tabular-nums}
+#rcRange{flex:1;min-width:0;accent-color:var(--c,var(--rest));height:44px;margin:0}
+.rc-over{font-size:14px;color:var(--warn);padding:2px 0 6px}
+.rc-seg button{font-size:15px;letter-spacing:.05em}
+.rc-body{display:flex;flex-direction:column;gap:22px}
+.rc-it{align-items:flex-start;text-align:left;width:100%}
+.rc-it .rc-grow{flex:1;min-width:0;overflow-wrap:anywhere}
+.rc-it small{display:block;font-size:14px;font-weight:400;color:var(--tx2);font-family:var(--fb)}
+.rc-it small.warn{color:var(--warn)} .rc-it small.bad{color:var(--warn);font-weight:600}
+.rc-it b{text-align:right}
+.rc-it b.unk{color:var(--warn);font-size:16px} .rc-it b.est{color:var(--warn)}
+.rc-it .chev{align-self:center}
+.rc-badge{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--surf2);color:var(--tx2);margin-left:8px;vertical-align:2px;white-space:nowrap;font-family:var(--fb)}
+.rc-badge.a{background:var(--ok-bg);color:var(--ok)} .rc-badge.b,.rc-badge.c{background:var(--warn-bg);color:var(--warn)} .rc-badge.x{background:var(--warn-bg);color:var(--warn)}
+.rc-sechead{font-size:13px;letter-spacing:.07em;text-transform:uppercase;color:var(--txm);font-weight:800;padding:12px 16px 4px;border-top:1px solid var(--line)}
+.rc-empty{padding:16px;color:var(--tx2)}
+.rc-proc{padding:14px 16px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:17px}
+.rc-small{font-size:15px}
+.rc-state{border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--line);background:var(--surf)}
+.rc-state.ok{background:var(--ok-bg);border-color:var(--ok)} .rc-state.est,.rc-state.bad{background:var(--warn-bg);border-color:var(--warn)}
+.rc-lbl{font-weight:800;font-size:17px}
+.rc-state.ok .rc-lbl{color:var(--ok)} .rc-state.est .rc-lbl,.rc-state.bad .rc-lbl{color:var(--warn)}
+.rc-why{font-size:15px;color:var(--tx)}
+.rc-money{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rc-money div{background:var(--surf);border-radius:14px;padding:12px;min-width:0}
+.rc-money span{display:block;font-size:13px;color:var(--tx2)}
+.rc-money b{font-family:var(--fd);font-size:24px;overflow-wrap:anywhere}
+.rc-money b.unk{font-family:var(--fb);font-size:15px;color:var(--tx2);font-weight:600}
+.rc-src{font-size:14px;color:var(--tx2)}
+.rc-issue{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:14px 16px;border-top:1px solid var(--line)}
+.rc-issue:first-child{border-top:0}
+.rc-ic{width:26px;height:26px;border-radius:50%;background:var(--warn);color:var(--surf);display:grid;place-items:center;font-weight:800;font-size:15px}
+.rc-ic.w{background:var(--txm)}
+.rc-issue b{display:block;font-size:16px}
+.rc-issue span{display:block;font-size:14px;color:var(--tx2);overflow-wrap:anywhere}
