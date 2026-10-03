@@ -1,0 +1,899 @@
+<title>Shell Lab V020</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&display=swap">
+<style>
+/* Layout: fixed shell — tab strip on top, one big scrolling column, four worlds at the thumb. */
+:root{
+  --bg:#f2f5fa; --surf:#ffffff; --surf2:#e8eef7; --line:#d9e1ee;
+  --tx:#14233b; --tx2:#4a5d7a; --txm:#7b8ba3;
+  --today:#1d4ed8; --rest:#0f766e; --cat:#7c3aed; --plan:#b45309;
+  --ok:#15803d; --ok-bg:#e6f4ea; --warn:#c2410c; --warn-bg:#fdeee6;
+  --shadow:0 1px 2px rgba(20,35,59,.06),0 4px 14px rgba(20,35,59,.06);
+  --fd:'Archivo',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+  --fb:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial,sans-serif;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1420; --surf:#172131; --surf2:#1f2b3e; --line:#2a3850;
+  --tx:#eef2f8; --tx2:#b3c0d4; --txm:#7f8ea6;
+  --today:#6d95ff; --rest:#2dd4bf; --cat:#a78bfa; --plan:#f59e0b;
+  --ok:#4ade80; --ok-bg:#12301f; --warn:#fb923c; --warn-bg:#3a1f12;
+  --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0d1420; --surf:#172131; --surf2:#1f2b3e; --line:#2a3850;
+  --tx:#eef2f8; --tx2:#b3c0d4; --txm:#7f8ea6;
+  --today:#6d95ff; --rest:#2dd4bf; --cat:#a78bfa; --plan:#f59e0b;
+  --ok:#4ade80; --ok-bg:#12301f; --warn:#fb923c; --warn-bg:#3a1f12;
+  --shadow:0 1px 2px rgba(0,0,0,.3); color-scheme:dark }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--fb);font-size:17px;line-height:1.35;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+button:focus-visible{outline:3px solid var(--today);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* top: lab label + tabs */
+#top{position:fixed;left:0;right:0;top:0;z-index:20;background:var(--bg);padding-top:var(--sat);border-bottom:1px solid var(--line)}
+.lab{display:flex;justify-content:space-between;align-items:center;padding:6px 16px 0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--txm)}
+.lab b{color:var(--tx2)}
+#tabs{display:flex;gap:8px;overflow-x:auto;padding:8px 16px 10px;scrollbar-width:none;scroll-snap-type:x proximity}
+#tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;display:flex;align-items:center;gap:8px;height:48px;padding:0 6px 0 14px;border-radius:14px;background:var(--surf);border:1.5px solid var(--line);font-weight:650;font-size:16px;max-width:240px;scroll-snap-align:start}
+.tab .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+.tab.on{border-color:var(--c,var(--today));box-shadow:0 0 0 1.5px var(--c,var(--today)) inset;background:var(--surf)}
+.tab.home{padding-right:14px}
+.tab .x{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--txm);font-size:20px;flex:0 0 auto}
+.tab .x:active{background:var(--surf2)}
+.tab.plus{padding:0;width:48px;justify-content:center;font-size:26px;color:var(--tx2)}
+
+/* main */
+#main{position:fixed;left:0;right:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.page{padding:18px 16px 40px;max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+
+/* bottom worlds */
+#worlds{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surf);border-top:1px solid var(--line);padding:6px 8px calc(6px + var(--sab));display:grid;grid-template-columns:1fr 1fr 1.1fr 1fr 1fr;gap:2px;align-items:end}
+.w.ask{color:var(--tx)}
+.w.ask .orb{width:54px;height:54px;border-radius:18px;display:grid;place-items:center;background:var(--tx);color:var(--bg);margin-top:-22px;box-shadow:0 6px 18px rgba(20,35,59,.25)}
+.w.ask .orb svg{width:28px;height:28px}
+.w{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0 6px;border-radius:14px;font-size:13px;font-weight:700;color:var(--txm)}
+.w svg{width:28px;height:28px}
+.w.on{color:var(--c);background:var(--surf2)}
+
+/* type */
+.eyebrow{font-size:13px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--txm)}
+h1{font-family:var(--fd);font-size:34px;line-height:1.05;margin:0;font-weight:800;letter-spacing:-.01em;text-wrap:balance}
+h2{font-family:var(--fd);font-size:15px;margin:0 0 10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txm)}
+.sub{color:var(--tx2);font-size:18px;margin-top:6px}
+.back{display:flex;align-items:center;gap:6px;height:44px;color:var(--c,var(--today));font-weight:700;font-size:17px;margin:-8px 0 -10px}
+.back svg{width:22px;height:22px}
+
+/* blocks */
+.card{background:var(--surf);border-radius:20px;box-shadow:var(--shadow);border:1px solid var(--line)}
+.list{background:var(--surf);border-radius:20px;border:1px solid var(--line);overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 16px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row:active,.big:active,.hero:active,.day:active{filter:brightness(.96)}
+.row .main{flex:1;min-width:0}
+.row .name{font-size:19px;font-weight:650}
+.row .meta{font-size:15px;color:var(--tx2);margin-top:2px}
+.row .qty{font-family:var(--fd);font-weight:800;font-size:24px;white-space:nowrap}
+.chev{color:var(--txm);font-size:24px;flex:0 0 auto}
+.check{width:44px;height:44px;border-radius:50%;border:2.5px solid var(--line);flex:0 0 auto;display:grid;place-items:center}
+.check.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.check svg{width:22px;height:22px}
+.row.done .name,.row.done .qty{color:var(--txm);text-decoration:line-through;text-decoration-thickness:2px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--surf2);color:var(--tx2);white-space:nowrap}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.cat{background:color-mix(in srgb,var(--cat) 14%,transparent);color:var(--cat)}
+.pill.rest{background:color-mix(in srgb,var(--rest) 14%,transparent);color:var(--rest)}
+
+/* combined qty split */
+.split{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:8px;background:var(--surf2)}
+.bar i{display:block}
+
+/* hero */
+.hero{display:block;width:100%;padding:20px;border-radius:24px;background:var(--c);color:#fff;box-shadow:var(--shadow)}
+.hero .k{font-size:14px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;opacity:.85}
+.hero .t{font-family:var(--fd);font-weight:800;font-size:30px;line-height:1.1;margin-top:6px}
+.hero .m{font-size:18px;margin-top:6px;opacity:.95}
+.hero .go{display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.3);font-weight:700;font-size:18px}
+.hero .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.hero .chips span{background:rgba(255,255,255,.2);padding:5px 12px;border-radius:999px;font-weight:700;font-size:15px}
+
+/* big tiles */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.big{display:flex;flex-direction:column;justify-content:space-between;gap:18px;min-height:132px;padding:18px;border-radius:22px;background:var(--surf);border:1px solid var(--line);box-shadow:var(--shadow)}
+.big .lbl{font-family:var(--fd);font-weight:800;font-size:23px;line-height:1.1}
+.big .val{font-size:16px;color:var(--tx2)}
+.big .val b{color:var(--tx);font-size:20px}
+.big.alert .val b{color:var(--warn)}
+.big svg{width:30px;height:30px;color:var(--c)}
+
+/* segmented */
+.seg{display:flex;gap:6px;background:var(--surf2);padding:5px;border-radius:16px;overflow-x:auto;scrollbar-width:none}
+.seg button{flex:1 0 auto;height:46px;border-radius:12px;font-weight:700;font-size:16px;text-align:center;padding:0 12px;color:var(--tx2)}
+.seg button.on{background:var(--surf);color:var(--tx);box-shadow:var(--shadow)}
+
+/* ring */
+.ring{display:flex;align-items:center;gap:16px;padding:16px}
+.ring svg{width:68px;height:68px;flex:0 0 auto}
+.ring .big1{font-family:var(--fd);font-weight:800;font-size:26px}
+
+/* note / banner */
+.note{padding:14px 16px;border-radius:16px;background:var(--surf2);color:var(--tx2);font-size:16px}
+.banner{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:18px;background:color-mix(in srgb,var(--c) 12%,var(--surf));border:1.5px solid color-mix(in srgb,var(--c) 40%,transparent)}
+.banner .main{flex:1;min-width:0}
+.banner b{font-size:18px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 18px;border-radius:14px;font-weight:750;font-size:16px;background:var(--c,var(--today));color:#fff;text-align:center}
+.btn.ghost{background:var(--surf);color:var(--c,var(--today));border:1.5px solid currentColor}
+.fix{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:18px;background:var(--warn-bg);color:var(--tx)}
+.fix .h{font-weight:800;color:var(--warn);font-size:17px}
+
+/* planner */
+.week{display:flex;flex-direction:column;gap:10px}
+.day{display:flex;gap:16px;align-items:stretch;width:100%;padding:14px 16px;border-radius:20px;background:var(--surf);border:1px solid var(--line);box-shadow:var(--shadow)}
+.day .d{width:58px;flex:0 0 auto;text-align:center}
+.day .d .dn{font-size:14px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txm)}
+.day .d .dd{font-family:var(--fd);font-weight:800;font-size:38px;line-height:1}
+.day .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;justify-content:center}
+.day .ev{font-weight:750;font-size:18px;color:var(--cat)}
+.day .sum{font-size:15px;color:var(--tx2)}
+.day.today{border:2.5px solid var(--plan)}
+.day.today .dd,.day.today .dn{color:var(--plan)}
+.day.past{opacity:.5}
+.day.closed .sum{font-style:italic}
+.wk{display:flex;justify-content:space-between;align-items:center}
+.wk button{height:44px;padding:0 14px;border-radius:12px;background:var(--surf);border:1px solid var(--line);font-weight:700;color:var(--plan)}
+
+/* ingredients/steps */
+.ing{display:flex;justify-content:space-between;gap:12px;padding:14px 16px;border-top:1px solid var(--line);font-size:18px}
+.ing:first-child{border-top:0}
+.ing b{font-family:var(--fd);font-size:20px;white-space:nowrap}
+.step{display:flex;gap:14px;padding:14px 16px;border-top:1px solid var(--line);font-size:18px}
+.step:first-child{border-top:0}
+.step .n{font-family:var(--fd);font-weight:800;font-size:20px;color:var(--c);width:24px;flex:0 0 auto}
+.qbtns{display:flex;gap:8px;flex-wrap:wrap}
+.qbtns button{min-height:52px;padding:6px 14px;border-radius:14px;background:var(--surf);border:1.5px solid var(--line);font-weight:700;font-size:15px;text-align:center;line-height:1.15}
+.qbtns button b{display:block;font-family:var(--fd);font-size:19px}
+.qbtns button.on{border-color:var(--c);color:var(--c);box-shadow:0 0 0 1.5px var(--c) inset}
+
+/* sheet */
+#scrim{position:fixed;inset:0;background:rgba(10,18,30,.45);z-index:40}
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--bg);border-radius:24px 24px 0 0;max-height:82%;overflow-y:auto;padding:10px 16px calc(24px + var(--sab))}
+#sheet .grab{width:44px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 14px}
+#sheet .page{padding:0}
+@media (prefers-reduced-motion:no-preference){#sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(40px);opacity:.6}}}
+.toast{position:fixed;left:16px;right:16px;z-index:50;background:var(--tx);color:var(--bg);padding:10px 10px 10px 18px;border-radius:16px;font-weight:700;font-size:16px;display:flex;align-items:center;gap:12px;min-height:56px;max-width:560px;margin:0 auto}
+.toast span{flex:1;min-width:0}
+.toast button{color:var(--bg);border:1.5px solid currentColor;border-radius:12px;padding:0 16px;height:44px;font-weight:800}
+/* narrative today */
+.greet h1{font-size:36px}
+.brief{font-size:20px;line-height:1.4;color:var(--tx2);margin-top:10px;text-wrap:pretty}
+.brief b{color:var(--tx)}
+.chap{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 10px}
+.chap h2{margin:0}
+.chap span{font-size:15px;color:var(--txm);font-weight:600}
+.row.donebg{background:var(--ok-bg)}
+.defer{padding:16px;border-radius:20px;background:var(--surf2);display:flex;flex-direction:column;gap:12px}
+.defer .name{font-size:19px;font-weight:700}
+.defer p{margin:0;color:var(--tx2);font-size:16px}
+.decide{display:flex;align-items:center;gap:14px;width:100%;padding:16px;border-radius:20px;background:var(--warn-bg);border:1px solid color-mix(in srgb,var(--warn) 25%,transparent)}
+.decide .main{flex:1;min-width:0}
+.decide .name{font-size:19px;font-weight:700}
+.decide .meta{font-size:15px;color:var(--tx2)}
+.feed{display:flex;flex-direction:column}
+.feed div{display:flex;gap:14px;padding:9px 2px;font-size:16px;color:var(--tx2);border-top:1px solid var(--line)}
+.feed div:first-child{border-top:0}
+.feed time{font-variant-numeric:tabular-nums;color:var(--txm);width:46px;flex:0 0 auto;font-weight:600}
+.feed .later{color:var(--txm);font-style:italic}
+.feed .mine{color:var(--tx);font-weight:600}
+/* ask */
+.askin{width:100%;height:58px;border-radius:16px;border:2px solid var(--line);background:var(--surf);color:var(--tx);font:inherit;font-size:19px;padding:0 16px}
+.askin:focus{outline:none;border-color:var(--today)}
+.chips{display:flex;flex-direction:column;gap:8px}
+.chips button{min-height:52px;padding:10px 16px;border-radius:14px;background:var(--surf);border:1px solid var(--line);font-size:17px;font-weight:600;color:var(--tx)}
+.chips button i{font-style:normal;color:var(--txm);font-weight:500;font-size:14px;display:block}
+.preview{padding:18px;border-radius:20px;background:var(--surf);border:2px solid var(--today);display:flex;flex-direction:column;gap:12px}
+.preview .k{font-size:13px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--today)}
+.preview .t{font-family:var(--fd);font-weight:800;font-size:26px;line-height:1.1}
+.preview .acts{display:flex;gap:10px}
+.preview .acts .btn{flex:1}
+.answer{padding:18px;border-radius:20px;background:var(--surf);border:1px solid var(--line);font-size:18px;line-height:1.45;display:flex;flex-direction:column;gap:12px}
+.why{color:var(--today);font-weight:700;font-size:16px;min-height:44px;display:inline-flex;align-items:center}
+</style>
+
+<div id="top">
+  <div class="lab"><span><b>Shell Lab V020</b> · demo data</span><span>Fri 9 Oct · demo day</span></div>
+  <div id="tabs" role="tablist"></div>
+</div>
+<div id="main"></div>
+<nav id="worlds"></nav>
+<div id="scrim" hidden></div>
+<div id="sheet" hidden></div>
+
+<script>
+/* ============ DEMO DATA (fake, not connected to Brigade) ============ */
+const WORLDS = {
+  today:      {label:'Today',      c:'--today'},
+  restaurant: {label:'Restaurant', c:'--rest'},
+  catering:   {label:'Catering',   c:'--cat'},
+  planner:    {label:'Planner',    c:'--plan'},
+};
+const ICON = {
+  today:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  restaurant:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2v20M4 2v6a3 3 0 0 0 6 0V2M17 22V2c-2.5 1-4 4-4 8h4"/></svg>',
+  catering:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h18M4 17a8 8 0 0 1 16 0M12 9V7M10 7h4M2 20h20"/></svg>',
+  planner:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>',
+  prep:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16l-1.5 8h-13zM8 12V8a4 4 0 0 1 8 0v4"/></svg>',
+  book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M4 16a4 4 0 0 1 4-4h10"/></svg>',
+  box:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg>',
+  sales:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  alert:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/></svg>',
+  station:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
+  cart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h3l3 12h11l2-8H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>',
+  fire:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 7-3 7-7 0-5-5-8-6-13-3 3-4 6-4 9-1-1-2-2-2-4-2 2-2 5-2 8 0 4 3 7 7 7z"/></svg>',
+  ask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  back:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  tick:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>',
+};
+
+/* Recipes: base batch + ingredients [name, qty, unit, ingredientId?] */
+const RECIPES = {
+  arrabbiata:{name:'Arrabbiata sauce', station:'Sauté', time:'50 min', base:3, unit:'kg', batchLabel:'1 batch',
+    ing:[['San Marzano tomatoes',2400,'g','sanmarzano'],['Olive oil',150,'g'],['Garlic, sliced',80,'g'],['Calabrian chili paste',45,'g'],['Chili flakes',6,'g'],['Salt',28,'g'],['Basil',1,'bunch','basil']],
+    steps:['Warm oil, add garlic on low heat until pale gold.','Add chili paste and flakes, 30 seconds.','Add crushed tomatoes and salt. Simmer 35 min, stir every 10.','Off heat, tear in basil. Cool in shallow hotel pans, label, date.']},
+  meatball:{name:'Meatball sauce', station:'Sauté', time:'1 h 20', base:2, unit:'kg', batchLabel:'1 batch',
+    ing:[['San Marzano tomatoes',1600,'g','sanmarzano'],['Onion, brunoise',200,'g'],['Olive oil',80,'g'],['Parmigiano rind',1,'pc','parmigiano'],['Salt',18,'g']],
+    steps:['Sweat onion in oil, no color.','Add tomatoes and rind, simmer 1 hour.','Remove rind, season, cool and label.']},
+  focaccia:{name:'Focaccia', station:'Pizza / Bread', time:'Dough day before', base:1, unit:'sheet', batchLabel:'1 sheet',
+    ing:[['Bread flour',1000,'g'],['Water',800,'g'],['Salt',22,'g'],['Dry yeast',4,'g'],['Olive oil',120,'g'],['Flaky salt',8,'g']],
+    steps:['Day before: mix, 4 folds every 30 min, cold proof overnight.','Oil sheet pan, stretch dough, proof 2 h at room temperature.','Dimple, oil, flaky salt. Bake 230°C for 22 min.']},
+  tiramisu:{name:'Mini tiramisu', station:'Pastry', time:'Set 6 h', base:24, unit:'cups', batchLabel:'1 batch',
+    ing:[['Mascarpone',500,'g','mascarpone'],['Egg yolks',6,'pcs'],['Sugar',120,'g'],['Heavy cream',250,'g'],['Savoiardi',36,'pcs'],['Espresso',400,'ml'],['Cocoa',15,'g']],
+    steps:['Whip yolks and sugar to ribbon.','Fold in mascarpone, then whipped cream.','Dip half a savoiardo in espresso per cup, pipe cream, repeat.','Chill at least 6 h. Dust cocoa right before service.']},
+  lasagna:{name:'Lasagna', station:'Pasta', time:'Bake 1 h', base:1, unit:'hotel pan', batchLabel:'1 pan',
+    check:'lasagna',
+    ing:[['Pasta sheets',1200,'g'],['Bolognese',3000,'g'],['Béchamel',2000,'g'],['Parmigiano',300,'g','parmigiano'],['Mozzarella',600,'g']],
+    steps:['Layer: sauce, pasta, béchamel, Bolognese, parmigiano. 6 layers.','Cover, bake 170°C 45 min, uncover 15 min.','Rest 30 min before cutting.']},
+  chickenparm:{name:'Chicken Parmesan', station:'Sauté', time:'25 min', base:1, unit:'portion', batchLabel:'1 portion',
+    check:'chickenparm',
+    ing:[['Premium chicken breast',180,'g','chicken'],['Breadcrumb',40,'g'],['Egg',0.5,'pcs'],['Marinara',90,'g'],['Mozzarella',50,'g'],['Parmigiano',10,'g','parmigiano']],
+    steps:['Pound breast to 1 cm, bread: flour, egg, crumb.','Shallow fry 3 min per side.','Top with marinara and mozzarella, finish in oven 6 min.']},
+  caesar:{name:'Caesar dressing', station:'Garde manger', time:'15 min', base:1, unit:'L', batchLabel:'1 batch',
+    ing:[['Egg yolks',4,'pcs'],['Anchovy',30,'g'],['Garlic',10,'g'],['Lemon juice',60,'ml'],['Olive oil',700,'ml'],['Parmigiano',80,'g','parmigiano']],
+    steps:['Blend yolks, anchovy, garlic, lemon.','Stream in oil to emulsify.','Fold in grated parmigiano. Label, 3 days.']},
+  bolognese:{name:'Bolognese', station:'Sauté', time:'3 h', base:4, unit:'kg', batchLabel:'1 batch',
+    ing:[['Ground beef & pork',2200,'g'],['Soffritto',600,'g'],['Tomato paste',120,'g'],['Red wine',300,'ml'],['Milk',300,'ml'],['San Marzano tomatoes',1000,'g','sanmarzano']],
+    steps:['Brown meat in batches.','Add soffritto, paste, wine; reduce.','Add milk and tomatoes, simmer 2.5 h.']},
+};
+
+const INGREDIENTS = {
+  parma:{name:'Prosciutto di Parma', vendor:'Buy locally (not stocked)', price:'$24.90 / lb', onhand:'0 lb', used:['Mason Rehearsal · charcuterie']},
+  chicken:{name:'Premium chicken breast', vendor:"Hardie's", price:'$4.85 / lb', onhand:'6 lb', used:['chickenparm']},
+  sanmarzano:{name:'San Marzano tomatoes', vendor:'BEK', price:'$38.40 / case 6×#10', onhand:'4 cases', used:['arrabbiata','meatball','bolognese']},
+  mascarpone:{name:'Mascarpone', vendor:'Global Gourmet', price:'$11.20 / 500 g', onhand:'5 tubs', used:['tiramisu']},
+  basil:{name:'Basil', vendor:"Hardie's", price:'$2.10 / bunch', onhand:'2 bunches', used:['arrabbiata']},
+  parmigiano:{name:'Parmigiano Reggiano', vendor:'BEK', price:'$13.60 / lb · up 14%', onhand:'9 lb', used:['lasagna','chickenparm','caesar','meatball']},
+};
+
+/* Today = Friday 9 October (demo). Restaurant + catering merged into one operating quantity. */
+const TODAY_PREP = [
+  {id:'p1', r:'arrabbiata', name:'Arrabbiata sauce', unit:'kg', R:3.0, C:2.5, ev:'mason', block:'am', est:'About 50 min'},
+  {id:'p2', r:'focaccia',  name:'Focaccia', unit:'sheets', R:4, C:2, ev:'mason', block:'am', est:'Bake 22 min per load'},
+  {id:'p5', r:'bolognese', name:'Bolognese', unit:'kg', R:4.0, C:0, block:'am', est:'Start early · 3 h simmer'},
+  {id:'p4', r:'meatball',  name:'Meatball sauce', unit:'kg', R:2.0, C:0, block:'am', est:'Morning team'},
+  {id:'p3', r:'tiramisu',  name:'Mini tiramisu', unit:'cups', R:0, C:52, ev:'mason', block:'pm', est:'Assemble after 14:00'},
+  {id:'p6', r:'lasagna',   name:'Lasagna', unit:'pans', R:2, C:0, ev:'mason', wait:'lasagna', block:'pm', est:'Bake 1 h'},
+  {id:'p7', r:'caesar',    name:'Caesar dressing', unit:'L', R:1, C:0, block:'pm', est:'15 min',
+    defer:'1.4 L in the walk-in covers tonight and Mason. Make it tomorrow morning.'},
+];
+const WHY = {
+  p1:'Restaurant par for Friday is <b>3.0 kg</b> (last four Fridays used 2.6–3.1 kg). Mason has penne arrabbiata for 40: about 60 g of sauce per guest, rounded to <b>2.5 kg</b>. One batch of 5.5 kg instead of two.',
+  p2:'The restaurant uses <b>4 sheets</b> on a Friday. Mason needs <b>2 sheets</b>: 40 guests, 3 pieces each, about 60 pieces per sheet.',
+  p3:'All for Mason: 40 guests, dessert table rule of 1.3 cups per guest gives <b>52</b>. The cream base was made yesterday.',
+  p4:'Par is 2.0 kg. The morning team already made it.',
+  p5:'Par is <b>4 kg</b>. The walk-in has 1.5 kg and Saturday usually needs about 5.',
+  p6:'<b>2 pans</b> for the restaurant. Mason also wants lasagna, but the catering yield per pan is not confirmed, so those pans wait for Chef.',
+  p7:'The walk-in has <b>1.4 L</b>. Tonight uses about 0.8 L and Mason 0.5 L. Making it today would only add waste risk.',
+};
+const CHECKS = {
+  lasagna:{title:'Lasagna catering yield', ev:'mason', recipe:'lasagna',
+    q:'How many catering portions come out of one hotel pan?', fix:'Confirm 15 portions per pan', after:'Mason needs 3 pans, so Lasagna today becomes 5 pans'},
+  chickenparm:{title:'Chicken Parmesan profile', ev:'mason', recipe:'chickenparm',
+    q:'No catering profile yet: buffet portion and pans per 40 guests are missing.', fix:'Confirm 5 oz portion, 20 per pan', after:'Mason needs 2 hotel pans'},
+};
+
+const EVENTS = {
+  mason:{name:'Mason Rehearsal', guests:40, day:'Friday 9 Oct', short:'Tonight · 17:00', time:'17:00', when:'Tonight', where:'Upstairs room · family style', contact:'Jenna Mason', src:'Tripleseat #48213', price:52, leave:'16:15',
+    menu:[
+      {n:'Focaccia', q:'2 sheets', r:'focaccia'},
+      {n:'Bruschetta', q:'40 pcs'},
+      {n:'Caprese skewers', q:'80 pcs'},
+      {n:'Caesar salad', q:'40 portions', r:'caesar'},
+      {n:'Penne arrabbiata', q:'2.5 kg sauce', r:'arrabbiata', tq:2.5},
+      {n:'Arancini', q:'80 pcs'},
+      {n:'Chicken Parmesan', q:'40 portions', r:'chickenparm', tq:40, check:'chickenparm'},
+      {n:'Lasagna', q:'40 portions', r:'lasagna', tq:3, check:'lasagna'},
+      {n:'Mini tiramisu', q:'52 cups', r:'tiramisu', tq:52},
+    ],
+    production:[
+      {when:'Yesterday', items:[['Focaccia dough +2','done'],['Tiramisu cream base','done']]},
+      {when:'10:00', items:[['Arrabbiata 5.5 kg (3.0 restaurant + 2.5 Mason)',''],['Caesar dressing',''] ]},
+      {when:'12:00', items:[['Lasagna for Mason · bake 14:00','check:lasagna']]},
+      {when:'13:30', items:[['Chicken Parmesan · bread and fry','check:chickenparm']]},
+      {when:'14:30', items:[['Assemble 52 mini tiramisu',''],['Caprese skewers · bruschetta','']]},
+      {when:'15:45', items:[['Pack, label, load the van',''],['Van leaves 16:15','']]},
+    ],
+    shopping:[
+      {n:'Prosciutto di Parma', q:'1.5 lb', how:'Buy today · before 14:00', st:'buy', ing:'parma'},
+      {n:'Premium chicken breast', q:'12 lb', how:"Hardie's · arriving 10:30", st:'coming', ing:'chicken'},
+      {n:'Basil', q:'4 bunches', how:"Hardie's · arriving 10:30", st:'coming', ing:'basil'},
+      {n:'Mascarpone', q:'3 tubs', how:'In house', st:'have', ing:'mascarpone'},
+      {n:'Savoiardi', q:'2 boxes', how:'In house', st:'have'},
+      {n:'Penne', q:'3 kg', how:'In house', st:'have'},
+    ],
+    cost:{costed:498, missing:['chickenparm','lasagna'], est:[96,140]},
+  },
+  ortiz:{name:'Ortiz Birthday', guests:25, day:'Sunday 11 Oct', short:'Sunday · 12:30', time:'12:30', when:'Sunday', where:'Patio · buffet', contact:'Luis Ortiz', src:'Tripleseat #48377', price:44, draft:true,
+    menu:[{n:'Focaccia', q:'2 sheets', r:'focaccia'},{n:'Caesar salad', q:'25 portions', r:'caesar'},{n:'Penne arrabbiata', q:'1.6 kg sauce', r:'arrabbiata', tq:1.6},{n:'Meatballs al sugo', q:'50 pcs', r:'meatball'},{n:'Mini tiramisu', q:'30 cups', r:'tiramisu', tq:30}],
+    production:[], shopping:[], cost:null},
+  lakeway:{name:'Lakeway Realty Lunch', guests:60, day:'Tuesday 13 Oct', short:'Tue 13 · 11:30', time:'11:30', when:'Next Tuesday', where:'Delivery · drop-off', contact:'Office manager', src:'Tripleseat #48402', price:28, draft:true,
+    menu:[{n:'Boxed lunches · 3 sandwiches', q:'60 boxes'},{n:'Caesar salad', q:'60 sides', r:'caesar'},{n:'Cookies', q:'60 pcs'}],
+    production:[], shopping:[], cost:null},
+};
+
+/* Planner week Mon 5 – Sun 11 Oct, plus next week */
+const WEEKS = [
+ [
+  {dn:'Mon',dd:5, past:true, closed:true},
+  {dn:'Tue',dd:6, past:true, rest:[['Bolognese 4.0 kg','bolognese'],['Arrabbiata 3.0 kg','arrabbiata']], buy:['BEK delivery']},
+  {dn:'Wed',dd:7, past:true, rest:[['Meatball sauce 2.0 kg','meatball'],['Focaccia 4 sheets','focaccia']], buy:["Hardie's delivery"]},
+  {dn:'Thu',dd:8, past:true, rest:[['Caesar dressing 1 L','caesar']], extra:[['Focaccia dough +2','focaccia'],['Tiramisu cream base','tiramisu']], buy:['Global Gourmet delivery']},
+  {dn:'Fri',dd:9, today:true, ev:'mason',
+    rest:[['Arrabbiata 3.0 kg','arrabbiata'],['Meatball sauce 2.0 kg','meatball'],['Bolognese 4.0 kg','bolognese']],
+    extra:[['Arrabbiata +2.5 kg','arrabbiata'],['Focaccia +2','focaccia'],['Mini tiramisu +52','tiramisu']],
+    buy:[['Prosciutto di Parma','parma'],['Premium chicken','chicken'],["Hardie's delivery · 10:30"]],
+    needs:['lasagna','chickenparm']},
+  {dn:'Sat',dd:10, rest:[['Arrabbiata 3.5 kg','arrabbiata'],['Bolognese 4.0 kg','bolognese']], extra:[['Focaccia dough +2','focaccia'],['Mini tiramisu +30','tiramisu']], buy:['BEK delivery'], needs:['ortiz']},
+  {dn:'Sun',dd:11, ev:'ortiz', rest:[['Brunch prep · 4 items']], extra:[['Arrabbiata +1.6 kg','arrabbiata'],['Meatballs +50','meatball']], needs:['ortiz']},
+ ],[
+  {dn:'Mon',dd:12, closed:true},
+  {dn:'Tue',dd:13, ev:'lakeway', rest:[['Bolognese 4.0 kg','bolognese']], extra:[['Caesar dressing +1 L','caesar']], buy:['BEK delivery'], needs:['lakeway']},
+  {dn:'Wed',dd:14, rest:[['Arrabbiata 3.0 kg','arrabbiata']], buy:["Hardie's delivery"]},
+  {dn:'Thu',dd:15, rest:[['Meatball sauce 2.0 kg','meatball']]},
+  {dn:'Fri',dd:16, rest:[['Arrabbiata 3.0 kg','arrabbiata'],['Focaccia 4 sheets','focaccia']], buy:['Global Gourmet delivery']},
+  {dn:'Sat',dd:17, rest:[['Bolognese 4.0 kg','bolognese']]},
+  {dn:'Sun',dd:18, rest:[['Brunch prep · 4 items']]},
+ ]];
+
+/* ============ STATE ============ */
+const KEY = 'shelllab-v020';
+function fresh(){ return {v:4, world:'today', active:'home',
+  ws:{today:[{s:'today'}], restaurant:[{s:'restaurant'}], catering:[{s:'catering'}], planner:[{s:'planner'}]},
+  tabs:[], done:{p4:true}, part:{}, makeAnyway:{}, fixed:{}, seq:1,
+  feed:[
+    {t:'07:40', x:'Morning team finished meatball sauce, 2.0 kg'},
+    {t:'08:12', x:'Samantha: the walk-in door is not closing well'},
+    {t:'08:30', x:'Tripleseat updated Mason Rehearsal: 40 guests, was 36'},
+    {t:'10:30', x:"Hardie's expected · chicken, basil, produce", later:true},
+    {t:'13:00', x:'BEK expected · dry goods, San Marzano', later:true},
+  ]}; }
+let S = fresh();
+try{ const x = JSON.parse(localStorage.getItem(KEY)); if(x && x.v===4) S = x; }catch(e){}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+const tabById = id => S.tabs.find(t=>t.id===id);
+function stack(){ return S.active==='home' ? S.ws[S.world] : (tabById(S.active)||{stack:[{s:'today'}]}).stack; }
+const cur = () => { const s=stack(); return s[s.length-1]; };
+
+/* ============ HELPERS ============ */
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = n => (Math.round(n*10)/10).toString();
+const openChecks = () => Object.keys(CHECKS).filter(k=>!S.fixed[k]);
+function evStatus(id){
+  const e = EVENTS[id];
+  if(e.draft) return {ready:0, checks:e.menu.length, draft:true};
+  const c = e.menu.filter(m=>m.check && !S.fixed[m.check]).length;
+  return {ready:e.menu.length-c, checks:c};
+}
+function prepQty(p){
+  let C = p.C;
+  if(p.wait && S.fixed[p.wait]) C = 3;
+  const T = p.R+C, made = S.done[p.id] ? T : (S.part[p.id]||0);
+  return {R:p.R, C, T, made, left:T-made};
+}
+const isDeferred = p => p.defer && !S.makeAnyway[p.id] && !S.done[p.id];
+/* demo clock: the prototype lives on Friday 9 Oct, starting 09:40; every action moves it 3 minutes */
+const nowHM = () => { const m = 9*60+40 + (S.tick||0)*3; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); };
+function log(x){ S.tick=(S.tick||0)+1; S.feed.push({t:nowHM(), x, mine:true}); }
+function scaleFmt(q, unit, f){
+  let v = q*f;
+  if(unit==='g'){ if(v>=1000) return fmt(v/1000)+' kg'; return Math.round(v)+' g'; }
+  if(unit==='ml'){ if(v>=1000) return fmt(v/1000)+' L'; return Math.round(v)+' ml'; }
+  if(unit==='pcs'||unit==='pc') return Math.ceil(v)+' '+unit;
+  return fmt(v)+' '+unit;
+}
+function backBtn(){
+  const s = stack(); if(s.length<2) return '';
+  const prev = s[s.length-2];
+  return `<button class="back" data-a="back">${ICON.back}${esc(titleOf(prev))}</button>`;
+}
+function checkRing(ready, total, color){
+  const r=28, C=2*Math.PI*r, p= total? ready/total:0;
+  return `<svg viewBox="0 0 68 68"><circle cx="34" cy="34" r="${r}" fill="none" stroke="var(--surf2)" stroke-width="8"/><circle cx="34" cy="34" r="${r}" fill="none" stroke="var(${color})" stroke-width="8" stroke-linecap="round" stroke-dasharray="${C*p} ${C}" transform="rotate(-90 34 34)"/></svg>`;
+}
+
+/* ============ SCREENS ============ */
+const SCREENS = {};
+function titleOf(e){ const sc = SCREENS[e.s]; return sc ? sc.title(e.p||{}) : ''; }
+
+/* ---- TODAY · composed as a story, not a dashboard ---- */
+function greeting(){ const h=parseInt(nowHM()); return h<12?'Good morning, Max.':h<17?'Good afternoon, Max.':'Good evening, Max.'; }
+function briefing(){
+  const open = TODAY_PREP.filter(p=>!S.done[p.id] && !isDeferred(p));
+  const checks = openChecks().length;
+  if(!open.length) return `All prep is done. <b>Mason</b> leaves at 16:15${checks?`, but ${checks} decision${checks>1?'s are':' is'} still open`:''}.`;
+  const next = open[0], q = prepQty(next);
+  let t = `Mason Rehearsal leaves at <b>16:15</b>. <b>${open.length} prep${open.length>1?'s':''}</b> left`;
+  t += checks ? ` and <b>${checks} decision${checks>1?'s':''}</b> only you can make.` : '.';
+  t += ` Start with <b>${next.name.toLowerCase()}</b>`;
+  t += q.R && q.C ? ': one batch covers the restaurant and Mason.' : '.';
+  return t;
+}
+function prepRow(p){
+  const q = prepQty(p), d = !!S.done[p.id], ev = p.ev ? EVENTS[p.ev].name.split(' ')[0] : '';
+  let split;
+  if(d) split = `<div class="meta">Done${q.C&&q.R?` · ${fmt(q.R)} restaurant + ${fmt(q.C)} ${ev}`:''}</div>`;
+  else if(q.R && q.C) split = `<div class="split"><span class="pill rest">${fmt(q.R)} Restaurant</span><span class="pill cat">+${fmt(q.C)} ${esc(ev)}</span>${q.made?`<span class="pill ok">${fmt(q.made)} made · ${fmt(q.left)} left</span>`:''}</div><div class="bar"><i style="width:${q.R/q.T*100}%;background:var(--rest)"></i><i style="width:${q.C/q.T*100}%;background:var(--cat)"></i></div>`;
+  else if(q.C) split = `<div class="split"><span class="pill cat">All for ${esc(EVENTS[p.ev].name)}</span><span class="pill">${esc(p.est)}</span></div>`;
+  else if(p.wait && !S.fixed[p.wait]) split = `<div class="split"><span class="pill rest">Restaurant</span><span class="pill warn">Mason pans wait for you</span></div>`;
+  else split = `<div class="split"><span class="pill rest">Restaurant</span><span class="pill">${esc(p.est)}</span></div>`;
+  const shown = d ? q.T : (q.made ? q.left : q.T);
+  return `<div class="row ${d?'done donebg':''}">
+    <button class="main" data-a="openRecipe" data-r="${p.r}" data-from="today">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><span class="name">${esc(p.name)}</span><span class="qty num">${fmt(shown)} <small style="font-size:16px">${p.unit}</small></span></div>
+      ${split}
+    </button>
+    <button class="check ${d?'on':''}" data-a="done" data-id="${p.id}" aria-label="Mark ${esc(p.name)} done">${d?ICON.tick:''}</button>
+  </div>`;
+}
+SCREENS.today = {title:()=> 'Today', c:'--today', render(){
+  const m = EVENTS.mason, st = evStatus('mason');
+  const live = TODAY_PREP.filter(p=>!isDeferred(p));
+  const am = live.filter(p=>p.block==='am' && !S.done[p.id]);
+  const pm = live.filter(p=>p.block==='pm' && !S.done[p.id]);
+  const done = live.filter(p=>S.done[p.id]);
+  const deferred = TODAY_PREP.filter(isDeferred);
+  const checks = openChecks();
+  return `<div class="page" style="--c:var(--today)">
+    <div class="greet"><div class="eyebrow">Friday 9 October</div><h1>${greeting()}</h1><p class="brief">${briefing()}</p></div>
+    <button class="hero" style="--c:var(--cat)" data-a="openEvent" data-id="mason">
+      <div class="k">Catering tonight</div>
+      <div class="t">${m.name}</div>
+      <div class="m">${m.guests} guests · ${m.time} · van leaves ${m.leave}</div>
+      <div class="chips"><span>${st.ready} ready</span>${st.checks?`<span>${st.checks} check${st.checks>1?'s':''}</span>`:'<span>all clear</span>'}</div>
+      <div class="go"><span>Open event</span><span>→</span></div>
+    </button>
+    ${checks.length?`<section><h2>Only you can decide</h2><div style="display:flex;flex-direction:column;gap:10px">${checks.map(k=>`
+      <button class="decide" data-a="openRecipe" data-r="${CHECKS[k].recipe}" data-from="event:mason"><span class="main"><div class="name">${esc(CHECKS[k].title)}</div><div class="meta">For Mason tonight · takes one tap</div></span><span class="chev">›</span></button>`).join('')}</div></section>`:''}
+    ${am.length?`<section><div class="chap"><h2>Before lunch</h2><span>by 11:30</span></div><div class="list">${am.map(prepRow).join('')}</div></section>`:''}
+    ${pm.length?`<section><div class="chap"><h2>After lunch</h2><span>from 13:00</span></div><div class="list">${pm.map(prepRow).join('')}</div></section>`:''}
+    ${done.length?`<section><div class="chap"><h2>Done</h2><span>${done.length} of ${live.length}</span></div><div class="list">${done.map(prepRow).join('')}</div></section>`:''}
+    ${deferred.map(p=>`<section><h2>Better tomorrow</h2><div class="defer"><div class="name">${esc(p.name)} · ${fmt(p.R)} ${p.unit}</div><p>${esc(p.defer)}</p><div style="display:flex;gap:10px"><button class="btn ghost" style="--c:var(--tx2)" data-a="makeAnyway" data-id="${p.id}">Make it anyway</button></div></div></section>`).join('')}
+    <section><h2>Buy before 14:00</h2><div class="list">
+      <button class="row" data-a="openIng" data-id="parma"><span class="main"><div class="name">Prosciutto di Parma</div><div class="meta">Not stocked · for Mason</div></span><span class="qty num">1.5 lb</span></button>
+    </div></section>
+    <section><h2>Kitchen feed</h2><div class="feed">${feedHtml()}</div></section>
+    <p class="note">Tomorrow: restaurant prep plus Ortiz Birthday extras. <button style="color:var(--plan);font-weight:700" data-a="world" data-w="planner">See in Planner →</button></p>
+  </div>`;
+}};
+function feedHtml(){
+  const sorted = [...S.feed.filter(f=>!f.later), ...S.feed.filter(f=>f.later)];
+  return sorted.map(f=>`<div class="${f.later?'later':''} ${f.mine?'mine':''}"><time>${f.t}</time><span>${esc(f.x)}</span></div>`).join('');
+}
+
+/* ---- RESTAURANT ---- */
+SCREENS.restaurant = {title:()=>'Restaurant', c:'--rest', render(){
+  const rp = TODAY_PREP.filter(p=>p.R);
+  const rd = rp.filter(p=>S.done[p.id]).length;
+  const tile=(s,ic,lbl,val,cls='')=>`<button class="big ${cls}" data-a="go" data-s="${s}">${ICON[ic]}<div><div class="lbl">${lbl}</div><div class="val">${val}</div></div></button>`;
+  return `<div class="page" style="--c:var(--rest)">
+    <div><div class="eyebrow">Zeno's · Friday</div><h1>Restaurant</h1><div class="sub">Open 17:00–22:00 · 86 covers booked</div></div>
+    <div class="grid">
+      ${tile('r-prep','prep','Prep',`<b>${rd}/${rp.length}</b> done`)}
+      ${tile('r-recipes','book','Recipes',`<b>148</b> recipes`)}
+      ${tile('r-ing','box','Ingredients',`<b>2</b> running low`)}
+      ${tile('r-sales','sales','Sales',`<b>$6,840</b> yesterday`)}
+      ${tile('r-attn','alert','Attention',`<b>3</b> to look at`,'alert')}
+      ${tile('r-stations','station','Stations',`<b>7</b> stations`)}
+    </div>
+  </div>`;
+}};
+SCREENS['r-prep']={title:()=>'Prep', c:'--rest', render(){
+  const rp = TODAY_PREP.filter(p=>p.R);
+  return `<div class="page" style="--c:var(--rest)">${backBtn()}<div><div class="eyebrow">Restaurant · today</div><h1>Prep</h1></div>
+  <div class="list">${rp.map(p=>`<button class="row ${S.done[p.id]?'done':''}" data-a="openRecipe" data-r="${p.r}" data-from="restaurant"><span class="main"><div class="name">${esc(p.name)}</div><div class="meta">${RECIPES[p.r].station}${isDeferred(p)?' · better tomorrow':''}</div></span><span class="qty num">${fmt(p.R)} <small style="font-size:16px">${p.unit}</small></span></button>`).join('')}</div>
+  <p class="note">These are restaurant quantities only. Catering extras are added in <button style="color:var(--today);font-weight:700" data-a="world" data-w="today">Today</button>.</p></div>`;
+}};
+SCREENS['r-recipes']={title:()=>'Recipes', c:'--rest', render(){
+  const groups = {};
+  Object.entries(RECIPES).forEach(([k,r])=>{(groups[r.station]=groups[r.station]||[]).push([k,r]);});
+  return `<div class="page" style="--c:var(--rest)">${backBtn()}<div><div class="eyebrow">Restaurant</div><h1>Recipes</h1><div class="sub">Demo shows 8 of 148</div></div>
+  ${Object.entries(groups).map(([g,list])=>`<section><h2>${esc(g)}</h2><div class="list">${list.map(([k,r])=>`<button class="row" data-a="openRecipe" data-r="${k}" data-from="restaurant"><span class="main"><div class="name">${esc(r.name)}</div><div class="meta">${r.batchLabel} = ${r.base} ${r.unit} · ${r.time}</div></span><span class="chev">›</span></button>`).join('')}</div></section>`).join('')}</div>`;
+}};
+SCREENS['r-ing']={title:()=>'Ingredients', c:'--rest', render(){
+  return `<div class="page" style="--c:var(--rest)">${backBtn()}<div><div class="eyebrow">Restaurant</div><h1>Ingredients</h1></div>
+  <div class="list">${Object.entries(INGREDIENTS).map(([k,i])=>`<button class="row" data-a="openIng" data-id="${k}"><span class="main"><div class="name">${esc(i.name)}</div><div class="meta">${esc(i.vendor)} · ${esc(i.price)}</div></span><span class="pill ${k==='parma'||k==='basil'?'warn':''}">${esc(i.onhand)}</span></button>`).join('')}</div></div>`;
+}};
+SCREENS['r-sales']={title:()=>'Sales', c:'--rest', render(){
+  const top=[['Rigatoni alla vodka',41],['Chicken Parmesan',33],['Margherita',29],['Lasagna',24],['Tiramisu',22]];
+  return `<div class="page" style="--c:var(--rest)">${backBtn()}<div><div class="eyebrow">Thursday 8 October</div><h1>Sales</h1></div>
+  <div class="grid"><div class="big"><div class="lbl num">$6,840</div><div class="val">net sales</div></div><div class="big"><div class="lbl num">142</div><div class="val">covers · $48 avg</div></div></div>
+  <section><h2>Most sold</h2><div class="list">${top.map(([n,q])=>`<div class="row"><span class="main"><div class="name">${n}</div></span><span class="qty num">${q}</span></div>`).join('')}</div></section></div>`;
+}};
+SCREENS['r-attn']={title:()=>'Attention', c:'--rest', render(){
+  return `<div class="page" style="--c:var(--rest)">${backBtn()}<div><div class="eyebrow">Restaurant</div><h1>Attention</h1></div>
+  <div class="list">
+   <div class="row"><span class="main"><div class="name">Walk-in door is not closing</div><div class="meta">Samantha · this morning</div></span><span class="pill warn">Fix</span></div>
+   <button class="row" data-a="openIng" data-id="parmigiano"><span class="main"><div class="name">Parmigiano up 14% at BEK</div><div class="meta">Last two invoices</div></span><span class="chev">›</span></button>
+   <div class="row"><span class="main"><div class="name">Bolognese par low for the weekend</div><div class="meta">4 kg made, Saturday usually needs 6</div></span><span class="pill">Par</span></div>
+  </div></div>`;
+}};
+SCREENS['r-stations']={title:()=>'Stations', c:'--rest', render(){
+  const st=[['Sauté','Marco',3],['Pasta','Todd',1],['Pizza / Bread','Luis',1],['Garde manger','Ana',1],['Pastry','Samantha',1],['Grill','Dee',0],['Dish','Rafa',0]];
+  return `<div class="page" style="--c:var(--rest)">${backBtn()}<div><div class="eyebrow">Restaurant · today</div><h1>Stations</h1></div>
+  <div class="list">${st.map(([n,w,c])=>`<div class="row"><span class="main"><div class="name">${n}</div><div class="meta">${w}</div></span><span class="pill">${c} prep</span></div>`).join('')}</div></div>`;
+}};
+
+/* ---- CATERING ---- */
+SCREENS.catering = {title:()=>'Catering', c:'--cat', render(){
+  const m = evStatus('mason');
+  const evRow = id => { const e=EVENTS[id], s=evStatus(id); return `<button class="row" data-a="openEvent" data-id="${id}"><span class="main"><div class="name">${e.name}</div><div class="meta">${e.guests} guests · ${e.short}</div><div class="split">${s.draft?'<span class="pill">Draft from Tripleseat</span><span class="pill warn">Review plan</span>':`<span class="pill ok">${s.ready} ready</span>${s.checks?`<span class="pill warn">${s.checks} checks</span>`:''}`}</div></span><span class="chev">›</span></button>`; };
+  const needs = openChecks().length + 2;
+  return `<div class="page" style="--c:var(--cat)">
+    <div><div class="eyebrow">Zeno's Catering</div><h1>Next events</h1></div>
+    <button class="hero" style="--c:var(--cat)" data-a="openEvent" data-id="mason">
+      <div class="k">Next · tonight 17:00</div><div class="t">Mason Rehearsal</div>
+      <div class="m">40 guests · upstairs · family style</div>
+      <div class="chips"><span>${m.ready} ready</span>${m.checks?`<span>${m.checks} checks</span>`:'<span>all clear</span>'}</div>
+      <div class="go"><span>Review plan</span><span>→</span></div>
+    </button>
+    <section><h2>This week</h2><div class="list">${evRow('ortiz')}</div></section>
+    <section><h2>Next week</h2><div class="list">${evRow('lakeway')}</div></section>
+    <div class="grid">
+      <button class="big alert" data-a="go" data-s="c-attn">${ICON.alert}<div><div class="lbl">Needs review</div><div class="val"><b>${needs}</b> decisions</div></div></button>
+      <button class="big" data-a="go" data-s="c-shop">${ICON.cart}<div><div class="lbl">Shopping</div><div class="val"><b>1</b> to buy today</div></div></button>
+      <button class="big" data-a="go" data-s="c-prod">${ICON.fire}<div><div class="lbl">Production</div><div class="val"><b>3</b> days ahead</div></div></button>
+      <button class="big" data-a="go" data-s="c-prof">${ICON.book}<div><div class="lbl">Profiles</div><div class="val">Catering recipes</div></div></button>
+    </div>
+    <p class="note">Events arrive from Tripleseat as drafts. You review them; you never retype them.</p>
+  </div>`;
+}};
+SCREENS['c-attn']={title:()=>'Needs review', c:'--cat', render(){
+  return `<div class="page" style="--c:var(--cat)">${backBtn()}<div><div class="eyebrow">Catering</div><h1>Needs review</h1></div>
+  <div class="list">
+    ${openChecks().map(k=>`<button class="row" data-a="openRecipe" data-r="${CHECKS[k].recipe}" data-from="event:mason"><span class="main"><div class="name">${CHECKS[k].title}</div><div class="meta">Mason Rehearsal · tonight</div></span><span class="pill warn">Decide</span></button>`).join('')}
+    <button class="row" data-a="openEvent" data-id="ortiz"><span class="main"><div class="name">Ortiz Birthday menu</div><div class="meta">Draft from Tripleseat · Sunday</div></span><span class="pill">Review</span></button>
+    <button class="row" data-a="openEvent" data-id="lakeway"><span class="main"><div class="name">Lakeway Realty Lunch menu</div><div class="meta">Draft from Tripleseat · Tue 13</div></span><span class="pill">Review</span></button>
+  </div></div>`;
+}};
+SCREENS['c-shop']={title:()=>'Shopping', c:'--cat', render(){
+  return `<div class="page" style="--c:var(--cat)">${backBtn()}<div><div class="eyebrow">Catering</div><h1>Shopping</h1></div>
+  <section><h2>Today · Mason</h2><div class="list">${EVENTS.mason.shopping.filter(x=>x.st!=='have').map(shopRow).join('')}</div></section>
+  <section><h2>Saturday · for Ortiz</h2><div class="list">
+    <div class="row"><span class="main"><div class="name">Mascarpone</div><div class="meta">Global Gourmet · order by Saturday 10:00</div></span><span class="qty num">2 tubs</span></div>
+    <div class="row"><span class="main"><div class="name">Ground beef & pork</div><div class="meta">BEK · Saturday delivery</div></span><span class="qty num">3 kg</span></div>
+  </div></section></div>`;
+}};
+SCREENS['c-prod']={title:()=>'Production', c:'--cat', render(){
+  return `<div class="page" style="--c:var(--cat)">${backBtn()}<div><div class="eyebrow">Catering</div><h1>Production</h1></div>
+  <section><h2>Today · Mason</h2><div class="list">${['Arrabbiata +2.5 kg','Focaccia +2 sheets','Mini tiramisu 52','Lasagna 3 pans','Chicken Parmesan 40'].map(x=>`<div class="row"><span class="main"><div class="name">${x}</div></span></div>`).join('')}</div></section>
+  <section><h2>Saturday · for Ortiz</h2><div class="list">${['Focaccia dough +2','Mini tiramisu +30'].map(x=>`<div class="row"><span class="main"><div class="name">${x}</div></span></div>`).join('')}</div></section>
+  <section><h2>Sunday · Ortiz</h2><div class="list">${['Arrabbiata +1.6 kg','Meatballs +50'].map(x=>`<div class="row"><span class="main"><div class="name">${x}</div></span></div>`).join('')}</div></section>
+  <p class="note">These numbers also land in Today on the right day, added to the restaurant prep.</p></div>`;
+}};
+SCREENS['c-prof']={title:()=>'Profiles', c:'--cat', render(){
+  const ok = k=> !RECIPES[k].check || S.fixed[RECIPES[k].check];
+  return `<div class="page" style="--c:var(--cat)">${backBtn()}<div><div class="eyebrow">Catering</div><h1>Catering profiles</h1><div class="sub">How a recipe behaves at an event: portion, pans, transport.</div></div>
+  <div class="list">${['focaccia','caesar','arrabbiata','tiramisu','lasagna','chickenparm'].map(k=>`<button class="row" data-a="openRecipe" data-r="${k}" data-from="catering"><span class="main"><div class="name">${RECIPES[k].name}</div></span>${ok(k)?'<span class="pill ok">Profile ok</span>':'<span class="pill warn">Missing</span>'}</button>`).join('')}</div></div>`;
+}};
+function shopRow(x){
+  const pill = x.st==='buy'?'<span class="pill warn">Buy</span>':x.st==='coming'?'<span class="pill">Coming</span>':'<span class="pill ok">In house</span>';
+  return `<button class="row" ${x.ing?`data-a="openIng" data-id="${x.ing}"`:''}><span class="main"><div class="name">${esc(x.n)} · ${esc(x.q)}</div><div class="meta">${esc(x.how)}</div></span>${pill}</button>`;
+}
+
+/* ---- EVENT (lives in its own tab) ---- */
+SCREENS.event = {title:p=>EVENTS[p.id].name, c:'--cat', render(p){
+  const e = EVENTS[p.id], s = evStatus(p.id), seg = p.seg||'plan';
+  const segs = [['plan','Plan'],['production','Production'],['shopping','Shopping'],['cost','Cost']];
+  let body='';
+  if(seg==='plan'){
+    body = `<div class="card ring">${checkRing(s.ready, e.menu.length, s.draft?'--txm':'--cat')}<div><div class="big1 num">${s.draft?'Draft':`${s.ready} of ${e.menu.length} ready`}</div><div class="meta" style="color:var(--tx2)">${s.draft?'Imported from Tripleseat. Check each dish once.':s.checks?`${s.checks} dish${s.checks>1?'es need':' needs'} a decision`:'Everything is ready to produce'}</div></div></div>
+    <div class="list">${e.menu.map(m=>{
+      const open = m.check && !S.fixed[m.check];
+      const pill = e.draft?'<span class="pill">Review</span>':open?'<span class="pill warn">Check</span>':'<span class="pill ok">Ready</span>';
+      return m.r?`<button class="row" data-a="openRecipe" data-r="${m.r}" data-from="event:${p.id}"><span class="main"><div class="name">${esc(m.n)}</div><div class="meta">${esc(m.q)}${open?' · '+esc(CHECKS[m.check].title):''}</div></span>${pill}</button>`
+                :`<div class="row"><span class="main"><div class="name">${esc(m.n)}</div><div class="meta">${esc(m.q)}</div></span>${pill}</div>`;
+    }).join('')}</div>`;
+  } else if(seg==='production'){
+    body = e.production.length ? e.production.map(b=>`<section><h2>${b.when}</h2><div class="list">${b.items.map(([t,st])=>{
+      const chk = st.startsWith('check:') ? st.slice(6) : null;
+      const pill = st==='done'?'<span class="pill ok">Done</span>': chk && !S.fixed[chk] ? '<span class="pill warn">Waiting</span>' : '';
+      return `<div class="row"><span class="main"><div class="name">${esc(t)}</div></span>${pill}</div>`;}).join('')}</div></section>`).join('')
+      : `<p class="note">Production is planned after the menu is reviewed.</p>`;
+  } else if(seg==='shopping'){
+    body = e.shopping.length ? `<div class="list">${e.shopping.map(shopRow).join('')}</div>` : `<p class="note">Shopping appears after the menu is reviewed.</p>`;
+  } else {
+    if(!e.cost) body = `<p class="note">Cost appears after the menu is reviewed.</p>`;
+    else {
+      const rev = e.price*e.guests;
+      const miss = e.cost.missing.filter(k=>!S.fixed[k]);
+      const lo = e.cost.costed + (miss.length? 0 : 118), hi = e.cost.costed + (miss.length? e.cost.est[1] : 118);
+      const loP = Math.round((e.cost.costed+ (miss.length?e.cost.est[0]:118))/rev*100), hiP = Math.round(hi/rev*100);
+      body = `<div class="grid"><div class="big"><div class="lbl num">$${rev.toLocaleString('en-US')}</div><div class="val">$${e.price} × ${e.guests} guests</div></div>
+        <div class="big"><div class="lbl num">${miss.length?`${loP}–${hiP}%`:`${hiP}%`}</div><div class="val">food cost ${miss.length?'(range)':''}</div></div></div>
+        ${miss.length?`<div class="fix"><div class="h">Range, not a number</div><div>${miss.map(k=>RECIPES[k].name).join(' and ')} ${miss.length>1?'have':'has'} no catering cost yet. Decide ${miss.length>1?'them':'it'} and the range becomes one number.</div></div>`:`<p class="note">All dishes costed. ${lo?'':''}</p>`}`;
+    }
+  }
+  return `<div class="page" style="--c:var(--cat)">
+    ${backBtn()}
+    <div><div class="eyebrow">${esc(e.day)} · ${e.time}</div><h1>${esc(e.name)}</h1><div class="sub">${e.guests} guests · ${esc(e.where)}</div>
+      <div class="split" style="margin-top:10px"><span class="pill">${esc(e.src)}</span>${e.draft?'<span class="pill warn">Draft</span>':''}</div></div>
+    <div class="seg" role="tablist">${segs.map(([k,l])=>`<button class="${seg===k?'on':''}" data-a="seg" data-k="${k}">${l}</button>`).join('')}</div>
+    ${body}
+  </div>`;
+}};
+
+/* ---- RECIPE (own tab) ---- */
+SCREENS.recipe = {title:p=>RECIPES[p.id].name, c:'--rest', render(p){
+  const r = RECIPES[p.id];
+  // quantity options from every context that wants this recipe
+  const opts = [{k:'batch', l:r.batchLabel, v:r.base}];
+  const tp = TODAY_PREP.find(x=>x.r===p.id);
+  if(tp){ const q=prepQty(tp); if(q.R) opts.push({k:'rest', l:'Restaurant', v:q.R, u:tp.unit}); if(q.R && q.C) opts.push({k:'today', l:'Today total', v:q.T, u:tp.unit}); }
+  let fromEv = p.from && p.from.startsWith('event:') ? p.from.slice(6) : (tp && tp.ev && tp.C ? tp.ev : null);
+  if(fromEv){ const mi = EVENTS[fromEv].menu.find(m=>m.r===p.id); if(mi && mi.tq) opts.push({k:'event', l:EVENTS[fromEv].name.split(' ')[0], v:mi.tq, u:r.unit==='hotel pan'?'pans':r.unit}); }
+  let mode = p.mode || (p.from==='today' && tp && tp.C ? (tp.R?'today':'event') : p.from && p.from.startsWith('event:') ? 'event' : 'batch');
+  if(!opts.find(o=>o.k===mode)) mode = 'batch';
+  const sel = opts.find(o=>o.k===mode);
+  const f = sel.v / r.base;
+  const chk = r.check && !S.fixed[r.check] ? CHECKS[r.check] : null;
+  const fixedNow = r.check && S.fixed[r.check] ? CHECKS[r.check] : null;
+  const evBanner = p.from && p.from.startsWith('event:') ? (()=>{ const e=EVENTS[p.from.slice(6)];
+    return `<div class="banner" style="--c:var(--cat)"><div class="main"><div class="eyebrow">Opened from</div><b>${esc(e.name)}</b></div><button class="btn" style="--c:var(--cat)" data-a="openEvent" data-id="${p.from.slice(6)}">Back to event</button></div>`; })() : '';
+  return `<div class="page" style="--c:var(--rest)">
+    ${backBtn()}
+    ${evBanner}
+    <div><div class="eyebrow">${esc(r.station)} · ${esc(r.time)}</div><h1>${esc(r.name)}</h1></div>
+    ${chk?`<div class="fix"><div class="h">Chef decides · ${esc(chk.title)}</div><div>${esc(chk.q)}</div><button class="btn" style="--c:var(--warn)" data-a="fix" data-k="${r.check}">${esc(chk.fix)}</button><div style="font-size:14px;color:var(--tx2)">Demo: this only changes the prototype.</div></div>`:''}
+    ${fixedNow?`<p class="note">Decided: ${esc(fixedNow.fix.replace('Confirm ',''))}. ${esc(fixedNow.after)}.</p>`:''}
+    ${tp?`<button class="why" data-a="why" data-id="${tp.id}">Why ${fmt(prepQty(tp).T)} ${esc(tp.unit)} today?</button>`:''}
+    <section><h2>How much</h2><div class="qbtns">${opts.map(o=>`<button class="${o.k===mode?'on':''}" data-a="mode" data-k="${o.k}">${esc(o.l)}<b class="num">${fmt(o.v)} ${esc(o.u||r.unit)}</b></button>`).join('')}</div></section>
+    <section><h2>Ingredients · for ${fmt(sel.v)} ${esc(sel.u||r.unit)}</h2><div class="list">${r.ing.map(([n,q,u,id])=>`<${id?`button data-a="openIng" data-id="${id}"`:'div'} class="ing" style="width:100%"><span>${esc(n)}</span><b class="num">${scaleFmt(q,u,f)}</b></${id?'button':'div'}>`).join('')}</div></section>
+    <section><h2>Method</h2><div class="list">${r.steps.map((s,i)=>`<div class="step"><span class="n">${i+1}</span><span>${esc(s)}</span></div>`).join('')}</div></section>
+  </div>`;
+}};
+
+/* ---- INGREDIENT (own tab) ---- */
+SCREENS.ing = {title:p=>INGREDIENTS[p.id].name, c:'--rest', render(p){
+  const i = INGREDIENTS[p.id];
+  return `<div class="page" style="--c:var(--rest)">${backBtn()}
+    <div><div class="eyebrow">Ingredient</div><h1>${esc(i.name)}</h1></div>
+    <div class="grid"><div class="big"><div class="lbl">${esc(i.onhand)}</div><div class="val">on hand</div></div><div class="big"><div class="lbl" style="font-size:19px">${esc(i.price)}</div><div class="val">${esc(i.vendor)}</div></div></div>
+    <section><h2>Used in</h2><div class="list">${i.used.map(u=>RECIPES[u]?`<button class="row" data-a="openRecipe" data-r="${u}" data-from="restaurant"><span class="main"><div class="name">${RECIPES[u].name}</div></span><span class="chev">›</span></button>`:`<button class="row" data-a="openEvent" data-id="mason"><span class="main"><div class="name">${esc(u)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>
+  </div>`;
+}};
+
+/* ---- PLANNER ---- */
+SCREENS.planner = {title:()=>'Planner', c:'--plan', render(p){
+  const wi = p.w||0, wk = WEEKS[wi];
+  const day = d => {
+    const e = d.ev ? EVENTS[d.ev] : null;
+    const parts = [];
+    if(d.rest) parts.push(`${d.rest.length} prep`);
+    if(d.extra) parts.push(`+${d.extra.length} catering`);
+    if(d.buy) parts.push(`${d.buy.length} buy`);
+    const needs = (d.needs||[]).filter(k=>!CHECKS[k] || !S.fixed[k]);
+    return `<button class="day ${d.today?'today':''} ${d.past?'past':''} ${d.closed?'closed':''}" data-a="go" data-s="day" data-w="${wi}" data-d="${d.dd}">
+      <div class="d"><div class="dn">${d.dn}</div><div class="dd num">${d.dd}</div></div>
+      <div class="body">${e?`<div class="ev">${e.name} · ${e.guests}</div>`:''}
+        <div class="sum">${d.closed?'Closed':parts.join(' · ')}</div>
+        ${needs.length && !d.past?`<div><span class="pill warn">${needs.length} need${needs.length>1?'':'s'} Chef</span></div>`:''}</div>
+      <span class="chev" style="align-self:center">›</span></button>`;
+  };
+  return `<div class="page" style="--c:var(--plan)">
+    <div><div class="eyebrow">October 2026</div><h1>${wi?'Next week':'This week'}</h1></div>
+    <div class="wk"><button data-a="week" data-w="0" ${wi===0?'disabled style="opacity:.4"':''}>‹ This week</button><span class="eyebrow">${wi?'12 – 18 Oct':'5 – 11 Oct'}</span><button data-a="week" data-w="1" ${wi===1?'disabled style="opacity:.4"':''}>Next ›</button></div>
+    <div class="week">${wk.map(day).join('')}</div>
+  </div>`;
+}};
+SCREENS.day = {title:p=>{const d=WEEKS[p.w].find(x=>x.dd==p.d); return `${d.dn} ${d.dd}`;}, c:'--plan', render(p){
+  const d = WEEKS[p.w].find(x=>x.dd==p.d);
+  const full = {Mon:'Monday',Tue:'Tuesday',Wed:'Wednesday',Thu:'Thursday',Fri:'Friday',Sat:'Saturday',Sun:'Sunday'}[d.dn];
+  const rows = (list, tag) => `<div class="list">${list.map(x=>{ const [t,r] = Array.isArray(x)?x:[x];
+    if(r && RECIPES[r]) return `<button class="row" data-a="openRecipe" data-r="${r}" data-from="${tag}"><span class="main"><div class="name">${esc(t)}</div></span><span class="chev">›</span></button>`;
+    if(r && INGREDIENTS[r]) return `<button class="row" data-a="openIng" data-id="${r}"><span class="main"><div class="name">${esc(t)}</div></span><span class="chev">›</span></button>`;
+    return `<div class="row"><span class="main"><div class="name">${esc(t)}</div></span></div>`; }).join('')}</div>`;
+  const needs = (d.needs||[]).filter(k=>!CHECKS[k] || !S.fixed[k]);
+  const e = d.ev ? EVENTS[d.ev] : null;
+  return `<div class="page" style="--c:var(--plan)">${backBtn()}
+    <div><div class="eyebrow">${d.today?'Today · ':''}October 2026</div><h1 style="font-size:44px">${full} ${d.dd}</h1></div>
+    ${d.closed?'<p class="note">Restaurant closed.</p>':''}
+    ${e?`<section><h2>Event</h2><button class="hero" style="--c:var(--cat)" data-a="openEvent" data-id="${d.ev}"><div class="t">${e.name}</div><div class="m">${e.guests} guests · ${e.time}${e.draft?' · draft':''}</div><div class="go"><span>Open event</span><span>→</span></div></button></section>`:''}
+    ${d.rest?`<section><h2>Restaurant prep</h2>${rows(d.rest,'restaurant')}</section>`:''}
+    ${d.extra?`<section><h2 style="color:var(--cat)">Extra catering</h2>${rows(d.extra, d.ev==='mason'||d.dd===8?'event:mason':'catering')}</section>`:''}
+    ${d.buy?`<section><h2>Buy / delivery</h2>${rows(d.buy)}</section>`:''}
+    ${needs.length?`<section><h2 style="color:var(--warn)">Needs Max</h2><div class="list">${needs.map(k=> CHECKS[k]
+      ? `<button class="row" data-a="openRecipe" data-r="${CHECKS[k].recipe}" data-from="event:mason"><span class="main"><div class="name">${CHECKS[k].title}</div></span><span class="pill warn">Decide</span></button>`
+      : `<button class="row" data-a="openEvent" data-id="${k}"><span class="main"><div class="name">${EVENTS[k].name} menu</div><div class="meta">Draft from Tripleseat</div></span><span class="pill warn">Review</span></button>`).join('')}</div></section>`:''}
+    ${d.today?`<button class="btn" style="--c:var(--today);width:100%" data-a="world" data-w="today">This is today → open Today</button>`:''}
+  </div>`;
+}};
+
+/* ============ RENDER ============ */
+const $ = id => document.getElementById(id);
+function cssVar(n){ return `var(${n})`; }
+function renderTabs(){
+  const w = WORLDS[S.world], s = S.ws[S.world], depth = s.length>1 ? ' · '+titleOf(s[s.length-1]) : '';
+  let h = `<button class="tab home ${S.active==='home'?'on':''}" style="--c:${cssVar(w.c)}" data-a="tab" data-id="home"><span class="dot" style="background:${cssVar(w.c)}"></span><span class="t">${w.label}${esc(depth)}</span></button>`;
+  for(const t of S.tabs){
+    const e = t.stack[0], c = SCREENS[e.s].c;
+    h += `<div class="tab ${S.active===t.id?'on':''}" style="--c:${cssVar(c)}"><button style="display:flex;align-items:center;gap:8px;min-width:0;height:100%" data-a="tab" data-id="${t.id}"><span class="dot" style="background:${cssVar(c)}"></span><span class="t">${esc(titleOf(e))}</span></button><button class="x" data-a="close" data-id="${t.id}" aria-label="Close ${esc(titleOf(e))}">×</button></div>`;
+  }
+  h += `<button class="tab plus" data-a="plus" aria-label="Open something in a new tab">+</button>`;
+  $('tabs').innerHTML = h;
+  const on = $('tabs').querySelector('.tab.on'); if(on) on.scrollIntoView({inline:'nearest', block:'nearest'});
+}
+function renderWorlds(){
+  const b = ([k,w])=>`<button class="w ${S.active==='home'&&S.world===k?'on':''}" style="--c:${cssVar(w.c)}" data-a="world" data-w="${k}">${ICON[k]}${w.label}</button>`;
+  const e = Object.entries(WORLDS);
+  $('worlds').innerHTML = b(e[0])+b(e[1])+`<button class="w ask" data-a="ask" aria-label="What do you need?"><span class="orb">${ICON.ask}</span>Need?</button>`+b(e[2])+b(e[3]);
+}
+function layout(){
+  const t = $('top').offsetHeight, b = $('worlds').offsetHeight;
+  $('main').style.top = t+'px'; $('main').style.bottom = b+'px';
+}
+function render(keepScroll){
+  const e = cur();
+  $('main').innerHTML = SCREENS[e.s].render(e.p||{});
+  renderTabs(); renderWorlds(); layout();
+  $('main').scrollTop = keepScroll ? $('main').scrollTop : (e.y||0);
+  save();
+}
+let scT; $('main').addEventListener('scroll', ()=>{ clearTimeout(scT); scT=setTimeout(()=>{ cur().y = $('main').scrollTop; save(); },120); });
+function rememberScroll(){ cur().y = $('main').scrollTop; }
+
+/* ============ ACTIONS ============ */
+function openTab(kind, ref, entry){
+  rememberScroll();
+  let t = S.tabs.find(x=>x.kind===kind && x.ref===ref);
+  if(t){ if(entry.p.from) { const root=t.stack[0]; root.p.from = entry.p.from; delete root.p.mode; t.stack.length=1; } }
+  else { t = {id:'t'+(S.seq++), kind, ref, stack:[entry]}; S.tabs.push(t); if(S.tabs.length>8) S.tabs.shift(); }
+  S.active = t.id; render();
+}
+let undoFn=null, toastT;
+function toast(msg, undo){
+  document.querySelectorAll('.toast').forEach(t=>t.remove()); clearTimeout(toastT);
+  const d=document.createElement('div'); d.className='toast'; d.setAttribute('role','status');
+  d.innerHTML = `<span>${esc(msg)}</span>${undo?'<button data-a="undo">Undo</button>':''}`;
+  d.style.bottom=($('worlds').offsetHeight+14)+'px'; document.body.appendChild(d);
+  undoFn = undo||null; toastT=setTimeout(()=>{ d.remove(); undoFn=null; }, undo?5000:1800);
+}
+/* ---- What do you need? : Understand → Preview → Confirm → Execute → Update the plan ---- */
+let pending=null;
+function findPrep(t){ return TODAY_PREP.find(p=> t.includes(p.r) || t.includes(p.name.toLowerCase().split(' ')[0]) || (p.r==='tiramisu'&&t.includes('tiramis')) ); }
+function ctxPrep(){ if(S.active==='home') return null; const t=tabById(S.active); return t && t.kind==='recipe' ? TODAY_PREP.find(p=>p.r===t.ref) : null; }
+function interpret(raw){
+  const t = raw.trim().toLowerCase(); if(!t) return '';
+  const num = (t.match(/(\d+(?:[.,]\d+)?)/)||[])[1]; const n = num ? parseFloat(num.replace(',','.')) : null;
+  let p = findPrep(t) || ((/\b(this|it|questo|full batch|all)\b/.test(t)) ? ctxPrep() : null);
+  if(/^(why|perch)/.test(t)){
+    if(!p) return `<div class="answer">Ask about a prep on today's list, for example “Why 5.5 kg arrabbiata?”</div>`;
+    return `<div class="answer"><div class="eyebrow">Answer · nothing changes</div><div><b>${esc(p.name)} · ${fmt(prepQty(p).T)} ${p.unit}</b></div><div>${WHY[p.id]}</div><button class="btn" data-a="openRecipe" data-r="${p.r}" data-from="today">Open ${esc(p.name)}</button></div>`;
+  }
+  const tell = t.match(/^(tell|message|di a|dì a|scrivi a)\s+(\w+)[:,]?\s*(.*)$/);
+  if(tell){
+    const who = tell[2][0].toUpperCase()+tell[2].slice(1), msg = raw.trim().replace(/^\S+\s+(a\s+)?\S+[:,]?\s*/i,'') || '…';
+    pending = {kind:'msg', who, msg};
+    return preview('Message', `To ${who}`, `“${esc(msg)}”`, 'Send');
+  }
+  if(p && /(made|fatto|fatti|finished|done|only|solo|ho fatto|this|full)/.test(t)){
+    const q = prepQty(p);
+    if(n!==null && n < q.T){
+      pending = {kind:'part', id:p.id, n};
+      return preview('Record production', `${esc(p.name)} · ${fmt(n)} of ${fmt(q.T)} ${p.unit}`, `${fmt(q.T-n)} ${p.unit} still to make. They stay on Today.`, 'Record');
+    }
+    pending = {kind:'full', id:p.id};
+    return preview('Record production', `${esc(p.name)} · ${fmt(q.T)} ${p.unit}`, q.R&&q.C?`${fmt(q.R)} restaurant + ${fmt(q.C)} ${EVENTS[p.ev].name.split(' ')[0]} · by Max · ${nowHM()}`:`by Max · ${nowHM()}`, 'Record');
+  }
+  // search
+  const hits = [];
+  Object.entries(EVENTS).forEach(([k,e])=>{ if(e.name.toLowerCase().includes(t)) hits.push(`<button class="row" data-a="openEvent" data-id="${k}"><span class="main"><div class="name">${e.name}</div><div class="meta">Event · ${e.short}</div></span><span class="chev">›</span></button>`); });
+  TODAY_PREP.forEach(pp=>{ if(pp.name.toLowerCase().includes(t)) hits.push(`<button class="row" data-a="openRecipe" data-r="${pp.r}" data-from="today"><span class="main"><div class="name">${pp.name}</div><div class="meta">Today · ${fmt(prepQty(pp).T)} ${pp.unit}${S.done[pp.id]?' · done':''}</div></span><span class="chev">›</span></button>`); });
+  Object.entries(RECIPES).forEach(([k,r])=>{ if(r.name.toLowerCase().includes(t)) hits.push(`<button class="row" data-a="openRecipe" data-r="${k}"><span class="main"><div class="name">${r.name}</div><div class="meta">Recipe · ${r.station}</div></span><span class="chev">›</span></button>`); });
+  Object.entries(INGREDIENTS).forEach(([k,i])=>{ if(i.name.toLowerCase().includes(t)) hits.push(`<button class="row" data-a="openIng" data-id="${k}"><span class="main"><div class="name">${i.name}</div><div class="meta">Ingredient · ${i.onhand} on hand</div></span><span class="chev">›</span></button>`); });
+  pending=null;
+  return hits.length ? `<div class="list">${hits.slice(0,8).join('')}</div>` : `<div class="answer">Nothing found for “${esc(raw)}”. This demo knows today's prep, 8 recipes, 3 events and 6 ingredients.</div>`;
+}
+function preview(k, title, sub, verb){
+  return `<div class="preview"><div class="k">${k} · check before saving</div><div class="t">${title}</div><div style="color:var(--tx2)">${sub}</div><div class="acts"><button class="btn ghost" data-a="askCancel">Cancel</button><button class="btn" data-a="askConfirm">${verb}</button></div></div>`;
+}
+function askRun(text){ const o=$('askout'); if(o) o.innerHTML = interpret(text); }
+function execute(a){
+  const p = a.id && TODAY_PREP.find(x=>x.id===a.id);
+  if(a.kind==='full'){ const prev = {d:S.done[a.id], pt:S.part[a.id]}; S.done[a.id]=true; delete S.part[a.id]; log(`Max recorded ${p.name.toLowerCase()}, ${fmt(prepQty(p).T)} ${p.unit}`); render(true);
+    toast(`${p.name} recorded`, ()=>{ S.done[a.id]=prev.d; if(prev.pt) S.part[a.id]=prev.pt; log(`Undone: ${p.name.toLowerCase()} back to open`); render(true); }); }
+  if(a.kind==='part'){ const prev = S.part[a.id]; S.part[a.id]=a.n; log(`Max made ${fmt(a.n)} ${p.unit} ${p.name.toLowerCase()} · ${fmt(prepQty(p).left)} left`); render(true);
+    toast(`${fmt(prepQty(p).left)} ${p.unit} ${p.name.toLowerCase()} left`, ()=>{ if(prev) S.part[a.id]=prev; else delete S.part[a.id]; log(`Undone: ${p.name.toLowerCase()} partial`); render(true); }); }
+  if(a.kind==='msg'){ log(`Max to ${a.who}: “${a.msg}” (demo, not sent)`); render(true); toast(`Saved to the feed · demo, nothing sent`, ()=>{ log(`Undone: message to ${a.who}`); render(true); }); }
+}
+function sheet(html){ $('sheet').innerHTML = `<div class="grab"></div>${html}`; $('sheet').hidden=false; $('scrim').hidden=false; }
+function closeSheet(){ $('sheet').hidden=true; $('scrim').hidden=true; }
+$('scrim').onclick = closeSheet;
+
+const A = {
+  world(el){ rememberScroll(); const w=el.dataset.w; closeSheet();
+    if(S.active==='home' && S.world===w && S.ws[w].length>1){ S.ws[w].length=1; S.ws[w][0].y=0; }
+    S.world=w; S.active='home'; render(); },
+  tab(el){ rememberScroll(); S.active=el.dataset.id; closeSheet(); render(); },
+  close(el){ const id=el.dataset.id, i=S.tabs.findIndex(t=>t.id===id); S.tabs.splice(i,1);
+    if(S.active===id) S.active = S.tabs[i-1]?.id || S.tabs[i]?.id || 'home'; render(); },
+  go(el){ rememberScroll(); const p={}; for(const k of ['w','d']) if(el.dataset[k]!==undefined) p[k]=+el.dataset[k]; stack().push({s:el.dataset.s, p}); render(); },
+  back(){ const s=stack(); if(s.length>1){ s.pop(); render(); } },
+  openEvent(el){ closeSheet(); openTab('event', el.dataset.id, {s:'event', p:{id:el.dataset.id}}); },
+  openRecipe(el){ closeSheet(); openTab('recipe', el.dataset.r, {s:'recipe', p:{id:el.dataset.r, from:el.dataset.from||''}}); },
+  openIng(el){ closeSheet(); openTab('ing', el.dataset.id, {s:'ing', p:{id:el.dataset.id}}); },
+  seg(el){ const e=cur(); e.p.seg=el.dataset.k; render(true); },
+  mode(el){ const e=cur(); e.p.mode=el.dataset.k; render(true); },
+  week(el){ const e=cur(); e.p=e.p||{}; e.p.w=+el.dataset.w; e.y=0; render(); },
+  done(el){ const id=el.dataset.id, p=TODAY_PREP.find(x=>x.id===id), was=!!S.done[id];
+    S.done[id]=!was; log(was?`${p.name} reopened`:`Max checked off ${p.name.toLowerCase()}`); render(true);
+    if(!was) toast(`${p.name} done`, ()=>{ S.done[id]=false; log(`Undone: ${p.name.toLowerCase()} back to open`); render(true); }); },
+  makeAnyway(el){ const id=el.dataset.id, p=TODAY_PREP.find(x=>x.id===id); S.makeAnyway[id]=true; log(`${p.name} moved back to today`); render(true);
+    toast(`${p.name} added after lunch`, ()=>{ delete S.makeAnyway[id]; log(`Undone: ${p.name.toLowerCase()} back to tomorrow`); render(true); }); },
+  fix(el){ const k=el.dataset.k; S.fixed[k]=true; log(`Max decided: ${CHECKS[k].title.toLowerCase()}`); render(true);
+    toast('Decided · prototype only', ()=>{ delete S.fixed[k]; log(`Undone: ${CHECKS[k].title.toLowerCase()}`); render(true); }); },
+  undo(){ const f=undoFn; undoFn=null; document.querySelectorAll('.toast').forEach(t=>t.remove()); if(f) f(); },
+  why(el){ const p=TODAY_PREP.find(x=>x.id===el.dataset.id); sheet(`<div class="page"><div class="eyebrow">Why this quantity</div><h1 style="font-size:28px">${esc(p.name)} · ${fmt(prepQty(p).T)} ${p.unit}</h1><div class="answer">${WHY[p.id]}</div></div>`); },
+  ask(){
+    const cp = ctxPrep();
+    sheet(`<div class="page"><h1 style="font-size:28px">What do you need?</h1>
+      <input id="ask" class="askin" type="search" placeholder="Find, ask, record, tell someone" autocomplete="off" enterkeyhint="go">
+      <div id="askout"></div>
+      <section><h2>Try</h2><div class="chips">
+        ${cp?`<button data-a="try" data-t="Made this">Made this<i>Uses the open tab: ${esc(cp.name)}</i></button>`:''}
+        <button data-a="try" data-t="Made 5.5 kg arrabbiata">Made 5.5 kg arrabbiata<i>Records production, updates Today</i></button>
+        <button data-a="try" data-t="Only 4 focaccia so far">Only 4 focaccia so far<i>Partial: the rest stays on the plan</i></button>
+        <button data-a="try" data-t="Why 52 tiramisu?">Why 52 tiramisu?<i>An answer; nothing changes</i></button>
+        <button data-a="try" data-t="Tell Samantha: tiramisu after 14:00, cream is in reach-in 2">Tell Samantha: tiramisu after 14:00<i>Message with preview</i></button>
+        <button data-a="try" data-t="lasagna">lasagna<i>Search everywhere</i></button>
+      </div></section>
+      <p class="note">Demo: the phrases are interpreted by simple local rules. In the real app Chef AI would read them. Every change shows a preview first and can be undone.</p></div>`);
+    const i=$('ask'); let t; i.addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>askRun(i.value),200); });
+    i.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); askRun(i.value); i.blur(); } });
+  },
+  try(el){ const i=$('ask'); i.value=el.dataset.t; askRun(i.value); $('askout').scrollIntoView({block:'nearest'}); },
+  askCancel(){ pending=null; $('askout').innerHTML=''; },
+  askConfirm(){ const a=pending; pending=null; closeSheet(); if(a) execute(a); },
+  plus(){ sheet(`<div class="page"><h1 style="font-size:28px">Open in a new tab</h1>
+    <section><h2>Events</h2><div class="list">${Object.keys(EVENTS).map(k=>`<button class="row" data-a="openEvent" data-id="${k}"><span class="main"><div class="name">${EVENTS[k].name}</div><div class="meta">${EVENTS[k].short}</div></span><span class="chev">›</span></button>`).join('')}</div></section>
+    <section><h2>Recipes</h2><div class="list">${Object.keys(RECIPES).map(k=>`<button class="row" data-a="openRecipe" data-r="${k}"><span class="main"><div class="name">${RECIPES[k].name}</div></span><span class="chev">›</span></button>`).join('')}</div></section>
+    <section><h2>Prototype</h2><div class="list">
+      <button class="row" data-a="closeAll"><span class="main"><div class="name">Close all tabs</div></span></button>
+      <button class="row" data-a="reset"><span class="main"><div class="name">Reset demo</div><div class="meta">Tabs, checkmarks and Chef decisions go back to the start</div></span></button>
+    </div></section></div>`); },
+  closeAll(){ S.tabs=[]; S.active='home'; closeSheet(); render(); },
+  reset(){ S=fresh(); closeSheet(); render(); toast('Demo reset'); },
+};
+document.addEventListener('click', ev=>{
+  const el = ev.target.closest('[data-a]'); if(!el) return;
+  const f = A[el.dataset.a]; if(f){ ev.preventDefault(); f(el); }
+});
+window.addEventListener('resize', layout);
+if(!SCREENS[cur()?.s]) S = fresh();
+render();
+</script>
