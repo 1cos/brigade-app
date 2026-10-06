@@ -6,7 +6,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const BUILD = 'api-r1.1'
+const BUILD = 'api-r1.2'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -220,12 +220,31 @@ async function planner(u: User) {
 
 async function catering(u: User) {
   const t = today()
-  const ev = must(await svc.from('events').select('id,name,event_date,event_time,guest_count,status,event_recipes').gte('event_date', t).lte('event_date', addDays(t, 14)).order('event_date')) as any[]
+  const ev = must(await svc.from('events').select('id,name,event_date,event_time,guest_count,status,event_recipes,tripleseat_id').gte('event_date', t).lte('event_date', addDays(t, 14)).order('event_date')) as any[]
   const ids = [...new Set(ev.flatMap(e => (Array.isArray(e.event_recipes) ? e.event_recipes : []).map((r: any) => r.recipe_id).filter(Boolean)))]
   const recs = ids.length ? must(await svc.from('recipes').select('id,title,category').in('id', ids)) as any[] : []
   const rN: any = {}; recs.forEach(r => { rN[r.id] = r })
+  // TS08: the current menu is the Tripleseat document (webhook + API reconcile, TS06), latest version per document.
+  // events.event_recipes is an old Brigade copy that nothing updates any more: sent apart, labelled as old.
+  const tsIds = [...new Set(ev.map(e => Number(e.tripleseat_id)).filter(Boolean))]
+  const vers = tsIds.length ? must(await svc.from('event_document_versions').select('ts_event_id,ts_document_id,version_no,received_at,lines').in('ts_event_id', tsIds).eq('is_test', false).order('version_no', { ascending: false })) as any[] : []
+  const latest: any = {}
+  vers.forEach(v => { if (!latest[v.ts_document_id]) latest[v.ts_document_id] = v })
+  const tsMenu = (tsId: any) => {
+    const docs = Object.values(latest).filter((v: any) => String(v.ts_event_id) === String(tsId)).sort((a: any, b: any) => a.ts_document_id - b.ts_document_id)
+    if (!docs.length) return null
+    // kitchen lines only, and only kitchen fields: no prices (never stored), no admin data
+    // Food sections first (as on the Kitchen Sheet), then the others in document order; position inside a section
+    const rank = (all: any[]) => { const o: any = {}; all.forEach((l: any, i: number) => { const k = l.section || ''; if (!(k in o)) o[k] = (/food|cibo|menu/i.test(k) ? 0 : 1000) + i }); return o }
+    const lines = docs.flatMap((v: any) => { const all = (Array.isArray(v.lines) ? v.lines : []).filter((l: any) => l.kitchen !== false); const r = rank(all)
+      return all.sort((a: any, b: any) => r[a.section || ''] - r[b.section || ''] || (Number(a.position) || 0) - (Number(b.position) || 0)) })
+      .map((l: any) => ({ section: l.section || '', name: l.name || '', details: l.details || '', qty: l.quantity ?? null }))
+    const at = docs.map((v: any) => v.received_at).sort().pop()
+    return { lines, version: Math.max(...docs.map((v: any) => v.version_no)), received_at: at }
+  }
   // only what to cook: name, date, guests, dishes — no client contacts, no prices
   return { events: ev.map(e => ({ id: e.id, name: e.name, date: e.event_date, time: e.event_time, guests: e.guest_count, status: e.status,
+    ts_menu: e.tripleseat_id ? tsMenu(e.tripleseat_id) : null,
     dishes: (Array.isArray(e.event_recipes) ? e.event_recipes : []).map((r: any) => ({ recipe_id: r.recipe_id || null, name: (rN[r.recipe_id] || {}).title || r.name || r.title || 'Dish', qty: r.quantity ?? r.qty ?? null })) })) }
 }
 

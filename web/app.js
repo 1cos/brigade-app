@@ -226,16 +226,24 @@ SCREENS.catering = { title: () => t('w_cat'), c: '--cat', render() {
   const top = head(t('next2'), t('w_cat'));
   if (!d) return `<div class="page">${top}${waiting('catering')}</div>`;
   return `<div class="page" style="--c:var(--cat)">${top}
-    <div class="list">${d.events.map(e => `<button class="row" data-a="openEvent" data-id="${e.id}"><span class="dotc"></span><span class="main"><div class="name">${esc(e.name)}</div><div class="meta">${shortDay(e.date)}${e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''}${e.guests ? ' · ' + t('guests', { n: e.guests }) : ''} · ${I.plural(e.dishes.length, 'dishes')}</div></span><span class="chev">›</span></button>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('no_events')}</div></span></div>`}</div>
+    <div class="list">${d.events.map(e => `<button class="row" data-a="openEvent" data-id="${e.id}"><span class="dotc"></span><span class="main"><div class="name">${esc(e.name)}</div><div class="meta">${shortDay(e.date)}${e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''}${e.guests ? ' · ' + t('guests', { n: e.guests }) : ''} · ${e.ts_menu ? t('ts_menu') + ' · ' + e.ts_menu.lines.length : I.plural(e.dishes.length, 'dishes')}</div></span><span class="chev">›</span></button>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('no_events')}</div></span></div>`}</div>
   </div>`;
 } };
 SCREENS.event = { title: p => { const d = API.peek('catering'); const e = d && d.events.find(x => x.id === p.id); return e ? e.name : t('w_cat'); }, c: '--cat', render(p) {
   const d = need('catering', null, 5 * 60000);
   if (!d) return `<div class="page">${backBtn()}${waiting('catering')}</div>`;
   const e = d.events.find(x => x.id === p.id); if (!e) return `<div class="page">${backBtn()}<p class="note">${t('event_nf')}</p></div>`;
+  const dish = x => x.recipe_id ? `<button class="row" data-a="openRecipe" data-r="${x.recipe_id}"><span class="main"><div class="name">${esc(x.name)}</div>${x.qty ? `<div class="meta">${esc(x.qty)}</div>` : ''}</span><span class="chev">›</span></button>` : `<div class="row"><span class="main"><div class="name">${esc(x.name)}</div><div class="meta">${t('no_recipe_link')}</div></span></div>`;
+  // TS08: guests = event guests from Tripleseat; ×N = quantity of that menu line (package), never merged with guests
+  const m = e.ts_menu;
+  const tsLine = l => `<div class="row"><span class="main"><div class="name">${esc(l.name)}</div>${l.qty != null && l.qty !== '' ? `<div class="meta">${t('ts_qty', { n: esc(l.qty) })}</div>` : ''}${l.details ? `<div class="meta">${esc(l.details)}</div>` : ''}</span></div>`;
+  const tsHtml = m ? `<section><h2>${t('ts_menu')}</h2><div class="list">${m.lines.map((l, i) => (l.section && (i === 0 || m.lines[i - 1].section !== l.section) ? `<div class="row"><span class="main"><div class="meta"><b>${esc(l.section)}</b></div></span></div>` : '') + tsLine(l)).join('') || `<div class="row"><span class="main"><div class="meta">${t('ts_empty')}</div></span></div>`}</div>
+    <p class="note">${t('ts_updated', { v: m.version, d: m.received_at ? esc(new Date(m.received_at).toLocaleString(I.locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) : '—' })}</p></section>` : '';
+  const oldHtml = m ? (e.dishes.length ? `<section><h2>${t('old_copy')}</h2><p class="note">${t('old_copy_note')}</p><div class="list">${e.dishes.map(dish).join('')}</div></section>` : '')
+    : `<section><h2>${t('what_cook')}</h2><div class="list">${e.dishes.map(dish).join('') || `<div class="row"><span class="main"><div class="meta">${t('menu_not_set')}</div></span></div>`}</div></section>`;
   return `<div class="page" style="--c:var(--cat)">${backBtn()}
-    ${head(shortDay(e.date) + (e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''), esc(e.name), e.guests ? t('guests', { n: e.guests }) : '')}
-    <section><h2>${t('what_cook')}</h2><div class="list">${e.dishes.map(x => x.recipe_id ? `<button class="row" data-a="openRecipe" data-r="${x.recipe_id}"><span class="main"><div class="name">${esc(x.name)}</div>${x.qty ? `<div class="meta">${esc(x.qty)}</div>` : ''}</span><span class="chev">›</span></button>` : `<div class="row"><span class="main"><div class="name">${esc(x.name)}</div><div class="meta">${t('no_recipe_link')}</div></span></div>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('menu_not_set')}</div></span></div>`}</div></section>
+    ${head(shortDay(e.date) + (e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''), esc(e.name), e.guests ? t(m ? 'guests_event' : 'guests', { n: e.guests }) : '')}
+    ${tsHtml}${oldHtml}
   </div>`;
 } };
 
