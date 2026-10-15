@@ -113,6 +113,11 @@
     of_line_short: p => [`${p.a}: ${p.got} of ${p.ord} shipped`, `${p.a}: spediti ${p.got} su ${p.ord}`, `${p.a}: enviados ${p.got} de ${p.ord}`],
     of_line_none: p => [`${p.a}: none of ${p.ord} shipped`, `${p.a}: nessuno spedito su ${p.ord}`, `${p.a}: ninguno enviado de ${p.ord}`],
     of_line_extra: p => [`${p.a}: ${p.n} received, not ordered`, `${p.a}: ricevuti ${p.n}, non ordinati`, `${p.a}: recibidos ${p.n}, no pedidos`],
+    w_office_eyebrow: ['Office', 'Ufficio', 'Oficina'], of_decision: ['Decision', 'Decisione', 'Decisión'], of_alerts: ['Important alerts', 'Avvisi importanti', 'Avisos importantes'],
+    of_no_alerts: ['Nothing urgent right now.', 'Niente di urgente adesso.', 'Nada urgente ahora.'], of_open_all: ['All decisions ›', 'Tutte le decisioni ›', 'Todas las decisiones ›'],
+    of_gone: ['This decision is no longer open: it was handled in Brigade, or it is out of date.', 'Questa decisione non è più aperta: è stata gestita in Brigade oppure è superata.', 'Esta decisión ya no está abierta: se gestionó en Brigade o está desactualizada.'],
+    of_to_fix: p => [`To fix: ${p.t}`, `Da sistemare: ${p.t}`, `Por arreglar: ${p.t}`], of_now: ['Now:', 'Adesso:', 'Ahora:'], of_fix_in_brigade: ['Fix in Brigade', 'Sistema in Brigade', 'Arreglar en Brigade'],
+    of_tools: ['Office tools', 'Strumenti dell\'Ufficio', 'Herramientas de oficina'],
     of_line_msg: p => { const s = `${p.from}: ${p.text}`; return [s, s, s]; },
   };
 
@@ -129,7 +134,7 @@
   const w = (k, p) => T({ k, p });
   const line = l => l.t === 'msg' ? w('of_line_msg', { from: l.from ? { raw: l.from } : { k: 'of_team' }, text: { raw: l.text } }) : w('of_line_' + l.t, { a: { raw: l.a }, b: l.b != null ? { raw: l.b } : null, got: l.got, ord: l.ord, n: l.n });
   const ctaBtn = (d) => {
-    if (d.cta === 'recipe' && d.rid) return `<button class="btn" data-a="openRecipe" data-r="${esc(d.rid)}">${w('of_btn_recipe')}</button>`;
+    if (d.cta === 'recipe' && d.rid) return `<button class="btn" data-a="openRecipe" data-r="${esc(d.rid)}" data-focus="${esc(d.focus || '')}">${w('of_btn_recipe')}</button>`;
     const k = { invoices: 'of_btn_invoices', review: 'of_btn_review', office: 'of_btn_office', brigade: 'of_btn_brigade' }[d.cta];
     const out = k ? `<a class="btn ghost" href="${BRIGADE_URL}" target="_blank" rel="noopener">${w(k)} ↗</a>` : '';
     return out + (d.area === 'team' && d.rid ? `<button class="btn" data-a="openRecipe" data-r="${esc(d.rid)}">${w('of_btn_recipe')}</button>` : '');
@@ -139,7 +144,7 @@
     return `<div class="dec"><div class="top"><span class="sev ${esc(d.sev)}"></span><div style="flex:1;min-width:0"><div class="name">${T(d.title)}</div>${now || dt ? `<div class="meta">${[now, dt].filter(Boolean).join(' · ')}</div>` : ''}</div></div>
       ${d.why ? `<div class="q">${T(d.why)}</div>` : ''}
       ${d.lines && d.lines.length ? `<ul class="lines">${d.lines.map(l => `<li>${line(l)}</li>`).join('')}</ul>` : ''}
-      ${d.recipes ? `<div class="list">${d.recipes.map(x => `<button class="row" data-a="openRecipe" data-r="${esc(x.id)}"><span class="main"><div class="name" style="font-weight:500;font-size:17px">${w('of_bom_row', { r: x.name, n: x.n })}</div></span><span class="chev">›</span></button>`).join('')}</div>` : ''}
+      ${d.recipes ? `<div class="list">${d.recipes.map(x => `<button class="row" data-a="openRecipe" data-r="${esc(x.id)}" data-focus="bom"><span class="main"><div class="name" style="font-weight:500;font-size:17px">${w('of_bom_row', { r: x.name, n: x.n })}</div></span><span class="chev">›</span></button>`).join('')}</div>` : ''}
       ${d.missing ? `<div class="meta"><b>${w('of_missing')}</b> ${T(d.missing)}</div>` : ''}
       ${d.cta || (d.area === 'team' && d.rid) ? `<div class="links">${ctaBtn(d)}</div>` : ''}</div>`;
   }
@@ -184,9 +189,35 @@
   function tiles(d, icons) {
     const t = (k, ic, lbl, val, cls) => `<button class="big ${cls || ''}" data-a="openOffice" data-k="${k}">${ic}<div><div class="lbl">${lbl}</div><div class="val">${val}</div></div></button>`;
     const dec = d ? d.decisions : null, inv = d ? d.invoices.tile : null;
-    return `<section><div class="chap"><h2>${w('of_office')}</h2></div><div class="grid">
+    return `<section><div class="chap"><h2>${w('of_tools')}</h2></div><div class="grid">
       ${t('decisions', icons.alert, w('of_decisions'), dec ? w('of_tile_dec', { n: dec.length }) : '…', dec && dec.some(x => x.cls === 'action_now') ? 'alert' : '')}
       ${t('invoices', icons.doc, w('of_invoices'), inv ? w('of_tile_inv', inv) : '…', inv && inv.now ? 'alert' : '')}</div></section>`;
   }
-  window.OfficeUI = { T, w, card, decisions, invoices, todayRow, tiles, title: k => w(k === 'invoices' ? 'of_invoices' : 'of_decisions'), _W: W };
+  /* My Shift: only the important alerts (action_now), each opens its own decision */
+  function alertRows(d) {
+    const needs = d.decisions.filter(x => x.today); if (!needs.length) return '';
+    return `<section><div class="chap"><h2>${w('of_alerts')}</h2><span>${needs.length}</span></div><div class="list alerts">${needs.map(alertRow).join('')}</div></section>`;
+  }
+  const alertRow = x => `<button class="row" data-a="openDecision" data-key="${esc(x.key)}"><span class="${x.sev === 'red' ? 'dotr' : 'dotw'}"></span><span class="main"><div class="name">${T(x.title)}</div><div class="meta">${T(x.why)}</div></span><span class="chev">›</span></button>`;
+  /* Ufficio world home (Chef only) */
+  function home(d, icons) {
+    const needs = d.decisions.filter(x => x.today);
+    return `<section><div class="chap"><h2>${w('of_alerts')}</h2><span>${needs.length || ''}</span></div><div class="list alerts">${needs.map(alertRow).join('') || `<div class="row"><span class="main"><div class="meta">${w('of_no_alerts')}</div></span></div>`}</div></section>`
+      + tiles(d, icons)
+      + (d.completeness.length ? `<div class="list"><div class="row"><span class="main"><div class="name">${w('of_completeness')}</div><div class="meta">${w('of_completeness_sub', { n: d.completeness.length })}</div></span></div></div>` : '')
+      + `<p class="note" style="font-size:14px">${w('of_checked', { t: hm(d.checked_at) })} ${w('of_ro_note')}</p>`;
+  }
+  function single(d, key) {
+    const x = d.decisions.find(y => y.key === key);
+    const body = x ? `<div class="list">${card(x)}</div>` : `<p class="note">${w('of_gone')}</p>`;
+    return `<div><div class="eyebrow">${w('w_office_eyebrow')}${x ? ' · ' + w(x.cls === 'action_now' ? 'of_act_now' : 'of_later') : ''}</div><h1>${w('of_decision')}</h1></div>${body}
+      <button class="lnk" data-a="openOffice" data-k="decisions" data-scope="all">${w('of_open_all')}</button>`;
+  }
+  /* recipe opened from a decision: which card, and the box on top of the recipe (as Shell V020) */
+  function fixFor(d, rid, focus) { return d.decisions.find(x => x.focus === focus && (x.rid === rid || (x.recipes || []).some(r => r.id === rid))) || null; }
+  function fixBox(f) {
+    return `<div class="fixbox ${esc(f.sev)}"><div class="h">${w('of_to_fix', { t: { raw: '' } }).replace(/\s*$/, ' ')}${T(f.title)}</div>${f.why ? `<div>${T(f.why)}</div>` : ''}${f.now ? `<div><b>${w('of_now')}</b> ${T(f.now)}</div>` : ''}${f.missing ? `<div><b>${w('of_missing')}</b> ${T(f.missing)}</div>` : ''}
+      <div><a class="btn ghost" href="${BRIGADE_URL}" target="_blank" rel="noopener">${w('of_fix_in_brigade')} ↗</a></div></div>`;
+  }
+  window.OfficeUI = { alertRows, home, single, fixFor, fixBox, T, w, card, decisions, invoices, todayRow, tiles, title: k => w(k === 'invoices' ? 'of_invoices' : 'of_decisions'), _W: W };
 })();

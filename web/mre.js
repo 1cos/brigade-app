@@ -379,6 +379,8 @@ window.MreUI = {
   init(helpers) { H = helpers; const m = document.getElementById('main');
     m.addEventListener('click', onClick, true); m.addEventListener('focusout', onBlurText); m.addEventListener('change', onChange); m.addEventListener('input', onInput); },
   render,
+  /* sign-out / switch user: nothing of the previous person's working copies stays in memory */
+  reset() { Object.keys(WORK).forEach(k => delete WORK[k]); Object.keys(UI).forEach(k => delete UI[k]); clearTimeout(saveT); clearTimeout(qT); },
   title(p) { const d = H && H.peek('mre_recipe', { id: p.id }); return d ? d.doc.title : (p.name || ''); },
 };
 })();

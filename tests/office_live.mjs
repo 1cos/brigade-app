@@ -12,7 +12,7 @@ async function call(who, op, body = {}) {
   let j = null; try { j = await r.json() } catch (e) {}
   return { status: r.status, j }
 }
-let r = await call(null, 'ping'); ok(r.j && r.j.build === 'api-r1.4-office', `ping: build ${r.j && r.j.build}`)
+let r = await call(null, 'ping'); ok(r.j && /^api-r1\.[4-9]/.test(r.j.build), `ping: build ${r.j && r.j.build}`)
 r = await call(null, 'office'); ok(r.status === 401, `senza sessione: rifiutato (HTTP ${r.status})`)
 r = await call('fake', 'office'); ok(r.status === 401, `token inventato: rifiutato (HTTP ${r.status})`)
 r = await call('anon', 'office'); ok(r.status === 401, `chiave pubblica di Brigade: rifiutata (HTTP ${r.status})`)

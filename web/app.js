@@ -17,8 +17,9 @@ const ICON = {
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
   alert: sv('<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>'),
   doc: sv('<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h6"/>'),
+  office: sv('<rect x="3" y="7" width="18" height="13" rx="3"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/>'),
 };
-const WORLDS = { today: { k: 'w_today', c: '--today' }, restaurant: { k: 'w_rest', c: '--rest' }, catering: { k: 'w_cat', c: '--cat' }, planner: { k: 'w_plan', c: '--plan' } };
+const WORLDS = { today: { k: 'w_today', c: '--today' }, restaurant: { k: 'w_rest', c: '--rest' }, catering: { k: 'w_cat', c: '--cat' }, planner: { k: 'w_plan', c: '--plan' }, office: { k: 'w_office', c: '--office', chef: true } };
 
 /* ============ HELPERS ============ */
 const $ = id => document.getElementById(id);
@@ -40,13 +41,16 @@ const isChef = () => ME && ME.role === 'chef';
 
 /* ============ UI STATE (per user, per device) ============ */
 const uiKey = () => 'brigade-app-ui:' + (ME ? ME.id : 'none');
-const fresh = () => ({ v: 1, world: 'today', active: 'home', ws: { today: [{ s: 'today' }], restaurant: [{ s: 'restaurant' }], catering: [{ s: 'catering' }], planner: [{ s: 'planner' }] }, tabs: [], seq: 1 });
+const fresh = () => ({ v: 1, world: 'today', active: 'home', ws: { today: [{ s: 'today' }], restaurant: [{ s: 'restaurant' }], catering: [{ s: 'catering' }], planner: [{ s: 'planner' }], office: [{ s: 'office' }] }, tabs: [], seq: 1 });
 let S = fresh();
-const loadUi = () => { S = fresh(); try { const x = JSON.parse(localStorage.getItem(uiKey())); if (x && x.v === 1) S = x; } catch (e) {} };
+const loadUi = () => { S = fresh(); try { const x = JSON.parse(localStorage.getItem(uiKey())); if (x && x.v === 1) S = x; } catch (e) {}
+  S.ws.office = S.ws.office || [{ s: 'office' }];
+  if (!isChef()) { S.tabs = S.tabs.filter(tb => !['office', 'decision', 'decisions', 'invoices'].includes(tb.stack[0].s)); if (S.world === 'office') S.world = 'today'; if (S.active !== 'home' && !tabById(S.active)) S.active = 'home'; } };
 const save = () => { if (!ME) return; try { localStorage.setItem(uiKey(), JSON.stringify(S)); } catch (e) {} };
 function wipeLocal() {                           // sign-out: nothing of the previous person stays on the phone
   try { Object.keys(localStorage).filter(k => k.startsWith('brigade-app-ui:')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
-  I.clearChoice(); S = fresh(); DRAFT = {}; API.forget();
+  I.clearChoice(); S = fresh(); DRAFT = {}; API.forget(); Object.keys(ERR).forEach(k => delete ERR[k]);
+  if (window.MreUI && window.MreUI.reset) window.MreUI.reset();
 }
 let DRAFT = {};                                  // unsent text in sheets, memory only
 
@@ -70,7 +74,7 @@ const head = (eyebrow, h, sub) => `<div><div class="eyebrow">${eyebrow}</div><h1
 const ERR = {};
 function need(op, body, ttl) {
   const d = API.peek(op, body);
-  API.get(op, body, ttl).then(() => { delete ERR[op]; }, e => { ERR[op] = e; });
+  API.get(op, body, ttl).then(() => { delete ERR[op]; }, e => { if (e.code !== 'stale') ERR[op] = e; });
   return d;
 }
 function waiting(op) {
@@ -111,7 +115,7 @@ SCREENS.today = { title: () => t('w_today'), c: '--today', render() {
   return `<div class="page" style="--c:var(--today)">
     ${top}<p class="brief">${brief}${next}</p></div>
     ${isChef() ? `<div class="acts"><button class="btn" data-a="compose">${t('msg_team')}</button></div>` : ''}
-    ${isChef() && window.OfficeUI ? (d => d ? window.OfficeUI.todayRow(d) : '')(need('office', null, 5 * 60000)) : ''}
+    ${isChef() && window.OfficeUI ? (d => d ? window.OfficeUI.alertRows(d) : '')(need('office', null, 5 * 60000)) : ''}
     ${isChef() && (need('mre_list', null, 2 * 60000) || {}).pending ? `<div class="list"><button class="row" data-a="world" data-w="restaurant"><span class="main"><div class="name">${t('m_lab_pending', { n: API.peek('mre_list').pending })}</div><div class="meta">${t('m_lab_title')}</div></span><span class="chev">›</span></button></div>` : ''}
     ${msgs.length ? `<section><div class="chap"><h2>${t(isChef() ? 'your_msgs' : 'from_chef')}</h2><span>${unread.length ? t('new_n', { n: unread.length }) : ''}</span></div><div class="list">${msgHtml}</div></section>` : ''}
     ${isChef() ? `<section><div class="chap"><h2>${t('problems')}</h2><span>${repUnread.length ? t('new_n', { n: repUnread.length }) : ''}</span></div><div class="list">${reports.slice(0, 8).map(r => `<button class="msg ${r.read ? '' : 'unread'}" data-a="readReport" data-id="${r.id}">${r.read ? '' : '<span class="dotw" style="margin-top:6px"></span>'}<span class="main"><div class="who">${esc(r.from)} · ${tFmt(r.at)}${r.prep ? ' · ' + esc(r.prep) : ''}</div><div class="txt">${esc(r.text)}</div></span></button>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('no_problems')}</div></span></div>`}</div></section>` : ''}
@@ -159,11 +163,10 @@ SCREENS.restaurant = { title: () => t('w_rest'), c: '--rest', render(p) {
   const top = head(t('read_only'), t('w_rest'));
   if (!d) return `<div class="page">${top}${waiting('recipes')}</div>`;
   const lab = mreSection(p);
-  const office = isChef() && window.OfficeUI && !(p.q || '').trim() ? window.OfficeUI.tiles(need('office', null, 5 * 60000), ICON) : '';
   const q = (p.q || '').trim().toLowerCase();
   const list = d.recipes.filter(r => !q || r.title.toLowerCase().includes(q));
   const groups = {}; list.forEach(r => { (groups[cat(r.category)] = groups[cat(r.category)] || []).push(r); });
-  return `<div class="page" style="--c:var(--rest)">${top}${office}${lab}
+  return `<div class="page" style="--c:var(--rest)">${top}${lab}
     ${lab ? `<div class="chap"><h2>${t('m_lab_others')}</h2></div>` : ''}
     <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: d.recipes.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
     ${Object.keys(groups).sort().map(g => `<section><div class="chap"><h2>${esc(g)}</h2><span>${groups[g].length}</span></div><div class="list">${groups[g].map(r => `<button class="row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(r.title)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>`).join('') || `<p class="note">${esc(t('nothing_for', { q }))}</p>`}
@@ -193,12 +196,14 @@ SCREENS.recipe = { title: p => { const d = API.peek('recipe', { id: p.id }); ret
   const fromPrep = p.prep ? +p.prep : null;
   return `<div class="page" style="--c:var(--rest)">${backBtn()}
     <div><div class="eyebrow">${esc(RC.headMeta(v))}</div><h1>${esc(v.rec.title)}</h1></div>
+    ${fixBox(p)}
     <div class="rc-sticky">${RC.amountHtml(v)}${RC.segHtml(v)}</div>
     ${RC.notes(v)}
     ${fromPrep ? actButtons(fromPrep, statusOf(fromPrep)) : ''}
     <div id="rcBody" class="rc-body">${recipeBody(v, p, d)}</div>
   </div>`;
 }, after(p, active) {
+  markFocus(p);
   const inp = $('rcAmount'), rng = $('rcRange'); if (!inp) return;
   const d = API.peek('recipe', { id: p.id }); if (!d) return;
   const v = () => RC.model(d, p);
@@ -227,6 +232,19 @@ SCREENS.recipe = { title: p => { const d = API.peek('recipe', { id: p.id }); ret
   if (active === 'rcAmount') { inp.focus(); }
 } };
 
+/* what to fix, when the recipe is opened from a decision (Chef only) */
+function fixFor(p) { if (!p.focus || !isChef() || !window.OfficeUI) return null; const d = need('office', null, 5 * 60000); return d ? window.OfficeUI.fixFor(d, p.id, p.focus) : null; }
+function fixBox(p) { const f = fixFor(p); return f ? window.OfficeUI.fixBox(f) : ''; }
+/* marks the part of the card to fix: Yield (STRUCTURE tab) or Ingredients (PREP tab); scrolls there once */
+function markFocus(p) {
+  if (!p.focus || !isChef()) return;
+  const want = p.focus === 'yield' ? [RC.R('s_yield')] : [RC.R('ingredients')];
+  const sec = [...document.querySelectorAll('#rcBody section')].find(x => { const h = x.querySelector('h2'); return h && want.some(w => h.textContent.trim().toLowerCase().startsWith(w.toLowerCase())); });
+  if (!sec) return;
+  sec.classList.add('hl');
+  if (!p.focusShown) { p.focusShown = 1; setTimeout(() => { const box = document.querySelector('#main .fixbox'); (box || sec).scrollIntoView({ block: 'start' }); }, 30); }
+}
+
 /* ============ MASTER RECIPE ENGINE (B-49 lab) — one recipe/prep screen, see mre.js ============ */
 function mreSection(p) {
   const L = need('mre_list', null, 2 * 60000);
@@ -241,13 +259,13 @@ const mreIds = () => new Set(((API.peek('mre_list') || {}).recipes || []).map(r 
 SCREENS.mre = { title: p => window.MreUI ? window.MreUI.title(p) : (p.name || ''), c: '--rest', render(p) {
   const h = window.MreUI ? window.MreUI.render(p) : null;
   if (h == null) return `<div class="page">${backBtn()}${waiting('mre_recipe')}</div>`;
-  return `<div class="page mr-page" style="--c:var(--rest)">${backBtn()}${h}</div>`;
+  return `<div class="page mr-page" style="--c:var(--rest)">${backBtn()}${fixBox(p)}${h}</div>`;
 } };
-function openMre(id, name, f, ref) { openTab('mre', id, { s: 'mre', p: { id, name: name || '', f: f || 1, ref: ref || '', panel: null, edit: false } }); }
+function openMre(id, name, f, ref, focus) { openTab('mre', id + (focus ? ':' + focus : ''), { s: 'mre', p: { id, name: name || '', f: f || 1, ref: ref || '', panel: null, edit: false, focus: focus || '' } }); }
 
 /* ============ DECISIONS · L'UFFICIO · INVOICES (B-25 module 1, read only, Chef only) — see office.js ============ */
 function officeScreen(kind) {
-  return { title: () => window.OfficeUI.title(kind), c: kind === 'invoices' ? '--rest' : '--today', render(p) {
+  return { title: () => window.OfficeUI.title(kind), c: '--office', render(p) {
     if (!isChef()) return `<div class="page">${backBtn()}<p class="note">${t('chef_only')}</p></div>`;
     const d = need('office', null, 5 * 60000);
     if (!d) return `<div class="page">${backBtn()}${waiting('office')}</div>`;
@@ -257,6 +275,21 @@ function officeScreen(kind) {
 }
 SCREENS.decisions = officeScreen('decisions');
 SCREENS.invoices = officeScreen('invoices');
+/* Ufficio world (Chef only): important alerts first, then the office tools */
+SCREENS.office = { title: () => t('w_office'), c: '--office', render() {
+  const top = head(t('chef_area'), t('w_office'));
+  if (!isChef()) return `<div class="page">${top}<p class="note">${t('chef_only')}</p></div>`;
+  const d = need('office', null, 5 * 60000);
+  if (!d) return `<div class="page">${top}${waiting('office')}</div>`;
+  return `<div class="page" style="--c:var(--office)">${top}${window.OfficeUI.home(d, ICON)}</div>`;
+} };
+/* one decision, opened straight from My Shift or the Ufficio */
+SCREENS.decision = { title: () => window.OfficeUI.w('of_decision'), c: '--office', render(p) {
+  if (!isChef()) return `<div class="page">${backBtn()}<p class="note">${t('chef_only')}</p></div>`;
+  const d = need('office', null, 5 * 60000);
+  if (!d) return `<div class="page">${backBtn()}${waiting('office')}</div>`;
+  return `<div class="page" style="--c:var(--office)">${backBtn()}${window.OfficeUI.single(d, p.key)}</div>`;
+} };
 
 /* ============ CATERING (only what to cook) ============ */
 SCREENS.catering = { title: () => t('w_cat'), c: '--cat', render() {
@@ -305,8 +338,9 @@ function renderTabs() {
 }
 function renderWorlds() {
   const b = ([k, w]) => `<button class="w ${S.active === 'home' && S.world === k ? 'on' : ''}" style="--c:var(${w.c})" data-a="world" data-w="${k}">${ICON[k]}${t(w.k)}</button>`;
-  const e = Object.entries(WORLDS);
-  $('worlds').innerHTML = b(e[0]) + b(e[1]) + `<button class="w ask" data-a="ask" aria-label="${t('find')}"><span class="orb">${ICON.ask}</span>${t('find')}</button>` + b(e[2]) + b(e[3]);
+  const e = Object.entries(WORLDS).filter(([, w]) => !w.chef || isChef());   // Ufficio: Chef only, last
+  $('worlds').classList.toggle('six', e.length > 4);
+  $('worlds').innerHTML = b(e[0]) + b(e[1]) + `<button class="w ask" data-a="ask" aria-label="${t('find')}"><span class="orb">${ICON.ask}</span>${t('find')}</button>` + e.slice(2).map(b).join('');
 }
 function layout() { $('main').style.top = $('top').offsetHeight + 'px'; $('main').style.bottom = $('worlds').offsetHeight + 'px'; }
 function render(keep) {
@@ -315,7 +349,8 @@ function render(keep) {
   const y = $('main').scrollTop, active = document.activeElement && document.activeElement.id;
   let html; try { html = sc.render(e.p || {}); } catch (x) { console.error(x); html = `<div class="page">${backBtn()}<div class="err">${esc(x.message)}</div></div>`; }
   $('main').innerHTML = html;
-  $('who').textContent = ME.name + (isChef() ? ' · ' + t('chef') : ME.station ? ' · ' + ME.station : '');
+  $('who').textContent = ME.name + ' · ' + t(isChef() ? 'chef' : 'staff_role');      // always who is signed in
+  $('switch').textContent = t('switch_user'); $('switch').hidden = false;
   $('mode').textContent = t('test_mode');
   renderTabs(); renderWorlds(); layout();
   $('main').scrollTop = keep ? y : (e.y || 0);
@@ -376,9 +411,13 @@ const A = {
   toOrigin() { remember(); goOrigin(tabById(S.active)); render(); },
   back() { const s = stack(); if (s.length > 1) { s.pop(); render(); } },
   openPrep(el) { const id = +el.dataset.id; const i = (API.peek('shift') || { items: [] }).items.find(x => x.id === id); openTab('prep', String(id), { s: 'prep', p: { id, name: i ? i.name : '' } }); },
-  openRecipe(el) { if (mreIds().has(el.dataset.r)) { openMre(el.dataset.r); return; } openTab('recipe', el.dataset.r, { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null } }); },
+  /* data-focus (yield / bom): opened from a decision, the card shows what to fix and marks that part, as in Shell V020 */
+  openRecipe(el) { const focus = isChef() ? el.dataset.focus || '' : '';
+    if (mreIds().has(el.dataset.r)) { openMre(el.dataset.r, '', 1, '', focus); return; }
+    openTab('recipe', el.dataset.r + (focus ? ':' + focus : ''), { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null, focus, tab: focus === 'yield' ? 'struct' : 'prep' } }); },
   openMre(el) { openMre(el.dataset.r); },
   openOffice(el) { const k = el.dataset.k, scope = el.dataset.scope || 'all'; openTab('office', k + ':' + scope, { s: k, p: { scope } }); },
+  openDecision(el) { openTab('decision', el.dataset.key, { s: 'decision', p: { key: el.dataset.key } }); },
   ofAll() { remember(); stack().push({ s: 'decisions', p: { scope: 'all' } }); render(); },
   ofMore(el) { cur().p = Object.assign(cur().p || {}, { [el.dataset.k]: 1 }); render(true); },
   /* a sub-recipe opens in its own tab at the quantity the parent needs; closing it returns to the parent */
@@ -449,7 +488,8 @@ const A = {
   },
   lang(el) { I.set(el.dataset.k, true); closeSheet(); render(true); },
   resetUi() { S = fresh(); closeSheet(); render(); },
-  async switchUser() { closeSheet(); await API.logout(); signedOut(); },
+  /* switch user: immediate. The screen is wiped first, then the server closes the session; the next person types their own PIN */
+  switchUser() { const was = ME ? ME.name : ''; API.logout(); signedOut(was ? t('switched', { n: was }) : ''); },
   pin(el) { pinPress(el.dataset.k); },
 };
 function findResults(q) {
@@ -493,7 +533,7 @@ function signedIn(user) {
   if (!I.hasChoice() && ['en', 'it', 'es'].includes(user.lang)) I.set(user.lang, false);   // the person's Brigade language, unless chosen on this phone
   loadUi(); hideLogin(); render();
 }
-function signedOut() { ME = null; wipeLocal(); $('main').innerHTML = ''; $('tabs').innerHTML = ''; closeSheet(); showLogin(''); }
+function signedOut(msg) { ME = null; wipeLocal(); $('main').innerHTML = ''; $('tabs').innerHTML = ''; $('worlds').innerHTML = ''; $('who').textContent = ''; $('switch').hidden = true; closeSheet(); pinBuf = ''; showLogin(msg || ''); }
 window.addEventListener('app-signed-out', () => { API.clearToken(); if (ME) toast(t('signed_out')); signedOut(); });
 
 if (window.MreUI) window.MreUI.init({ need, peek: API.peek, render, toast, isChef, entry: () => cur().p,

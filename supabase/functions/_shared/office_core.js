@@ -87,16 +87,16 @@ export function triage(data, now = Date.now()) {
   Object.entries(groupBy(att.filter(isAction), a => a.decision_key || a.item_id)).forEach(([key, rows]) => {
     const a = rows[0], o = off[a.item_id] || {}, today = a.attention === 'action_now', base = { key, today, date: a.created_at, cls: a.attention, reason: a.reason }
     switch (a.reason) {
-      case 'no_yield': return out.push({ ...base, sev: 'red', area: 'recipe', rid: a.recipe_id, title: K('of_no_yield', { r: rname(a.recipe_id) }),
+      case 'no_yield': return out.push({ ...base, sev: 'red', area: 'recipe', rid: a.recipe_id, focus: 'yield', title: K('of_no_yield', { r: rname(a.recipe_id) }),
         why: K('of_why_no_yield', { sold: sold(o) }), missing: K('of_miss_yield'), cta: 'recipe' })
-      case 'no_ingredients': return out.push({ ...base, sev: 'red', area: 'recipe', rid: a.recipe_id, title: K('of_no_ingr', { r: rname(a.recipe_id) }),
+      case 'no_ingredients': return out.push({ ...base, sev: 'red', area: 'recipe', rid: a.recipe_id, focus: 'bom', title: K('of_no_ingr', { r: rname(a.recipe_id) }),
         why: K('of_why_no_ingr', { sold: sold(o) }), missing: K('of_miss_ingr'), cta: 'recipe' })
       case 'portions_unknown': { const cy = yields[a.recipe_id] || {}
-        return out.push({ ...base, sev: 'amber', area: 'recipe', rid: a.recipe_id, title: K('of_portions', { r: rname(a.recipe_id) }),
+        return out.push({ ...base, sev: 'amber', area: 'recipe', rid: a.recipe_id, focus: 'yield', title: K('of_portions', { r: rname(a.recipe_id) }),
           now: K('of_yield_now', { portions: num(cy.portions) > 0 ? Math.round(num(cy.portions) * 100) / 100 : null, qty: num(cy.yield_qty) > 0 ? num(cy.yield_qty) / 1000 : null, dim: cy.yield_dim === 'volume' ? 'L' : 'kg' }),
           why: K('of_why_portions', { sold: sold(o) }), missing: K('of_miss_portions'), cta: 'recipe' }) }
       case 'bom_maybe_incomplete': { const ids = [...new Set(rows.map(x => x.recipe_id))].filter(Boolean)
-        return out.push({ ...base, sev: 'amber', area: 'recipe', title: K('of_bom_few', { n: ids.length }), why: K('of_why_bom_few'), missing: K('of_miss_bom_few'),
+        return out.push({ ...base, sev: 'amber', area: 'recipe', focus: 'bom', title: K('of_bom_few', { n: ids.length }), why: K('of_why_bom_few'), missing: K('of_miss_bom_few'),
           recipes: ids.map(id => ({ id, name: rname(id), n: bomN[id] || 0 })) }) }
       case 'recipe_proposal': return out.push({ ...base, sev: 'amber', area: 'team', rid: a.recipe_id || null, title: K('of_proposal', { r: o.recipe_name ? RAW(nice(o.recipe_name)) : rname(a.recipe_id) }),
         why: RAW(msg(o)), missing: K('of_miss_proposal'), cta: 'office' })
