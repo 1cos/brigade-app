@@ -445,13 +445,15 @@ const A = {
     openTab('recipe', el.dataset.r + (focus ? ':' + focus : ''), { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null, focus, fix, tab: focus === 'yield' ? 'struct' : 'prep' } }); },
   /* "Edit" (Chef) on any recipe: the server makes an isolated lab copy if needed, then the B-49 editor opens on it */
   async editRecipe(el) {
-    if (!isChef() || el.disabled) return; el.disabled = true;
-    const id = el.dataset.r, p = cur().p || {};
-    try { await API.call('mre_prepare_edit', { id }); API.forget('mre_list'); await API.get('mre_list', null, 0); }
-    catch (e) { el.disabled = false; if (e.status !== 401) toast(errText(e)); return; }
+    if (!isChef() || el.disabled) return;
+    const id = el.dataset.r, p = cur().p || {}, rd = API.peek('recipe', { id }), name = rd && rd.recipe ? rd.recipe.title : '';
+    el.disabled = true; el.textContent = t('preparing_copy');
+    try { await API.call('mre_prepare_edit', { id }); }
+    catch (e) { el.disabled = false; el.textContent = t('edit_recipe'); if (e.status !== 401) toast(errText(e)); return; }
+    API.forget('mre_list'); API.get('mre_list', null, 0).catch(() => {});        // refreshed in the background: the editor opens now
     const tb = S.active !== 'home' ? tabById(S.active) : null;
     if (tb && tb.kind === 'recipe' && tb.stack.length === 1) { S.tabs.splice(S.tabs.indexOf(tb), 1); goOrigin(tb); }   // the Brigade card makes room for the editor
-    openMre(id, '', 1, '', p.focus === 'photo' ? '' : p.focus || '', p.fix || '', true);
+    openMre(id, name, 1, '', p.focus === 'photo' ? '' : p.focus || '', p.fix || '', true);
   },
   openMre(el) { openMre(el.dataset.r); },
   openOffice(el) { const k = el.dataset.k, scope = el.dataset.scope || 'all'; openTab('office', k + ':' + scope, { s: k, p: { scope } }); },
