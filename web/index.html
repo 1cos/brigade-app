@@ -18,7 +18,7 @@
 <body>
 <div id="login" hidden></div>
 <div id="top">
-  <div class="lab"><span class="who"><b>Brigade</b> · <span id="who"></span></span><span class="acct"><button class="swbtn" id="switch" data-a="switchUser" hidden></button><span class="testbar" id="mode"></span></span></div>
+  <div class="lab"><span class="who"><span class="brand"><b>Brigade</b> · </span><span id="who"></span></span><span class="acct"><button class="swbtn" id="switch" data-a="switchUser" hidden></button><span class="testbar" id="mode"></span></span></div>
   <div id="tabs" role="tablist" hidden></div>
 </div>
 <div id="main"></div>
@@ -33,6 +33,7 @@
 <script type="module">import * as MRE from './mre_engine.js'; window.MRE = MRE; window.dispatchEvent(new Event('app-data'));</script>
 <script src="mre.js"></script>
 <script src="office.js"></script>
+<script src="kitchen.js"></script>
 <script src="app.js"></script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body>

@@ -167,6 +167,7 @@ function prepView(v) {
       const sf = subFactor(row.quantity, row.unit, f, row.recipes);
       return `<button class="ing rc-it" data-a="openSub" data-i="${i}"><span class="rc-grow">${esc(ingName(row))}<span class="rc-badge">${R('prep_badge')}</span>${note}${sf.ok ? '' : `<small class="warn">${esc(R('sub_noconv', { x: sf.why }))}</small>`}</span><b class="num">${esc(q.text)}${flagTxt(q)}</b><span class="chev">›</span></button>`;
     }
+    if (row.item_id) return `<button class="ing rc-it" data-a="openIng" data-id="${esc(row.item_id)}"><span class="rc-grow">${esc(ingName(row))}${note}</span><b class="num">${esc(q.text)}${flagTxt(q)}</b><span class="chev">›</span></button>`;   // ingredient card (B-25 m2)
     return `<div class="ing rc-it"><span class="rc-grow">${esc(ingName(row))}${note}</span><b class="num">${esc(q.text)}${flagTxt(q)}</b></div>`;
   }).join('')}</div>`;
   else if (v.written.length) ing = `<p class="note rc-small">${R('written_only')}</p><div class="list">${v.written.map(i => {

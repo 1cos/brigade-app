@@ -96,7 +96,7 @@
     of_act_now: ['Act now', 'Da fare ora', 'Actuar ahora'], of_later: ['Your decision, not today', 'Decisione tua, non oggi', 'Tu decisión, no hoy'],
     of_more_link: p => p.n ? [`${p.n} for later, history and out-of-date alerts ›`, `${p.n} per dopo, storico e avvisi superati ›`, `${p.n} para después, historial y avisos desactualizados ›`] : ['History and out-of-date alerts ›', 'Storico e avvisi superati ›', 'Historial y avisos desactualizados ›'],
     of_completeness: ['Recipe completeness', 'Completezza ricette', 'Completitud de recetas'],
-    of_completeness_sub: p => [`${p.n} open: missing photos, procedures or portions. Not urgent. Its screen arrives with the next module.`, `${p.n} aperte: foto, procedimenti o porzioni mancanti. Non urgente. La sua schermata arriva con il prossimo modulo.`, `${p.n} abiertas: faltan fotos, procedimientos o porciones. No es urgente. Su pantalla llega con el próximo módulo.`],
+    of_completeness_sub: ['Missing photos, procedures and portions. Not urgent, kept in the Office.', 'Foto, procedimenti e porzioni mancanti. Non urgente, tenuto nell\'Ufficio.', 'Faltan fotos, procedimientos y porciones. No es urgente, está en la Oficina.'],
     of_show: p => [`Show ${p.n}`, `Mostra ${p.n}`, `Mostrar ${p.n}`],
     of_ro_note: ['Read only: decisions are made in Brigade. When Brigade changes, this list updates at the next refresh.', 'Sola lettura: le decisioni si prendono in Brigade. Quando Brigade cambia, questa lista si aggiorna al prossimo caricamento.', 'Solo lectura: las decisiones se toman en Brigade. Cuando Brigade cambia, esta lista se actualiza en la próxima carga.'],
     of_missing: ['Missing:', 'Manca:', 'Falta:'],
@@ -164,7 +164,7 @@
       eyebrow: today ? w('of_head_today') : w('of_head'), title: w('of_need_you', { n: list.length }), sub: w('of_checked', { t: hm(d.checked_at) }),
       body: sec(w('of_act_now'), now) + sec(w('of_later'), later)
         + (today ? `<button class="lnk" data-a="ofAll">${w('of_more_link', { n: later.length })}</button>`
-          : (d.completeness.length ? `<div class="list"><div class="row"><span class="main"><div class="name">${w('of_completeness')}</div><div class="meta">${w('of_completeness_sub', { n: d.completeness.length })}</div></span></div></div>` : '')
+          : (d.completeness.length ? `<div class="list"><button class="row" data-a="openComplete"><span class="main"><div class="name">${w('of_completeness')}</div><div class="meta">${w('of_completeness_sub')}</div></span><span class="chev">›</span></button></div>` : '')
           + (d.stale.length ? fold('stale', w('of_rl_yield_resolved'), d.stale.map(x => Object.assign({}, x, { sev: 'green' }))) : '')
           + Object.entries(groups).sort((a, b) => b[1].length - a[1].length).map(([k, l]) => fold(k, w(k), l)).join(''))
         + `<p class="note" style="font-size:14px">${w('of_ro_note')}</p>`,
@@ -200,11 +200,11 @@
   }
   const alertRow = x => `<button class="row" data-a="openDecision" data-key="${esc(x.key)}"><span class="${x.sev === 'red' ? 'dotr' : 'dotw'}"></span><span class="main"><div class="name">${T(x.title)}</div><div class="meta">${T(x.why)}</div></span><span class="chev">›</span></button>`;
   /* Ufficio world home (Chef only) */
-  function home(d, icons) {
+  function home(d, icons, compRow) {
     const needs = d.decisions.filter(x => x.today);
     return `<section><div class="chap"><h2>${w('of_alerts')}</h2><span>${needs.length || ''}</span></div><div class="list alerts">${needs.map(alertRow).join('') || `<div class="row"><span class="main"><div class="meta">${w('of_no_alerts')}</div></span></div>`}</div></section>`
       + tiles(d, icons)
-      + (d.completeness.length ? `<div class="list"><div class="row"><span class="main"><div class="name">${w('of_completeness')}</div><div class="meta">${w('of_completeness_sub', { n: d.completeness.length })}</div></span></div></div>` : '')
+      + (compRow || '')
       + `<p class="note" style="font-size:14px">${w('of_checked', { t: hm(d.checked_at) })} ${w('of_ro_note')}</p>`;
   }
   function single(d, key) {
