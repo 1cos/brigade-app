@@ -37,7 +37,8 @@ export function ingredientCard(id, data, chef) {
       avg_unit_weight_g: num(i.avg_unit_weight_g), yield_factor: num(i.yield_factor), active: i.active !== false, notes: i.notes || null },
     used_in: used, preps, can_price: !!chef,
   }
-  if (chef) card.vendors = (data.vendors || []).filter(v => v.ingredient_id === id).map(v => ({ vendor: v.vendor, sku: v.vendor_sku || null, pack: v.pack_description || v.purchase_unit || null,
+  // vendors in a fixed order (by name): Brigade has no order for them, so two reads could swap them
+  if (chef) card.vendors = (data.vendors || []).filter(v => v.ingredient_id === id).slice().sort((a, b) => String(a.vendor || '').localeCompare(String(b.vendor || '')) || String(a.vendor_sku || '').localeCompare(String(b.vendor_sku || ''))).map(v => ({ vendor: v.vendor, sku: v.vendor_sku || null, pack: v.pack_description || v.purchase_unit || null,
     last_invoice_date: v.last_invoice_date || null, price_per_100g: num(v.price_per_100g), price_per_each: num(v.price_per_each), unit_price: num(v.unit_price),
     do_not_order: !!v.do_not_order, do_not_order_reason: v.do_not_order_reason || null }))
   return card

@@ -41,7 +41,7 @@ for (const i of D.ingredients) {
   const vUsed = ids(vh, 'data-r'), vPrep = ids(vh, 'data-id').map(Number)
   const vPrices = [...vh.matchAll(/<span class="qty num" style="font-size:20px">([^<]*)<\/span>/g)].map(m => m[1])
   const money = v => v == null ? '' : '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  const eq = JSON.stringify(vUsed) === JSON.stringify(c.used_in.map(x => x.id)) && JSON.stringify(vPrep) === JSON.stringify(c.preps.map(x => x.id)) && JSON.stringify(vPrices) === JSON.stringify(c.vendors.map(v => money(v.unit_price)))
+  const eq = JSON.stringify(vUsed) === JSON.stringify(c.used_in.map(x => x.id)) && JSON.stringify(vPrep) === JSON.stringify(c.preps.map(x => x.id)) && JSON.stringify(vPrices.slice().sort()) === JSON.stringify(c.vendors.map(v => money(v.unit_price)).sort())   // same vendors; V020 shows them in database order, Brigade 2.0 by name
   if (eq) same++; else notes.push({ card: i.name, v020: { vUsed: vUsed.length, vPrep, vPrices }, app: { used: c.used_in.length, preps: c.preps.map(x => x.id), prices: c.vendors.map(v => money(v.unit_price)) } })
   usedTot += c.used_in.length; vendTot += c.vendors.length
   if (!('vendors' in s) && !/price|cost/i.test(JSON.stringify(Object.keys(s.ingredient)))) staffClean++
