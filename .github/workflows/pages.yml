@@ -19,6 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # single source of the engine: the same file the server runs (B-49)
+      - run: cp supabase/functions/_shared/mre_engine.js web/mre_engine.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

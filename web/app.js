@@ -109,6 +109,7 @@ SCREENS.today = { title: () => t('w_today'), c: '--today', render() {
   return `<div class="page" style="--c:var(--today)">
     ${top}<p class="brief">${brief}${next}</p></div>
     ${isChef() ? `<div class="acts"><button class="btn" data-a="compose">${t('msg_team')}</button></div>` : ''}
+    ${isChef() && (need('mre_list', null, 2 * 60000) || {}).pending ? `<div class="list"><button class="row" data-a="world" data-w="restaurant"><span class="main"><div class="name">${t('m_lab_pending', { n: API.peek('mre_list').pending })}</div><div class="meta">${t('m_lab_title')}</div></span><span class="chev">›</span></button></div>` : ''}
     ${msgs.length ? `<section><div class="chap"><h2>${t(isChef() ? 'your_msgs' : 'from_chef')}</h2><span>${unread.length ? t('new_n', { n: unread.length }) : ''}</span></div><div class="list">${msgHtml}</div></section>` : ''}
     ${isChef() ? `<section><div class="chap"><h2>${t('problems')}</h2><span>${repUnread.length ? t('new_n', { n: repUnread.length }) : ''}</span></div><div class="list">${reports.slice(0, 8).map(r => `<button class="msg ${r.read ? '' : 'unread'}" data-a="readReport" data-id="${r.id}">${r.read ? '' : '<span class="dotw" style="margin-top:6px"></span>'}<span class="main"><div class="who">${esc(r.from)} · ${tFmt(r.at)}${r.prep ? ' · ' + esc(r.prep) : ''}</div><div class="txt">${esc(r.text)}</div></span></button>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('no_problems')}</div></span></div>`}</div></section>` : ''}
     ${stations.length ? `<div class="seg">${['all', ...stations].map(s => `<button class="${s === seg ? 'on' : ''}" data-a="station" data-k="${esc(s)}">${s === 'all' ? t('all') : esc(s.replace(/ Station$/, ''))}</button>`).join('')}</div>` : ''}
@@ -154,10 +155,12 @@ SCREENS.restaurant = { title: () => t('w_rest'), c: '--rest', render(p) {
   const d = need('recipes', null, 10 * 60000);
   const top = head(t('read_only'), t('w_rest'));
   if (!d) return `<div class="page">${top}${waiting('recipes')}</div>`;
+  const lab = mreSection(p);
   const q = (p.q || '').trim().toLowerCase();
   const list = d.recipes.filter(r => !q || r.title.toLowerCase().includes(q));
   const groups = {}; list.forEach(r => { (groups[cat(r.category)] = groups[cat(r.category)] || []).push(r); });
-  return `<div class="page" style="--c:var(--rest)">${top}
+  return `<div class="page" style="--c:var(--rest)">${top}${lab}
+    ${lab ? `<div class="chap"><h2>${t('m_lab_others')}</h2></div>` : ''}
     <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: d.recipes.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
     ${Object.keys(groups).sort().map(g => `<section><div class="chap"><h2>${esc(g)}</h2><span>${groups[g].length}</span></div><div class="list">${groups[g].map(r => `<button class="row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(r.title)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>`).join('') || `<p class="note">${esc(t('nothing_for', { q }))}</p>`}
   </div>`;
@@ -219,6 +222,24 @@ SCREENS.recipe = { title: p => { const d = API.peek('recipe', { id: p.id }); ret
   rng.addEventListener('input', () => { const f = RC.setAmount(v(), rng.value); if (f !== null) { p.factor = f; refresh(true); } });
   if (active === 'rcAmount') { inp.focus(); }
 } };
+
+/* ============ MASTER RECIPE ENGINE (B-49 lab) — one recipe/prep screen, see mre.js ============ */
+function mreSection(p) {
+  const L = need('mre_list', null, 2 * 60000);
+  if (!L || !L.recipes) return '';
+  const q = (p.q || '').trim().toLowerCase();
+  const row = r => `<button class="row" data-a="openMre" data-r="${r.id}"><span class="main"><div class="name">${esc(r.title)}</div>${isChef() ? `<div class="meta">${r.draft ? t('m_lab_draft') + ' · ' : ''}${r.state === 'importata' ? t('m_lab_imported') : t('m_lab_published', { v: r.current_version })}${r.pending ? ' · ' + t('m_n_new', { n: r.pending }) : ''}</div>` : ''}</span><span class="chev">›</span></button>`;
+  const pil = L.recipes.filter(r => r.pilot && (!q || r.title.toLowerCase().includes(q))), ex = L.recipes.filter(r => r.is_test && !q);
+  return `<section><div class="chap"><h2>${t('m_lab_title')}</h2><span>${pil.length}</span></div><p class="note" style="font-size:14px;margin:0 0 8px">${t('m_lab_sub')}</p>
+    <div class="list">${pil.map(row).join('')}</div>${ex.length ? `<div class="chap" style="margin-top:12px"><h2>${t('m_lab_example')}</h2></div><div class="list">${ex.map(row).join('')}</div>` : ''}</section>`;
+}
+const mreIds = () => new Set(((API.peek('mre_list') || {}).recipes || []).map(r => r.id));
+SCREENS.mre = { title: p => window.MreUI ? window.MreUI.title(p) : (p.name || ''), c: '--rest', render(p) {
+  const h = window.MreUI ? window.MreUI.render(p) : null;
+  if (h == null) return `<div class="page">${backBtn()}${waiting('mre_recipe')}</div>`;
+  return `<div class="page mr-page" style="--c:var(--rest)">${backBtn()}${h}</div>`;
+} };
+function openMre(id, name, f, ref) { openTab('mre', id, { s: 'mre', p: { id, name: name || '', f: f || 1, ref: ref || '', panel: null, edit: false } }); }
 
 /* ============ CATERING (only what to cook) ============ */
 SCREENS.catering = { title: () => t('w_cat'), c: '--cat', render() {
@@ -284,7 +305,7 @@ function render(keep) {
   if (sc.after) sc.after(e.p || {}, active);
   save();
 }
-let rt; function rerender() { clearTimeout(rt); rt = setTimeout(() => { const a = document.activeElement; if (a && a.id === 'rcAmount') return; render(true); }, 60); }
+let rt; function rerender() { clearTimeout(rt); rt = setTimeout(() => { const a = document.activeElement; if (a && (a.id === 'rcAmount' || (a.closest && a.closest('[data-mred]')))) return; render(true); }, 60); }
 window.addEventListener('app-data', rerender);
 let scT; $('main').addEventListener('scroll', () => { clearTimeout(scT); scT = setTimeout(() => { cur().y = $('main').scrollTop; save(); }, 150); });
 const remember = () => { cur().y = $('main').scrollTop; };
@@ -338,7 +359,8 @@ const A = {
   toOrigin() { remember(); goOrigin(tabById(S.active)); render(); },
   back() { const s = stack(); if (s.length > 1) { s.pop(); render(); } },
   openPrep(el) { const id = +el.dataset.id; const i = (API.peek('shift') || { items: [] }).items.find(x => x.id === id); openTab('prep', String(id), { s: 'prep', p: { id, name: i ? i.name : '' } }); },
-  openRecipe(el) { openTab('recipe', el.dataset.r, { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null } }); },
+  openRecipe(el) { if (mreIds().has(el.dataset.r)) { openMre(el.dataset.r); return; } openTab('recipe', el.dataset.r, { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null } }); },
+  openMre(el) { openMre(el.dataset.r); },
   /* a sub-recipe opens in its own tab at the quantity the parent needs; closing it returns to the parent */
   openSub(el) { const p = cur().p, d = API.peek('recipe', { id: p.id }); if (!d) return; const s = RC.subFor(RC.model(d, p), +el.dataset.i); if (!s) return;
     openTab('recipe', s.id, { s: 'recipe', p: { id: s.id, name: s.name, factor: s.factor, subWarn: s.warn, prep: '', tab: p.tab } }); },
@@ -454,6 +476,8 @@ function signedIn(user) {
 function signedOut() { ME = null; wipeLocal(); $('main').innerHTML = ''; $('tabs').innerHTML = ''; closeSheet(); showLogin(''); }
 window.addEventListener('app-signed-out', () => { API.clearToken(); if (ME) toast(t('signed_out')); signedOut(); });
 
+if (window.MreUI) window.MreUI.init({ need, peek: API.peek, render, toast, isChef, entry: () => cur().p,
+  openRecipe: (id, name, f, ref) => openMre(id, name, f, ref) });
 (async function boot() {
   I.set(I.lang, false);
   if (!API.hasToken()) { signedOut(); return; }

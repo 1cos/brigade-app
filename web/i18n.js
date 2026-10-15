@@ -87,6 +87,7 @@
   const locale = () => ({ en: 'en-US', it: 'it-IT', es: 'es-ES' })[lang];
   window.I18N = {
     t, plural, locale, langs: ['en', 'it', 'es'], names: { en: 'English', it: 'Italiano', es: 'Español' },
+    extend(o) { Object.assign(D, o); },        // feature dictionaries (e.g. mre_i18n.js) add their own keys
     get lang() { return lang; },
     set(l, persist) { if (l in IDX) { lang = l; document.documentElement.lang = l; if (persist) try { localStorage.setItem('brigade-app-lang', l); } catch (e) {} } },
     hasChoice() { try { return !!localStorage.getItem('brigade-app-lang'); } catch (e) { return false; } },

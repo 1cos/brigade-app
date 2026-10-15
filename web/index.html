@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Newsreader:opsz,wght@6..72,600&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -29,6 +29,9 @@
 <script src="i18n.js"></script>
 <script src="api.js"></script>
 <script src="recipe.js"></script>
+<script src="mre_i18n.js"></script>
+<script type="module">import * as MRE from './mre_engine.js'; window.MRE = MRE; window.dispatchEvent(new Event('app-data'));</script>
+<script src="mre.js"></script>
 <script src="app.js"></script>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body>
