@@ -176,14 +176,17 @@ SCREENS.restaurant = { title: () => t('w_rest'), c: '--rest', render(p) {
 function searchBind(active) {
   const i = $('q'); if (!i) return;
   if (active === 'q') { i.focus(); const v = i.value; i.setSelectionRange(v.length, v.length); }
-  let tm; i.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { cur().p.q = i.value; render(true); }, 220); });
+  // the home of a world starts without params
+  let tm; i.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { const e = cur(); e.p = e.p || {}; e.p.q = i.value; render(true); }, 220); });
 }
 
 /* ---- recipe tab: BR-UI02 card inside the V020-B tab ---- */
 function recipeBody(v, p, d) {
   if (v.tab === 'cost') { const c = API.peek('recipe_cost', { id: p.id }); return RC.costView(v, c !== undefined ? c : ERR.recipe_cost ? null : undefined); }
   if (v.tab === 'struct') { const tr = API.peek('recipe_tree', { id: p.id }); return RC.structView(v, tr !== undefined ? tr : ERR.recipe_tree ? null : undefined); }
-  return RC.prepView(v)
+  const photo = v.rec.photo_url || v.rec.image_url;
+  return (p.focus === 'photo' || photo ? `<section><h2>${t('k_photo')}</h2><div class="list">${photo ? `<img class="rc-photo" src="${esc(photo)}" alt="${esc(v.rec.title)}" loading="lazy">` : `<div class="rc-empty">${t('k_no_photo')}</div>`}</div></section>` : '')
+    + RC.prepView(v)
     + (d.preps.length ? `<section><h2>${RC.R('prep_list')}</h2><div class="list">${d.preps.map(x => `<button class="row" data-a="openPrep" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>` : '')
     + (d.used_in.length ? `<section><h2>${RC.R('used_in')}</h2><div class="list">${d.used_in.map(u => `<button class="row" data-a="openRecipe" data-r="${u.id}"><span class="main"><div class="name">${esc(u.title)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>` : '');
 }
@@ -196,7 +199,7 @@ SCREENS.recipe = { title: p => { const d = API.peek('recipe', { id: p.id }); ret
   if (v.tab === 'struct') need('recipe_tree', { id: p.id }, 10 * 60000);
   const fromPrep = p.prep ? +p.prep : null;
   return `<div class="page" style="--c:var(--rest)">${backBtn()}
-    <div><div class="eyebrow">${esc(RC.headMeta(v))}</div><h1>${esc(v.rec.title)}</h1></div>
+    <div><div class="eyebrow rc-headrow"><span>${esc(RC.headMeta(v))}</span>${isChef() ? `<button class="mr-link" data-a="editRecipe" data-r="${esc(p.id)}">${t('edit_recipe')}</button>` : ''}</div><h1>${esc(v.rec.title)}</h1></div>
     ${fixBox(p)}
     <div class="rc-sticky">${RC.amountHtml(v)}${RC.segHtml(v)}</div>
     ${RC.notes(v)}
@@ -235,15 +238,31 @@ SCREENS.recipe = { title: p => { const d = API.peek('recipe', { id: p.id }); ret
 
 /* what to fix, when the recipe is opened from a decision (Chef only) */
 function fixFor(p) { if (!p.focus || !isChef() || !window.OfficeUI) return null; const d = need('office', null, 5 * 60000); return d ? window.OfficeUI.fixFor(d, p.id, p.focus) : null; }
-function fixBox(p) { const f = fixFor(p); return f ? window.OfficeUI.fixBox(f) : ''; }
+function fixBox(p) {
+  if (p.fix && p.fix.startsWith('complete:') && isChef() && window.KitchenUI) return window.KitchenUI.fixBox(p.fix.slice(9), p.id, !!(cur() && cur().s === 'mre' && p.edit));   // from Recipe completeness
+  const f = fixFor(p); return f ? window.OfficeUI.fixBox(f, p.id, !!(cur() && cur().s === 'mre' && p.edit)) : ''; }
 /* marks the part of the card to fix: Yield (STRUCTURE tab) or Ingredients (PREP tab); scrolls there once */
 function markFocus(p) {
   if (!p.focus || !isChef()) return;
-  const want = p.focus === 'yield' ? [RC.R('s_yield')] : [RC.R('ingredients')];
+  const want = p.focus === 'yield' ? [RC.R('s_yield')] : p.focus === 'procedure' ? [RC.R('method')] : p.focus === 'photo' ? [t('k_photo')] : [RC.R('ingredients')];
   const sec = [...document.querySelectorAll('#rcBody section')].find(x => { const h = x.querySelector('h2'); return h && want.some(w => h.textContent.trim().toLowerCase().startsWith(w.toLowerCase())); });
   if (!sec) return;
-  sec.classList.add('hl');
-  if (!p.focusShown) { p.focusShown = 1; setTimeout(() => { const box = document.querySelector('#main .fixbox'); (box || sec).scrollIntoView({ block: 'start' }); }, 30); }
+  sec.classList.add('hl'); tagFocus(sec);
+  if (!p.focusShown) { p.focusShown = 1; setTimeout(() => scrollToFocus(sec), 30); }   // straight to the part to fix
+}
+/* scrolls the marked part just under the sticky amount + tabs bar of the card (or the top of the page) */
+function scrollToFocus(el) {
+  const m = $('main'), st = document.querySelector('#main .rc-sticky');
+  const top = m.getBoundingClientRect().top + (st ? st.offsetHeight : 0);   // where the bar sits once it sticks
+  m.scrollTop += el.getBoundingClientRect().top - top - 12;
+}
+/* the marked part carries the reason with it (the full box stays on top of the card) */
+function tagFocus(el) {
+  const h = document.querySelector('#main .fixbox .h'); if (!h || el.querySelector('.hltag')) return;
+  const edit = document.querySelector('#main .fixbox button[data-a="editRecipe"]');
+  const tag = document.createElement('div'); tag.className = 'hltag';
+  tag.innerHTML = `<span>${esc(h.textContent)}</span>${edit ? `<button class="mr-link acc" data-a="editRecipe" data-r="${esc(edit.dataset.r)}">${esc(t('edit_recipe'))}</button>` : ''}`;
+  el.insertBefore(tag, el.firstChild);
 }
 
 /* ============ MASTER RECIPE ENGINE (B-49 lab) — one recipe/prep screen, see mre.js ============ */
@@ -263,9 +282,11 @@ SCREENS.mre = { title: p => window.MreUI ? window.MreUI.title(p) : (p.name || ''
   return `<div class="page mr-page" style="--c:var(--rest)">${backBtn()}${fixBox(p)}${h}</div>`;
 }, after(p) {        // Bibbia card: mark Yield line or Ingredients column
   if (!p.focus || !isChef()) return;
-  const el = document.querySelector(p.focus === 'yield' ? '#main .mr-yield' : '#main .mr-left'); if (el) el.classList.add('hl');
+  const el = document.querySelector(p.focus === 'yield' ? '#main .mr-yield' : p.focus === 'procedure' ? '#main .mr-right' : '#main .mr-left'); if (!el) return;
+  el.classList.add('hl'); tagFocus(el);
+  if (!p.focusShown) { p.focusShown = 1; setTimeout(() => scrollToFocus(el), 30); }
 } };
-function openMre(id, name, f, ref, focus) { openTab('mre', id + (focus ? ':' + focus : ''), { s: 'mre', p: { id, name: name || '', f: f || 1, ref: ref || '', panel: null, edit: false, focus: focus || '' } }); }
+function openMre(id, name, f, ref, focus, fix, startEdit) { openTab('mre', id + (focus ? ':' + focus : ''), { s: 'mre', p: Object.assign({ id, name: name || '', f: f || 1, ref: ref || '', panel: null, edit: false, focus: focus || '', fix: fix || '' }, startEdit ? { startEdit: true } : {}) }); }
 
 /* ============ DECISIONS · L'UFFICIO · INVOICES (B-25 module 1, read only, Chef only) — see office.js ============ */
 function officeScreen(kind) {
@@ -345,7 +366,8 @@ function renderWorlds() {
   const b = ([k, w]) => `<button class="w ${S.active === 'home' && S.world === k ? 'on' : ''}" style="--c:var(${w.c})" data-a="world" data-w="${k}">${ICON[k]}${t(w.k)}</button>`;
   const e = Object.entries(WORLDS).filter(([, w]) => !w.chef || isChef());   // Ufficio: Chef only, last
   $('worlds').classList.toggle('six', e.length > 4);
-  $('worlds').innerHTML = b(e[0]) + b(e[1]) + `<button class="w ask" data-a="ask" aria-label="${t('find')}"><span class="orb">${ICON.ask}</span>${t('find')}</button>` + e.slice(2).map(b).join('');
+  const html = b(e[0]) + b(e[1]) + `<button class="w ask" data-a="ask" aria-label="${t('find')}"><span class="orb">${ICON.ask}</span>${t('find')}</button>` + e.slice(2).map(b).join('');
+  if ($('worlds').dataset.h !== html) { $('worlds').innerHTML = html; $('worlds').dataset.h = html; }   // same bar → not rebuilt, so a tap is never lost while data arrives
 }
 function layout() { $('main').style.top = $('top').offsetHeight + 'px'; $('main').style.bottom = $('worlds').offsetHeight + 'px'; }
 function render(keep) {
@@ -353,13 +375,14 @@ function render(keep) {
   const e = cur(), sc = SCREENS[e.s] || SCREENS.today;
   const y = $('main').scrollTop, active = document.activeElement && document.activeElement.id;
   let html; try { html = sc.render(e.p || {}); } catch (x) { console.error(x); html = `<div class="page">${backBtn()}<div class="err">${esc(x.message)}</div></div>`; }
-  $('main').innerHTML = html;
+  // a refresh that changes nothing does not rebuild the page: a tap landing while data arrives is never lost
+  const same = keep && $('main')._h === html;
+  if (!same) { $('main').innerHTML = html; $('main')._h = html; }
   $('who').textContent = ME.name + ' · ' + t(isChef() ? 'chef' : 'staff_role');      // always who is signed in
   $('switch').textContent = t('switch_user'); $('switch').hidden = false;
   $('mode').textContent = t('test_mode');
   renderTabs(); renderWorlds(); layout();
-  $('main').scrollTop = keep ? y : (e.y || 0);
-  if (sc.after) sc.after(e.p || {}, active);
+  if (!same) { $('main').scrollTop = keep ? y : (e.y || 0); if (sc.after) sc.after(e.p || {}, active); }
   save();
 }
 let rt; function rerender() { clearTimeout(rt); rt = setTimeout(() => { const a = document.activeElement; if (a && (a.id === 'rcAmount' || (a.closest && a.closest('[data-mred]')))) return; render(true); }, 60); }
@@ -417,9 +440,19 @@ const A = {
   back() { const s = stack(); if (s.length > 1) { s.pop(); render(); } },
   openPrep(el) { const id = +el.dataset.id; const i = (API.peek('shift') || { items: [] }).items.find(x => x.id === id); openTab('prep', String(id), { s: 'prep', p: { id, name: i ? i.name : '' } }); },
   /* data-focus (yield / bom): opened from a decision, the card shows what to fix and marks that part, as in Shell V020 */
-  openRecipe(el) { const focus = isChef() ? el.dataset.focus || '' : '';
-    if (mreIds().has(el.dataset.r)) { openMre(el.dataset.r, '', 1, '', focus); return; }
-    openTab('recipe', el.dataset.r + (focus ? ':' + focus : ''), { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null, focus, tab: focus === 'yield' ? 'struct' : 'prep' } }); },
+  openRecipe(el) { const focus = isChef() ? el.dataset.focus || '' : '', fix = isChef() ? el.dataset.fix || '' : '';
+    if (mreIds().has(el.dataset.r) && focus !== 'photo') { openMre(el.dataset.r, '', 1, '', focus, fix); return; }   // the lab card has no photo: photo opens the Brigade card
+    openTab('recipe', el.dataset.r + (focus ? ':' + focus : ''), { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null, focus, fix, tab: focus === 'yield' ? 'struct' : 'prep' } }); },
+  /* "Edit" (Chef) on any recipe: the server makes an isolated lab copy if needed, then the B-49 editor opens on it */
+  async editRecipe(el) {
+    if (!isChef() || el.disabled) return; el.disabled = true;
+    const id = el.dataset.r, p = cur().p || {};
+    try { await API.call('mre_prepare_edit', { id }); API.forget('mre_list'); await API.get('mre_list', null, 0); }
+    catch (e) { el.disabled = false; if (e.status !== 401) toast(errText(e)); return; }
+    const tb = S.active !== 'home' ? tabById(S.active) : null;
+    if (tb && tb.kind === 'recipe' && tb.stack.length === 1) { S.tabs.splice(S.tabs.indexOf(tb), 1); goOrigin(tb); }   // the Brigade card makes room for the editor
+    openMre(id, '', 1, '', p.focus === 'photo' ? '' : p.focus || '', p.fix || '', true);
+  },
   openMre(el) { openMre(el.dataset.r); },
   openOffice(el) { const k = el.dataset.k, scope = el.dataset.scope || 'all'; openTab('office', k + ':' + scope, { s: k, p: { scope } }); },
   openIng(el) { openTab('ing', el.dataset.id, { s: 'ing', p: { id: el.dataset.id } }); },
@@ -543,7 +576,7 @@ function signedIn(user) {
   if (!I.hasChoice() && ['en', 'it', 'es'].includes(user.lang)) I.set(user.lang, false);   // the person's Brigade language, unless chosen on this phone
   loadUi(); hideLogin(); render();
 }
-function signedOut(msg) { ME = null; wipeLocal(); $('main').innerHTML = ''; $('tabs').innerHTML = ''; $('worlds').innerHTML = ''; $('who').textContent = ''; $('switch').hidden = true; closeSheet(); pinBuf = ''; showLogin(msg || ''); }
+function signedOut(msg) { ME = null; wipeLocal(); $('main').innerHTML = ''; $('main')._h = null; $('tabs').innerHTML = ''; $('worlds').innerHTML = ''; $('worlds').dataset.h = ''; $('who').textContent = ''; $('switch').hidden = true; closeSheet(); pinBuf = ''; showLogin(msg || ''); }
 window.addEventListener('app-signed-out', () => { API.clearToken(); if (ME) toast(t('signed_out')); signedOut(); });
 
 if (window.KitchenUI) { window.KitchenUI.init({ esc, need, waiting, backBtn, head, shortDay, isChef, cat, peek: API.peek });

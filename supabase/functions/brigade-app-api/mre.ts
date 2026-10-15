@@ -5,6 +5,7 @@
 // Calculations use the SAME engine file as the app (../_shared/mre_engine.js).
 import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js'
 import * as E from '../_shared/mre_engine.js'
+import { buildLabDoc } from '../_shared/mre_import.js'
 
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL') ?? '', { prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10 })
 type U = { id: number; name: string; role: 'chef' | 'staff' }
@@ -51,10 +52,12 @@ export async function mreList(u: U, svc: any) {
     select r.id, r.pilot, r.is_test, r.current_version, v.state, v.doc->>'title' as title, v.doc->>'category' as category,
            jsonb_array_length(r.diffs) as diffs, r.diffs_checked_at is not null as diffs_checked,
            exists (select 1 from mre.versions d where d.recipe_id = r.id and d.state = 'bozza') as draft,
-           (select count(*)::int from mre.suggestions s where s.recipe_id = r.id and s.status = 'in attesa') as pending
+           (select count(*)::int from mre.suggestions s where s.recipe_id = r.id and s.status = 'in attesa') as pending,
+           coalesce((r.source->>'on_demand')::boolean, false) as on_demand
     from mre.recipes r join mre.versions v on v.recipe_id = r.id and v.version = r.current_version
     order by v.doc->>'title'`)
-  const list = rows.map((r: any) => u.role === 'chef' ? r : { id: r.id, pilot: r.pilot, is_test: r.is_test, title: r.title, category: r.category, state: r.state })
+  // copies made by the Chef's "Edit" (B-25) are Chef work in progress: staff keep the official Brigade card for them
+  const list = rows.filter((r: any) => u.role === 'chef' || !r.on_demand).map((r: any) => u.role === 'chef' ? r : { id: r.id, pilot: r.pilot, is_test: r.is_test, title: r.title, category: r.category, state: r.state })
   return { engine: E.MRE_ENGINE_VERSION, recipes: list, pending: u.role === 'chef' ? rows.reduce((a: number, r: any) => a + r.pending, 0) : 0 }
 }
 
@@ -90,6 +93,60 @@ export async function mreIngredients(u: U, q: string) {
   chef(u)
   const s = String(q || '').trim().slice(0, 60)
   return await lab(async tx => { const [{ r }] = await tx`select mre.ingredient_search(${s}) as r`; const recs = s.length >= 2 ? await tx`select r.id, v.doc->>'title' as title from mre.recipes r join mre.versions v on v.recipe_id = r.id and v.version = r.current_version where v.doc->>'title' ilike ${'%' + s + '%'} order by 2 limit 15` : []; return { ingredients: r, recipes: recs } })
+}
+
+/* ---------------- Chef: "Edit" on ANY recipe (B-25, Chef Max 16/10) ----------------
+   The editor works only on lab documents. A recipe that is not in the lab yet is imported on demand with the SAME
+   converter as the 20 pilots (../_shared/mre_import.js): the recipe and the sub-recipes below it that are missing.
+   Brigade is only READ here (selects); the copy is written in schema mre under role mre_app. Official recipes never change. */
+export async function mrePrepareEdit(u: U, body: any, svc: any) {
+  chef(u)
+  const id = String(body?.id || ''); if (!isUuid(id)) throw bad('bad_id')
+  const inLab = async (ids: string[]) => ids.length ? new Set((await lab<any[]>(tx => tx`select id from mre.recipes where id = any(string_to_array(${ids.join(',')}, ',')::uuid[])`)).map((r: any) => r.id)) : new Set<string>()
+  if ((await inLab([id])).has(id)) return { ok: true, id, imported: 0 }
+  const must = (r: any) => { if (r.error) throw r.error; return r.data || [] }
+  const recipes: Record<string, any> = {}, bom: Record<string, any[]> = {}
+  const want: string[] = []
+  let frontier = [id]
+  for (let depth = 0; depth < 8 && frontier.length; depth++) {
+    const have = await inLab(frontier)
+    const todo = frontier.filter(x => !have.has(x) && !(x in bom))
+    if (!todo.length) break
+    const rs = must(await svc.from('recipes').select('*').in('id', todo)) as any[]
+    rs.forEach(r => { recipes[r.id] = r })
+    if (!rs.some(r => r.id === id) && depth === 0) throw new MreError(404, 'not_found')
+    const bs = must(await svc.from('recipe_bom').select('*, ingredients(name, base_unit)').in('parent_recipe_id', rs.map(r => r.id)).limit(5000)) as any[]
+    rs.forEach(r => { bom[r.id] = []; want.push(r.id) })
+    bs.sort((a, b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9) || a.bom_id - b.bom_id)
+      .forEach(b => { const { ingredients: ing, ...row } = b; bom[b.parent_recipe_id].push(Object.assign(row, { ing_name: ing?.name ?? null, ing_base: ing?.base_unit ?? null })) })
+    frontier = [...new Set(bs.filter(b => b.component_type === 'RECIPE' && b.sub_recipe_id).map(b => b.sub_recipe_id))] as string[]
+  }
+  // names of every sub-recipe referenced (also those already in the lab), policies from the FC05 single source
+  const subIds = [...new Set(Object.values(bom).flat().filter((b: any) => b.sub_recipe_id).map((b: any) => b.sub_recipe_id))].filter(x => !recipes[x as string]) as string[]
+  const byId: Record<string, any> = Object.assign({}, recipes)
+  if (subIds.length) (must(await svc.from('recipes').select('id,title').in('id', subIds)) as any[]).forEach(r => { byId[r.id] = r })
+  const itemIds = [...new Set(Object.values(bom).flat().filter((b: any) => b.item_id).map((b: any) => b.item_id))] as string[]
+  const facts = itemIds.length ? await lab<any>(async tx => { const [{ f }] = await tx`select mre.ingredient_facts(string_to_array(${itemIds.join(',')}, ',')::uuid[]) as f`; return f || {} }) : {}
+  Object.values(bom).flat().forEach((b: any) => { b.policy = b.item_id && facts[b.item_id] ? facts[b.item_id].policy ?? null : null })
+  const [steps, preps, yields] = await Promise.all([
+    svc.from('recipe_steps').select('*').in('recipe_id', want).order('step_number').then(must),
+    svc.from('prep_tasks').select('id,name,unit,recipe_id,prep_type,stock_role,archived').in('recipe_id', want).not('archived', 'is', true).then(must),
+    svc.from('recipe_yield').select('*').in('id', want).then(must),
+  ]) as any[][]
+  const at = new Date().toISOString()
+  const built = want.map(rid => {
+    const out = buildLabDoc({ id: rid, r: recipes[rid], rows: bom[rid], stepRows: steps.filter(x => x.recipe_id === rid), prepRows: preps.filter(x => x.recipe_id === rid), y: yields.find(x => x.id === rid), byId, importedAt: at })
+    return { id: rid, doc: out.doc, source: Object.assign(out.source, { on_demand: true, requested_by: u.id, requested_for: id }), diffs: out.diffs }
+  })
+  const day = new Intl.DateTimeFormat('it-IT', { timeZone: 'America/Chicago', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())
+  await lab(async tx => {
+    for (const b of built) {
+      await tx`insert into mre.recipes (id, pilot, current_version, source, diffs) values (${b.id}, false, 1, ${sql.json(b.source)}, ${sql.json(b.diffs)}) on conflict (id) do nothing`
+      await tx`insert into mre.versions (recipe_id, version, state, doc, reason, created_by) values (${b.id}, 1, 'importata', ${sql.json(b.doc)}, ${'Copia di prova da Brigade per Modifica (' + day + ')'}, ${u.id}) on conflict do nothing`
+    }
+    await audit(tx, u, 'import_on_demand', id, { recipes: built.map(b => b.id) })
+  })
+  return { ok: true, id, imported: built.length }
 }
 
 /* ---------------- Chef: draft, publish, restore ---------------- */

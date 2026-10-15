@@ -27,6 +27,12 @@
     k_w_photo: ['Helps the team recognise the plate.', 'Aiuta la brigata a riconoscere il piatto.', 'Ayuda al equipo a reconocer el plato.'],
     k_w_procedure: ['Helps a new cook make it the same way.', 'Aiuta un cuoco nuovo a farlo allo stesso modo.', 'Ayuda a un cocinero nuevo a hacerlo igual.'],
     k_w_portions: ['Optional. The batch size is set; portions help plan prep from sales.', 'Facoltativo. Il peso del lotto c\'è; le porzioni aiutano a pianificare la prep dalle vendite.', 'Opcional. El lote está definido; las porciones ayudan a planificar la prep según ventas.'],
+    k_photo: ['Photo', 'Foto', 'Foto'], k_no_photo: ['No photo in Brigade yet.', 'Ancora nessuna foto in Brigade.', 'Aún no hay foto en Brigade.'],
+    k_fix_deferred: ['To complete: yield deferred by Chef', 'Da completare: resa rimandata dallo Chef', 'Por completar: rendimiento pospuesto por Chef'],
+    k_fix_photo: ['To complete: the photo is missing', 'Da completare: manca la foto', 'Por completar: falta la foto'],
+    k_fix_procedure: ['To complete: the procedure is missing', 'Da completare: manca il procedimento', 'Por completar: falta el procedimiento'],
+    k_fix_portions: ['To complete: portions per batch not set', 'Da completare: porzioni per lotto non impostate', 'Por completar: porciones por lote sin definir'],
+    k_fix_edit: ['Edit (test copy)', 'Modifica (copia di prova)', 'Editar (copia de prueba)'], k_fix_photo_where: ['Photos are added in Brigade.', 'Le foto si aggiungono in Brigade.', 'Las fotos se añaden en Brigade.'],
     k_c_ro: ['Add photos and procedures in Brigade.', 'Foto e procedimenti si aggiungono in Brigade.', 'Fotos y procedimientos se añaden en Brigade.'],
   });
   const BRIGADE_URL = 'https://1cos.github.io/back-of-house/';
@@ -71,13 +77,22 @@
       const d = H.need('completeness', null, 5 * 60000);
       if (!d) return `<div class="page">${H.backBtn()}${H.waiting('completeness')}</div>`;
       const sec = k => { const l = d.groups[k] || []; if (!l.length) return '';
-        return `<section><div class="chap"><h2>${t('k_c_' + k)}</h2><span>${l.length}</span></div><p class="note" style="margin:0 0 8px">${t('k_w_' + k)}</p><div class="list">${p['m_' + k] ? l.map(x => `<button class="row" data-a="openRecipe" data-r="${esc(x.id)}"><span class="main"><div class="name" style="font-weight:500;font-size:17px">${esc(x.title)}</div><div class="meta">${esc(H.cat(x.category))}</div></span><span class="chev">›</span></button>`).join('') : `<button class="more" data-a="kMore" data-k="m_${k}">${t('k_show', { n: l.length })}</button>`}</div></section>`; };
+        return `<section><div class="chap"><h2>${t('k_c_' + k)}</h2><span>${l.length}</span></div><p class="note" style="margin:0 0 8px">${t('k_w_' + k)}</p><div class="list">${p['m_' + k] ? l.map(x => `<button class="row" data-a="openRecipe" data-r="${esc(x.id)}" data-focus="${FOCUS[k]}" data-fix="complete:${k}"><span class="main"><div class="name" style="font-weight:500;font-size:17px">${esc(x.title)}</div><div class="meta">${esc(H.cat(x.category))}</div></span><span class="chev">›</span></button>`).join('') : `<button class="more" data-a="kMore" data-k="m_${k}">${t('k_show', { n: l.length })}</button>`}</div></section>`; };
       return `<div class="page" style="--c:var(--office)">${H.backBtn()}${H.head(t('w_office'), t('k_complete'), t('k_complete_sub'))}
         ${['deferred', 'photo', 'procedure', 'portions'].map(sec).join('')}${roNote('k_c_ro')}</div>`;
     } },
   };
+  /* completeness kind → the part of the recipe card to open and mark */
+  const FOCUS = { procedure: 'procedure', photo: 'photo', portions: 'yield', deferred: 'yield' };
+  /* box on top of the recipe opened from Completeness: what is missing, why, and Edit (not for photos) */
+  function fixBox(kind, id, editing) {
+    const { esc } = H;
+    return `<div class="fixbox amber"><div class="h">${t('k_fix_' + kind)}</div><div>${t('k_w_' + kind)}</div>
+      ${kind === 'photo' ? `<div>${t('k_fix_photo_where')}</div><div><a class="btn ghost" href="${BRIGADE_URL}" target="_blank" rel="noopener">${t('k_open_brigade')} ↗</a></div>`
+        : editing ? '' : `<div><button class="btn" data-a="editRecipe" data-r="${esc(id)}">${t('k_fix_edit')}</button></div>`}</div>`;
+  }
   /* Ufficio row (Chef) and Recipes row (everyone) */
   const completeRow = d => d && d.total ? `<div class="list"><button class="row" data-a="openComplete"><span class="main"><div class="name">${t('k_complete')}</div><div class="meta">${t('k_complete_row', { n: d.total })}</div></span><span class="chev">›</span></button></div>` : '';
   const ingsRow = d => `<div class="list"><button class="row" data-a="openIngs"><span class="main"><div class="name">${t('k_ings')}</div><div class="meta">${d ? t('k_in_brigade', { n: d.ingredients.length }) : '…'}</div></span><span class="chev">›</span></button></div>`;
-  window.KitchenUI = { init(h) { H = h; }, screens, completeRow, ingsRow };
+  window.KitchenUI = { init(h) { H = h; }, screens, completeRow, ingsRow, fixBox, FOCUS };
 })();

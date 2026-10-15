@@ -65,7 +65,7 @@ for (const [dev, w, h] of [['telefono', 390, 844], ['tablet', 820, 1180], ['comp
   await pg.screenshot({ path: `${OUT}/${P}${dev}_3_ufficio.png` }); await noHScroll(pg, `${dev} Ufficio`)
   await pg.click('button.w[data-w="restaurant"]'); await pg.waitForTimeout(400)
   ok(await pg.locator('button.big').count() === 0, `${dev} · Ricette: nessun riquadro dell'Ufficio`)
-  await pg.click('button.w[data-w="office"]'); await pg.waitForTimeout(300)
+  await pg.click('button.w[data-w="office"]'); await pg.waitForSelector('button.big[data-k="decisions"]', { timeout: 5000 })   // WebKit can be slower to repaint
   await pg.click('button.big[data-k="decisions"]'); await pg.waitForTimeout(400)
   const n = await pg.locator('#main .dec').count()
   ok(n === OFFICE.decisions.length, `${dev} · tutte le decisioni: ${n} schede (motore ${OFFICE.decisions.length})`)

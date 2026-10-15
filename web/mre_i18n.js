@@ -2,7 +2,8 @@
 window.I18N.extend(Object.fromEntries(Object.entries({
   loading_engine: ['Loading…', 'Carico…', 'Cargando…'],
   edit: ['Edit recipe', 'Modifica ricetta', 'Editar receta'],
-  editing: ['You are editing the official recipe · draft of v{v}', 'Stai modificando la ricetta ufficiale · bozza della v{v}', 'Estás editando la receta oficial · borrador de la v{v}'],
+  editing: ['Editing the test copy · draft of v{v}', 'Stai modificando la copia di prova · bozza della v{v}', 'Editando la copia de prueba · borrador de la v{v}'],
+  isolated: ['Isolated test area: the official Brigade recipe does not change. Publishing to Brigade needs a separate OK from Chef.', 'Spazio di prova isolato: la ricetta ufficiale di Brigade non cambia. La pubblicazione in Brigade richiede un OK separato dello Chef.', 'Espacio de prueba aislado: la receta oficial de Brigade no cambia. Publicar en Brigade requiere un OK aparte de Chef.'],
   draft_saved: ['draft saved', 'bozza salvata', 'borrador guardado'],
   yield: ['Yield', 'Resa', 'Rendimiento'], portion: ['portion', 'porzione', 'porción'], portions: ['portions', 'porzioni', 'porciones'], batch: ['batch', 'lotto', 'lote'], batches: ['batches', 'lotti', 'lotes'],
   yield_label: ['Yield note', 'Nota resa', 'Nota rendimiento'], stock: ['Kept in stock', 'Ha scorta', 'Tiene stock'], yes: ['Yes', 'Sì', 'Sí'], no: ['No', 'No', 'No'],
@@ -69,7 +70,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   v_riga_ruolo: ['line role', 'ruolo riga', 'rol de línea'], v_riga_quantita: ['quantity not valid', 'quantità non valida', 'cantidad no válida'], v_riga_unita: ['unit to define on a line', 'unità da definire su una riga', 'unidad por definir en una línea'],
   v_passo_collegamento: ['a step refers to a removed line', 'un passo cita una riga rimossa', 'un paso cita una línea quitada'], v_ciclo: ['the recipe contains itself', 'la ricetta contiene se stessa', 'la receta se contiene a sí misma'],
   v_documento_non_valido: ['recipe not valid', 'ricetta non valida', 'receta no válida'],
-  reason: ['Why (optional)', 'Motivo (facoltativo)', 'Motivo (opcional)'], discard: ['Discard changes', 'Annulla modifiche', 'Descartar cambios'], publish: ['Publish v{v}', 'Pubblica v{v}', 'Publicar v{v}'],
+  reason: ['Why (optional)', 'Motivo (facoltativo)', 'Motivo (opcional)'], discard: ['Discard changes', 'Annulla modifiche', 'Descartar cambios'], publish: ['Save v{v} in the test area', 'Salva v{v} nella prova', 'Guardar v{v} en la prueba'],
   from_parent: ['for {t}', 'per {t}', 'para {t}'], discarded: ['Changes discarded.', 'Modifiche annullate.', 'Cambios descartados.'],
   published: ['Published v{v}.', 'Pubblicata la v{v}.', 'Publicada la v{v}.'], restored: ['v{v} restored as v{n}. Nothing was deleted.', 'v{v} ripristinata come v{n}. Niente è stato cancellato.', 'v{v} restaurada como v{n}. Nada se borró.'],
   checked: ['Marked as checked.', 'Segnate come controllate.', 'Marcadas como revisadas.'],

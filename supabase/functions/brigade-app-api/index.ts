@@ -4,6 +4,7 @@
 // R1: reads are live Brigade data (read-only); writes go ONLY to app_events with mode='test'.
 // R1.3 (B-49): Master Recipe Engine lab ops 'mre_*' (mre.ts) — writes ONLY to schema mre, under role mre_app.
 // R1.4 (B-25 module 1): 'office' = Decisions, L'Ufficio and invoices (office.ts) — read only, Chef only.
+// R1.7 (B-25, Chef 16/10): 'mre_prepare_edit' = Edit on any recipe → isolated lab copy (mre.ts), never the official recipe.
 // R1.6 (B-25 module 2): 'completeness' (Chef), 'ingredients' / 'ingredient' (all; prices Chef only) — kitchen.ts, read only.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
@@ -12,7 +13,7 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 
-const BUILD = 'api-r1.6-kitchen'
+const BUILD = 'api-r1.7-edit'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -327,6 +328,7 @@ Deno.serve(async (req: Request) => {
       case 'mre_list': out = await MRE.mreList(u, svc); break
       case 'mre_recipe': out = await MRE.mreRecipe(u, String(body.id || ''), svc); break
       case 'mre_ingredients': out = await MRE.mreIngredients(u, String(body.q || '')); break
+      case 'mre_prepare_edit': out = await MRE.mrePrepareEdit(u, body, svc); break
       case 'mre_save_draft': out = await MRE.mreSaveDraft(u, body); break
       case 'mre_discard': out = await MRE.mreDiscard(u, body); break
       case 'mre_publish': out = await MRE.mrePublish(u, body); break

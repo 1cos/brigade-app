@@ -36,6 +36,8 @@ function render(p) {
   const d = data(p.id);
   if (!d) return null;                                   // app shows the loading state
   if (!E()) return `<div class="mr"><p class="mr-muted">${T('loading_engine')}</p></div>`;
+  // opened with "Edit" from any recipe card (B-25): start the editor on the lab copy (open draft first, if any)
+  if (p.startEdit && H.isChef()) { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.panel = null; p.saved = !!d.draft; delete p.startEdit; }
   const chef = H.isChef(), edit = chef && p.edit && WORK[p.id];
   const doc = edit ? WORK[p.id] : d.doc;
   const f = edit ? 1 : (p.f > 0 ? p.f : 1);
@@ -45,7 +47,7 @@ function render(p) {
 
   // head
   h += `<div class="mr-head"><div class="mr-row1"><span class="mr-cat">${esc(cat(doc.category))}</span>${chef && !edit ? `<button class="mr-link" data-m="edit">${T('edit')}</button>` : ''}</div>`;
-  if (edit) h += `<div class="mr-editbar">${T('editing', { v: d.recipe.current_version + 1 })}${p.saved ? ' · ' + T('draft_saved') : ''}</div>` + approvedReminder(d);
+  if (edit) h += `<div class="mr-editbar">${T('editing', { v: d.recipe.current_version + 1 })}${p.saved ? ' · ' + T('draft_saved') : ''}</div><div class="mr-muted mr-isol">${T('isolated')}</div>` + approvedReminder(d);
   h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(doc.title)}</h1>`;
   const parts = [];
   if (Number(y.g) > 0) { const s = E().showMass(y.g * f, pref, loc()); parts.push(`${T('yield')} ${Q('y:g', s.n, s.u)}`); }
@@ -79,7 +81,7 @@ function render(p) {
   if (edit) h += addHtml(p);
   h += `</div><div class="mr-right"><div class="mr-sec"><span>${T('method')}</span></div>`;
   const steps = doc.steps || [];
-  if (!steps.length) h += `<p class="mr-muted">${chef ? T('no_steps_chef') : T('no_steps')}</p>`;
+  if (!steps.length && !edit) h += `<p class="mr-muted">${chef ? T('no_steps_chef') : T('no_steps')}</p>`;
   h += `<ol class="mr-steps">`;
   steps.forEach((s, i) => {
     const txt = stepText(s), title = stepTitle(s);

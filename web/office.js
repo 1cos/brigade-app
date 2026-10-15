@@ -117,6 +117,7 @@
     of_no_alerts: ['Nothing urgent right now.', 'Niente di urgente adesso.', 'Nada urgente ahora.'], of_open_all: ['All decisions ›', 'Tutte le decisioni ›', 'Todas las decisiones ›'],
     of_gone: ['This decision is no longer open: it was handled in Brigade, or it is out of date.', 'Questa decisione non è più aperta: è stata gestita in Brigade oppure è superata.', 'Esta decisión ya no está abierta: se gestionó en Brigade o está desactualizada.'],
     of_to_fix: p => [`To fix: ${p.t}`, `Da sistemare: ${p.t}`, `Por arreglar: ${p.t}`], of_now: ['Now:', 'Adesso:', 'Ahora:'], of_fix_in_brigade: ['Fix in Brigade', 'Sistema in Brigade', 'Arreglar en Brigade'],
+    of_edit_test: ['Edit (test copy)', 'Modifica (copia di prova)', 'Editar (copia de prueba)'],
     of_tools: ['Office tools', 'Strumenti dell\'Ufficio', 'Herramientas de oficina'],
     of_line_msg: p => { const s = `${p.from}: ${p.text}`; return [s, s, s]; },
   };
@@ -215,9 +216,9 @@
   }
   /* recipe opened from a decision: which card, and the box on top of the recipe (as Shell V020) */
   function fixFor(d, rid, focus) { return d.decisions.find(x => x.focus === focus && (x.rid === rid || (x.recipes || []).some(r => r.id === rid))) || null; }
-  function fixBox(f) {
+  function fixBox(f, id, editing) {
     return `<div class="fixbox ${esc(f.sev)}"><div class="h">${w('of_to_fix', { t: { raw: '' } }).replace(/\s*$/, ' ')}${T(f.title)}</div>${f.why ? `<div>${T(f.why)}</div>` : ''}${f.now ? `<div><b>${w('of_now')}</b> ${T(f.now)}</div>` : ''}${f.missing ? `<div><b>${w('of_missing')}</b> ${T(f.missing)}</div>` : ''}
-      <div><a class="btn ghost" href="${BRIGADE_URL}" target="_blank" rel="noopener">${w('of_fix_in_brigade')} ↗</a></div></div>`;
+      <div class="links">${id && !editing ? `<button class="btn" data-a="editRecipe" data-r="${esc(id)}">${w('of_edit_test')}</button>` : ''}<a class="btn ghost" href="${BRIGADE_URL}" target="_blank" rel="noopener">${w('of_fix_in_brigade')} ↗</a></div></div>`;
   }
   window.OfficeUI = { alertRows, home, single, fixFor, fixBox, T, w, card, decisions, invoices, todayRow, tiles, title: k => w(k === 'invoices' ? 'of_invoices' : 'of_decisions'), _W: W };
 })();

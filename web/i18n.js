@@ -72,6 +72,7 @@
     reset: ['Reset layout', 'Riordina', 'Reiniciar vista'], reset_sub: ['Closes tabs and returns to My Shift.', 'Chiude le tab e torna al tuo turno.', 'Cierra las pestañas y vuelve a tu turno.'],
     w_office: ['Office', 'Ufficio', 'Oficina'], chef_area: ['Chef only', 'Riservato allo Chef', 'Solo Chef'], staff_role: ['Staff', 'Staff', 'Staff'],
     switched: ['{n} signed out. Enter your PIN.', '{n} è uscito. Inserisci il tuo PIN.', '{n} cerró sesión. Ingresa tu PIN.'],
+    edit_recipe: ['Edit', 'Modifica', 'Editar'],
     chef_only: ['Only Chef can see this.', 'Solo lo Chef può vedere questa pagina.', 'Solo Chef puede ver esta página.'],
     language: ['Language', 'Lingua', 'Idioma'], reserved: ['reserved test', 'prova riservata', 'prueba reservada'], prep_word: ['Prep', 'Prep', 'Prep'], recipe_word: ['Recipe', 'Ricetta', 'Receta'],
     // login
