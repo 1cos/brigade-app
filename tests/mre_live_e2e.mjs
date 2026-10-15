@@ -16,7 +16,7 @@ async function call(who, op, body = {}) {
 const uuid = () => crypto.randomUUID()
 
 // 0) the existing Brigade 2.0 keeps working
-let r = await call(null, 'ping'); ok(r.j && r.j.build === 'api-r1.3-mre', `ping: build ${r.j && r.j.build}`)
+let r = await call(null, 'ping'); ok(r.j && /^api-r1\.[3-9]/.test(r.j.build), `ping: build ${r.j && r.j.build}`)
 r = await call('chef', 'me'); ok(r.j && r.j.user && r.j.user.role === 'chef', 'me (Chef) ok')
 r = await call('chef', 'recipes'); ok(r.j && r.j.recipes && r.j.recipes.length > 100, `recipes ok (${r.j && r.j.recipes && r.j.recipes.length})`)
 r = await call('chef', 'shift'); ok(r.status === 200 && r.j.items, 'shift (Il mio turno) ok')

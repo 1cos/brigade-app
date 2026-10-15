@@ -15,6 +15,8 @@ const ICON = {
   planner: sv('<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 10h18M8 2v4M16 2v4"/>'),
   ask: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  alert: sv('<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>'),
+  doc: sv('<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h6"/>'),
 };
 const WORLDS = { today: { k: 'w_today', c: '--today' }, restaurant: { k: 'w_rest', c: '--rest' }, catering: { k: 'w_cat', c: '--cat' }, planner: { k: 'w_plan', c: '--plan' } };
 
@@ -109,6 +111,7 @@ SCREENS.today = { title: () => t('w_today'), c: '--today', render() {
   return `<div class="page" style="--c:var(--today)">
     ${top}<p class="brief">${brief}${next}</p></div>
     ${isChef() ? `<div class="acts"><button class="btn" data-a="compose">${t('msg_team')}</button></div>` : ''}
+    ${isChef() && window.OfficeUI ? (d => d ? window.OfficeUI.todayRow(d) : '')(need('office', null, 5 * 60000)) : ''}
     ${isChef() && (need('mre_list', null, 2 * 60000) || {}).pending ? `<div class="list"><button class="row" data-a="world" data-w="restaurant"><span class="main"><div class="name">${t('m_lab_pending', { n: API.peek('mre_list').pending })}</div><div class="meta">${t('m_lab_title')}</div></span><span class="chev">›</span></button></div>` : ''}
     ${msgs.length ? `<section><div class="chap"><h2>${t(isChef() ? 'your_msgs' : 'from_chef')}</h2><span>${unread.length ? t('new_n', { n: unread.length }) : ''}</span></div><div class="list">${msgHtml}</div></section>` : ''}
     ${isChef() ? `<section><div class="chap"><h2>${t('problems')}</h2><span>${repUnread.length ? t('new_n', { n: repUnread.length }) : ''}</span></div><div class="list">${reports.slice(0, 8).map(r => `<button class="msg ${r.read ? '' : 'unread'}" data-a="readReport" data-id="${r.id}">${r.read ? '' : '<span class="dotw" style="margin-top:6px"></span>'}<span class="main"><div class="who">${esc(r.from)} · ${tFmt(r.at)}${r.prep ? ' · ' + esc(r.prep) : ''}</div><div class="txt">${esc(r.text)}</div></span></button>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('no_problems')}</div></span></div>`}</div></section>` : ''}
@@ -156,10 +159,11 @@ SCREENS.restaurant = { title: () => t('w_rest'), c: '--rest', render(p) {
   const top = head(t('read_only'), t('w_rest'));
   if (!d) return `<div class="page">${top}${waiting('recipes')}</div>`;
   const lab = mreSection(p);
+  const office = isChef() && window.OfficeUI && !(p.q || '').trim() ? window.OfficeUI.tiles(need('office', null, 5 * 60000), ICON) : '';
   const q = (p.q || '').trim().toLowerCase();
   const list = d.recipes.filter(r => !q || r.title.toLowerCase().includes(q));
   const groups = {}; list.forEach(r => { (groups[cat(r.category)] = groups[cat(r.category)] || []).push(r); });
-  return `<div class="page" style="--c:var(--rest)">${top}${lab}
+  return `<div class="page" style="--c:var(--rest)">${top}${office}${lab}
     ${lab ? `<div class="chap"><h2>${t('m_lab_others')}</h2></div>` : ''}
     <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: d.recipes.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
     ${Object.keys(groups).sort().map(g => `<section><div class="chap"><h2>${esc(g)}</h2><span>${groups[g].length}</span></div><div class="list">${groups[g].map(r => `<button class="row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(r.title)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>`).join('') || `<p class="note">${esc(t('nothing_for', { q }))}</p>`}
@@ -240,6 +244,19 @@ SCREENS.mre = { title: p => window.MreUI ? window.MreUI.title(p) : (p.name || ''
   return `<div class="page mr-page" style="--c:var(--rest)">${backBtn()}${h}</div>`;
 } };
 function openMre(id, name, f, ref) { openTab('mre', id, { s: 'mre', p: { id, name: name || '', f: f || 1, ref: ref || '', panel: null, edit: false } }); }
+
+/* ============ DECISIONS · L'UFFICIO · INVOICES (B-25 module 1, read only, Chef only) — see office.js ============ */
+function officeScreen(kind) {
+  return { title: () => window.OfficeUI.title(kind), c: kind === 'invoices' ? '--rest' : '--today', render(p) {
+    if (!isChef()) return `<div class="page">${backBtn()}<p class="note">${t('chef_only')}</p></div>`;
+    const d = need('office', null, 5 * 60000);
+    if (!d) return `<div class="page">${backBtn()}${waiting('office')}</div>`;
+    const v = kind === 'invoices' ? window.OfficeUI.invoices(d) : window.OfficeUI.decisions(d, p);
+    return `<div class="page" style="--c:var(${this.c})">${backBtn()}${head(v.eyebrow, v.title, v.sub)}${v.body}</div>`;
+  } };
+}
+SCREENS.decisions = officeScreen('decisions');
+SCREENS.invoices = officeScreen('invoices');
 
 /* ============ CATERING (only what to cook) ============ */
 SCREENS.catering = { title: () => t('w_cat'), c: '--cat', render() {
@@ -361,6 +378,9 @@ const A = {
   openPrep(el) { const id = +el.dataset.id; const i = (API.peek('shift') || { items: [] }).items.find(x => x.id === id); openTab('prep', String(id), { s: 'prep', p: { id, name: i ? i.name : '' } }); },
   openRecipe(el) { if (mreIds().has(el.dataset.r)) { openMre(el.dataset.r); return; } openTab('recipe', el.dataset.r, { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null } }); },
   openMre(el) { openMre(el.dataset.r); },
+  openOffice(el) { const k = el.dataset.k, scope = el.dataset.scope || 'all'; openTab('office', k + ':' + scope, { s: k, p: { scope } }); },
+  ofAll() { remember(); stack().push({ s: 'decisions', p: { scope: 'all' } }); render(); },
+  ofMore(el) { cur().p = Object.assign(cur().p || {}, { [el.dataset.k]: 1 }); render(true); },
   /* a sub-recipe opens in its own tab at the quantity the parent needs; closing it returns to the parent */
   openSub(el) { const p = cur().p, d = API.peek('recipe', { id: p.id }); if (!d) return; const s = RC.subFor(RC.model(d, p), +el.dataset.i); if (!s) return;
     openTab('recipe', s.id, { s: 'recipe', p: { id: s.id, name: s.name, factor: s.factor, subWarn: s.warn, prep: '', tab: p.tab } }); },

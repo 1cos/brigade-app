@@ -70,6 +70,7 @@
     find_ph: ['Recipe or prep', 'Ricetta o prep', 'Receta o prep'], switch_user: ['Switch user', 'Cambia utente', 'Cambiar usuario'],
     switch_sub: ['Signs you out. Tabs and drafts are cleared.', 'Esci. Tab e bozze vengono cancellate.', 'Cierra tu sesión. Se borran pestañas y borradores.'],
     reset: ['Reset layout', 'Riordina', 'Reiniciar vista'], reset_sub: ['Closes tabs and returns to My Shift.', 'Chiude le tab e torna al tuo turno.', 'Cierra las pestañas y vuelve a tu turno.'],
+    chef_only: ['Only Chef can see this.', 'Solo lo Chef può vedere questa pagina.', 'Solo Chef puede ver esta página.'],
     language: ['Language', 'Lingua', 'Idioma'], reserved: ['reserved test', 'prova riservata', 'prueba reservada'], prep_word: ['Prep', 'Prep', 'Prep'], recipe_word: ['Recipe', 'Ricetta', 'Receta'],
     // login
     kitchen: ['Zeno\'s kitchen', 'Cucina di Zeno\'s', 'Cocina de Zeno\'s'], enter_pin: ['Enter your PIN', 'Inserisci il PIN', 'Ingresa tu PIN'], delete: ['Delete', 'Cancella', 'Borrar'],

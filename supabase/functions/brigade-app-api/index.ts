@@ -3,12 +3,14 @@
 // resolves identity from app_sessions + app_access and decides what each user may see or write.
 // R1: reads are live Brigade data (read-only); writes go ONLY to app_events with mode='test'.
 // R1.3 (B-49): Master Recipe Engine lab ops 'mre_*' (mre.ts) — writes ONLY to schema mre, under role mre_app.
+// R1.4 (B-25 module 1): 'office' = Decisions, L'Ufficio and invoices (office.ts) — read only, Chef only.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import * as MRE from './mre.ts'
+import * as OFFICE from './office.ts'
 
-const BUILD = 'api-r1.3-mre'
+const BUILD = 'api-r1.4-office'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -316,6 +318,7 @@ Deno.serve(async (req: Request) => {
       case 'planner': out = await planner(u); break
       case 'catering': out = await catering(u); break
       case 'act': out = await act(u, body); break
+      case 'office': out = await OFFICE.office(u, svc); break
       case 'mre_list': out = await MRE.mreList(u, svc); break
       case 'mre_recipe': out = await MRE.mreRecipe(u, String(body.id || ''), svc); break
       case 'mre_ingredients': out = await MRE.mreIngredients(u, String(body.q || '')); break
@@ -331,7 +334,7 @@ Deno.serve(async (req: Request) => {
     }
     return new Response(JSON.stringify(out), { headers: H })
   } catch (e) {
-    if (e instanceof HttpError || e instanceof MRE.MreError) return new Response(JSON.stringify({ ok: false, error: (e as any).code }), { status: (e as any).status, headers: H })
+    if (e instanceof HttpError || e instanceof MRE.MreError || e instanceof OFFICE.OfficeError) return new Response(JSON.stringify({ ok: false, error: (e as any).code }), { status: (e as any).status, headers: H })
     console.error('[app-api]', (e as Error)?.message || e)
     return new Response(JSON.stringify({ ok: false, error: 'server_error' }), { status: 500, headers: H })
   }
