@@ -75,7 +75,7 @@ for (const [dev, w, h] of [['telefono', 390, 844], ['tablet', 820, 1180], ['comp
   if (await rr.count()) {
     await rr.first().click(); await pg.waitForTimeout(600)
     const box = await pg.locator('#main .fixbox').innerText().catch(() => '')
-    const hl = await pg.locator('#main section.hl h2').allTextContents()
+    const hl = await pg.locator('#main section.hl h2, #main .mr-left.hl .mr-sec span').allTextContents()
     ok(/^Da sistemare:/.test(box) && hl.some(x => /ingredienti/i.test(x)), `${dev} · ricetta aperta dalla decisione: riquadro "${box.split('\n')[0]}", evidenziata "${hl.join(',')}"`)
     await pg.screenshot({ path: `${OUT}/${P}${dev}_5_ricetta_da_sistemare.png` })
   } else ok(false, `${dev} · nessuna decisione con ricette da aprire`)

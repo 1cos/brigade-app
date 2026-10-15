@@ -260,6 +260,9 @@ SCREENS.mre = { title: p => window.MreUI ? window.MreUI.title(p) : (p.name || ''
   const h = window.MreUI ? window.MreUI.render(p) : null;
   if (h == null) return `<div class="page">${backBtn()}${waiting('mre_recipe')}</div>`;
   return `<div class="page mr-page" style="--c:var(--rest)">${backBtn()}${fixBox(p)}${h}</div>`;
+}, after(p) {        // Bibbia card: mark Yield line or Ingredients column
+  if (!p.focus || !isChef()) return;
+  const el = document.querySelector(p.focus === 'yield' ? '#main .mr-yield' : '#main .mr-left'); if (el) el.classList.add('hl');
 } };
 function openMre(id, name, f, ref, focus) { openTab('mre', id + (focus ? ':' + focus : ''), { s: 'mre', p: { id, name: name || '', f: f || 1, ref: ref || '', panel: null, edit: false, focus: focus || '' } }); }
 
