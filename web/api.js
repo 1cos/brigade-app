@@ -35,7 +35,7 @@
     if (c && Date.now() - c.at < ttl) return Promise.resolve(c.data);
     const p = call(op, body).then(d => { cache[k] = { data: d, at: Date.now() }; return d; }, e => { delete cache[k]; throw e; });
     cache[k] = Object.assign(c || {}, { p });
-    p.finally(() => { if (cache[k]) delete cache[k].p; window.dispatchEvent(new CustomEvent('app-data')); });
+    p.finally(() => { if (cache[k]) delete cache[k].p; window.dispatchEvent(new CustomEvent('app-data')); }).catch(() => {});   // the caller handles the error
     return p;
   }
   const peek = (op, body) => { const c = cache[op + JSON.stringify(body || {})]; return c && 'data' in c ? c.data : undefined; };

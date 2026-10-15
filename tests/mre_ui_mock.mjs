@@ -29,6 +29,7 @@ function api(op, b) {
       const f2 = {}; Object.keys(facts).forEach(k => { f2[k] = u.role === 'chef' ? facts[k] : (({ price, ...r }) => r)(facts[k]) })
       return { recipe: { id: b.id, current_version: L.cur }, doc: root, docs: dd, facts: f2, measures, versions: L.versions.slice().reverse().map(v => ({ version: v.version, state: v.state, reason: v.reason, by: 'Max', at: v.at })),
         productions: L.prods, suggestions: L.sugs, draft: u.role === 'chef' && L.draft ? Object.assign({}, L.draft, { id: b.id }) : null, diffs: u.role === 'chef' ? (rep[b.id] && rep[b.id].diff_types || []).map(t => ({ type: t, note: 'mock' })) : undefined, diffs_checked: L.checked, cost: u.role === 'chef' ? E.cost(b.id, 1, ctx) : undefined } }
+    case 'office': return u.role === 'chef' ? { checked_at: new Date().toISOString(), today: '2026-10-15', decisions: [], stale: [], history: [], completeness: [], invoices: { warnings: 0, invoices: 0, needs: [], queue: [], info: [], excluded: 0, docs: [], tile: { now: 0, review: 0 } } } : [403, 'forbidden']
     case 'mre_save_draft': LAB[b.id].draft = b.doc; return { ok: true }
     case 'mre_discard': LAB[b.id].draft = null; return { ok: true }
     case 'mre_check_diffs': LAB[b.id].checked = { at: new Date().toISOString(), by: 'Max' }; return { ok: true }
