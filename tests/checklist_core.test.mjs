@@ -36,7 +36,7 @@ ok(!sa.why.dishes.some(d => /Pistachio/.test(d.title)) && sa.why.not_counted.som
   ok(x.samples.length === 4 && x.samples.every(s => s.amount === s.portions) && sa.qty === exp, `salmon calc: last 4 Fridays ${x.samples.map(s => s.portions).join('+')} → mean ${mean} +25% → ${sa.qty} (expected ${exp})`) }
 const bf = by(O, 'branzino_filet'), bw = by(T, 'branzino_whole')
 { const x = bf.why.day, mean = x.samples.reduce((a, s) => a + s.portions, 0) / 4, exp = Math.ceil(mean * 1.30)
-  ok(bf.qty === exp && x.samples.every(s => s.amount === s.portions) && bf.why.dishes.length === 1 && bf.why.dishes[0].title === 'Siciliana' && /Chef 16\/10: 1 filet per Siciliana/.test(bf.why.dishes[0].source), `branzino filets: Siciliana sold last 4 Fridays ${x.samples.map(s => s.portions).join('+')} × 1 filet (Chef) → mean ${mean} +30% → ${bf.qty}`) }
+  ok(bf.qty === exp && x.samples.every(s => s.amount === s.portions) && bf.why.dishes.length === 1 && bf.why.dishes[0].title === 'Siciliana' && bf.why.dishes[0].per_portion === 1, `branzino filets: Siciliana sold last 4 Fridays ${x.samples.map(s => s.portions).join('+')} × 1 filet (official recipe since R1.11.4) → mean ${mean} +30% → ${bf.qty}`) }
 ok(bf.ref === null && bf.why.chef_ref.lo === 10 && bf.why.not_counted.length === 0, 'branzino filets: POS number now; Chef reference (about 10) kept in Why? for comparison only')
 ok(bf.why.notes[0] === `${bf.qty} filets = ${Math.ceil(bf.qty / 2)} whole fish if filleted today (2 filets per fish, Chef). Frozen filets already in stock are not counted.`, `filets → whole fish kept separate: ${bf.why.notes[0]}`)
 { const W = run('2026-10-15', { station: 'oven' }), S = run('2026-10-17', { station: 'oven' }), r = R => by(R, 'branzino_filet')
@@ -49,14 +49,13 @@ ok(T.items.length === 1 && bw.what === 'whole branzino (gutted and cleaned)' && 
   ok(JSON.stringify(th) === '{"lobster":15,"salmon":20,"branzino_filet":10}', `thaw times only where the Chef gave them: ${JSON.stringify(th)} (none for shrimp, calamari, whole branzino)`) }
 ok([...F.items, ...O.items].filter(c => c.thaw_min).every(c => c.why.notes.some(n => /not an HACCP validation/.test(n))), 'thaw time labelled as current practice, not an HACCP validation (Chef view)')
 // ---------- Chef 16/10 definitive quantities: the forecast follows the OFFICIAL recipes, pending shown until they agree ----------
-{ const pend = sh.why.notes.filter(n => /^Pending in the official recipe/.test(n))
-  ok(pend.length === 2 && /Add shrimp = 5 shrimp = 250 g \(Brigade says 150 g\)/.test(pend[0]) && /Scoglio = 2 shrimp = 100 g \(Brigade says nothing\)/.test(pend[1]), 'shrimp: Add shrimp 250 g and Scoglio 100 g shown as pending while the official recipes say otherwise')
-  const P = JSON.parse(JSON.stringify(C))   // the official recipes as they will be after R1.11.4 (in memory only)
-  P.bom.find(b => b.parent_recipe_id === '8346fbee-7306-4d79-a90a-7228a7f9b766' && b.sub_recipe_id === 'dc5cf3dd-f130-46ec-a868-849110d59cdf').quantity = 250
-  P.bom.push({ parent_recipe_id: '93e0f4f1-9889-407d-841c-c225659b684c', component_type: 'RECIPE', sub_recipe_id: 'dc5cf3dd-f130-46ec-a868-849110d59cdf', item_id: null, quantity: 100, unit: 'g' })
-  const s2 = CL.stationPriorities(Object.assign({}, P, { today: '2026-10-16' })).items.find(c => c.key === 'shrimp')
-  const sco = s2.why.dishes.find(d => d.title === 'Fettuccine Allo Scoglio'), add = s2.why.dishes.find(d => d.title === 'ADD SHRIMP')
-  ok(sco && sco.per_portion === 100 && add.per_portion === 250 && !s2.why.notes.some(n => /^Pending/.test(n)) && s2.qty > sh.qty, `after the recipe fix: Add shrimp 250 g + Scoglio 100 g counted, nothing pending → ${sh.qty} g becomes ${s2.qty} g`)
+{ const sco = sh.why.dishes.find(d => d.title === 'Fettuccine Allo Scoglio'), add = sh.why.dishes.find(d => d.title === 'ADD SHRIMP')
+  ok(sco && sco.per_portion === 100 && add.per_portion === 250 && !sh.why.notes.some(n => /^Pending/.test(n)), `official recipes saved (R1.11.4): Add shrimp 250 g + Scoglio 100 g counted, nothing pending → shrimp ${sh.qty} g`)
+  const P = JSON.parse(JSON.stringify(C))   // the recipes as they were BEFORE R1.11.4 (in memory only): the Chef must see "pending"
+  P.bom.find(b => b.parent_recipe_id === '8346fbee-7306-4d79-a90a-7228a7f9b766' && b.sub_recipe_id === 'dc5cf3dd-f130-46ec-a868-849110d59cdf').quantity = 150
+  P.bom = P.bom.filter(b => !(b.parent_recipe_id === '93e0f4f1-9889-407d-841c-c225659b684c' && b.sub_recipe_id === 'dc5cf3dd-f130-46ec-a868-849110d59cdf'))
+  const s0 = CL.stationPriorities(Object.assign({}, P, { today: '2026-10-16' })).items.find(c => c.key === 'shrimp'), pend = s0.why.notes.filter(n => /^Pending in the official recipe/.test(n))
+  ok(pend.length === 2 && /250 g \(Brigade says 150 g\)/.test(pend[0]) && /100 g \(Brigade says nothing\)/.test(pend[1]) && s0.qty < sh.qty, `if the official recipes disagree with the Chef, the Why? says "pending" (old recipes: ${s0.qty} g)`)
   ok(sa.why.notes.some(n => /190 g/.test(n)) && !sa.why.notes.some(n => /200 g/.test(n)), 'salmon: 190 g (Chef), no 200 g anywhere')
   const bwn = T.items[0].why.notes.join(' '), bfn = bf.why.notes.join(' ')
   ok(/2\.2 lb/.test(bwn) && !/2\.1/.test(bwn + bfn) && /1\.1 lb/.test(bfn), 'branzino: 2.2 lb per fish, 1.1 lb per filet in theory (purchase only)') }

@@ -83,7 +83,7 @@ const open = async (pg, st = 'pasta') => { await pg.click(`button[data-a="openSm
   ok(/Sold but not counted/.test(await card('salmon')) && /Salmon whole\s+1×\s+add-on, quantity not mapped/.test(await card('salmon')), 'salmon Why?: unmapped add-on "Salmon whole" listed with its sales (Chef review)')
   await pg.locator('#main .sc[data-k="branzino_filet"] summary').click(); await pg.waitForTimeout(150)
   const bft = await card('branzino_filet')
-  ok(/Chef 16\/10: 1 filet per Siciliana/.test(bft) && /Chef's reference, for comparison: about 10/.test(bft) && /whole fish if filleted today/.test(bft), 'branzino filets Why?: 1 filet per Siciliana (Chef), reference for comparison, whole-fish equivalent')
+  ok(/Siciliana 1\/portion/.test(bft) && /Chef's reference, for comparison: about 10/.test(bft) && /whole fish if filleted today/.test(bft), 'branzino filets Why?: 1 filet per Siciliana (official recipe), reference for comparison, whole-fish equivalent')
   await pg.locator('#main .sc[data-k="branzino_filet"]').screenshot({ path: `${OUT}/${P}6b_branzino_why.png` })
   await pg.screenshot({ path: `${OUT}/${P}6_oven.png` })
   await pg.locator('#main button[data-a="scDone"][data-k="calamari"]').click(); await pg.waitForTimeout(200)
