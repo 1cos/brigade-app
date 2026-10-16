@@ -27,7 +27,8 @@ ok(v.price_each.s === 'verified' && Math.abs(v.price_each.v - 1.9985) < 1e-9, `A
 ok(art.conversions.piece_g.s === 'estimated' && art.conversions.piece_g.v === 128, 'Artichokes: 128 g stays "estimated" (not approved)')
 ok(art.price.per_g_status === 'estimated', 'Artichokes: FC05 per-gram price flagged as resting on the unapproved 128 g')
 ok(v.checks.some(c => /Purchase unit says "lb"/.test(c.msg)), 'Artichokes: vendor sheet "lb" vs counted pack reported')
-ok(art.theoretical.v === 228 && art.theoretical.unit === 'pz' && art.bought.v === 320, `Artichokes 28 days: used ${art.theoretical.v} pz (POS × 2), bought ${art.bought.v} pz (4 cases)`)
+const soldArt = A.sales.filter(s => s.kind === 'item' && s.name === 'Artichoke').reduce((t, s) => t + Number(s.qty), 0)
+ok(art.theoretical.v === 2 * soldArt && art.theoretical.unit === 'pz' && art.bought.v === 320, `Artichokes 28 days: used ${art.theoretical.v} pz = POS ${soldArt} × 2, bought ${art.bought.v} pz (4 cases)`)
 const since = '2026-06-09', all = A.inv.filter(l => l.ingredient_id === by('Artichokes').id && l.invoice_date >= since)
 const bought = all.reduce((s, l) => s + lineAmount(l).amt, 0); ok(bought === 1120, `Artichokes since 9/6: ${bought} pz bought (14 cases × 80), as in the audit`)
 

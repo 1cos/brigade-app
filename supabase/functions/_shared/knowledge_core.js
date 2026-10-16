@@ -124,7 +124,9 @@ export function dishesUsing(id, bom, recipes, yields) {
     const g = q != null && MASS_G[u] ? { unit: 'g', amt: q * MASS_G[u] } : { unit: u || '?', amt: q }
     walk(b.parent_recipe_id, g.unit, g.amt, q == null ? M : V, [b.parent_recipe_id], 0)
   }
-  return Object.values(out).sort((a, b) => a.title.localeCompare(b.title))
+  // fixed order (same title can appear twice, e.g. two recipes with one name or two units)
+  Object.values(out).forEach(o => o.paths.sort())
+  return Object.values(out).sort((a, b) => a.title.localeCompare(b.title) || a.recipe_id.localeCompare(b.recipe_id) || a.unit.localeCompare(b.unit))
 }
 export const posNames = r => String((r && r.pos_name) || '').split('|').map(x => x.trim()).filter(Boolean)
 
@@ -147,7 +149,7 @@ export function knowledgeCard(id, data, chef) {
     return { recipe_id: b.parent_recipe_id, title: ((data.recipes || []).find(r => r.id === b.parent_recipe_id) || {}).title || '?', qty: q, unit: b.unit || null,
       per_lot: f(q, q == null ? M : V, 'recipe BOM', q == null ? 'quantity missing' : null),
       per_portion: port > 0 && q != null ? f(r2(q / port * 1000) / 1000, V, `BOM ÷ ${port} portions`) : f(null, M, null, port > 0 ? 'quantity missing' : 'portions per batch not set'),
-      unit_ok: dimOf(b.unit) ? null : 'unit not convertible' } }).sort((a, b) => a.title.localeCompare(b.title))
+      unit_ok: dimOf(b.unit) ? null : 'unit not convertible' } }).sort((a, b) => a.title.localeCompare(b.title) || String(a.recipe_id).localeCompare(String(b.recipe_id)) || String(a.unit || '').localeCompare(String(b.unit || '')) || (a.qty ?? -1) - (b.qty ?? -1))
   const dishes = dishesUsing(id, data.bom, data.recipes, data.yields)
   // POS: sold in the window per dish (name = recipes.pos_name, the same rule the POS cleaner uses first)
   // dishes count menu items; add-ons (menu group "Add-ons", e.g. ADD LOBSTER = "Lobsters") count POS modifiers
@@ -182,7 +184,9 @@ export function knowledgeCard(id, data, chef) {
       : facts && facts.policy ? null : f(null, M, null, 'no usable invoice price')
     // per-gram price that rests on an unapproved piece weight is an estimate, not a verified price
     if (out.price && out.price.per_g != null && out.conversions.piece_g.s !== V && out.vendors_k.some(v => v.checks.some(c => /per-gram price assumes/.test(c.msg)))) out.price.per_g_status = E
-    out.invoices = (data.invoices || []).slice(0, 8).map(l => { const a = lineAmount(l)
+    // fixed order: newest first; same day → vendor, description, total (several lines can share a date)
+    const invSorted = (data.invoices || []).slice().sort((a, b) => String(b.invoice_date).localeCompare(String(a.invoice_date)) || String(a.vendor || '').localeCompare(String(b.vendor || '')) || String(a.raw_description || '').localeCompare(String(b.raw_description || '')) || (num(a.line_total) ?? 0) - (num(b.line_total) ?? 0) || String(a.invoice_number || a.doc_number || '').localeCompare(String(b.invoice_number || b.doc_number || '')))
+    out.invoices = invSorted.slice(0, 8).map(l => { const a = lineAmount(l)
       return { date: l.invoice_date, vendor: l.vendor, number: l.invoice_number || l.doc_number || null, number_src: l.invoice_number ? 'invoice line' : l.doc_number ? 'original document' : null,
         description: l.raw_description, sku: l.vendor_sku || null, qty: num(l.qty), unit: l.purchase_unit || null, pack: l.pack_description || null, amount: a.s === V ? { qty: r2(a.amt), unit: a.unit, rule: a.rule } : null, amount_why: a.s === V ? null : a.why,
         unit_price: num(l.unit_price), total: num(l.line_total) } })
