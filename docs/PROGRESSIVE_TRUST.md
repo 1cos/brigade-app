@@ -44,3 +44,20 @@ Both: no stock table touched; a tick is a statement, never a sale or a deduction
 Records it would add, all from the same cards: `ready_count` (Step 2 counts saved), `production` (batch made, linked to the
 recipe yield), `yield_lot` (real yield, lot / date), `stock_move` (only through the existing deduction engine).
 Activation requires: explicit Chef approval, role permissions, and deduction tests on a copy before any live write.
+
+## Fish workflow (R1.11.2, Chef 16/10)
+- **Branzino** arrives whole. Table Side processes it: part is gutted and cleaned but left whole (Branzino Chef Style / Table Side), part is filleted, cleaned, wrapped and frozen.
+  - Table Side card: whole branzino (gutted and cleaned) for today, from POS (Branzino Chef Style).
+  - Oven card: branzino filets for the Siciliana, ready (thawed) for today. No POS number: "Siciliana cartoccio" has no yield, so the filets per portion are unknown. The card shows the Chef's reference instead (about 5–7 Monday–Thursday, about 10 Friday–Saturday): a reference, never a fixed amount.
+  - Filleting and freezing is not a daily card: it needs the filets per fish (Chef) and a count of the frozen stock (Step 3). The need is never asked in two stations.
+- **Salmon** arrives as large whole filets, portioned to 200 g. One Amalfi Salmon = one filet; the "Add salmon whole" modifier = one filet. Salmon Pistachio is off the menu (last POS sale 26/06/2026) and is not counted.
+- **Thaw times** (Chef's current practice, not an HACCP validation): lobster ~15 min, branzino filet ~10 min, salmon ~20 min. No time where the Chef gave none.
+
+## Dynamic assignment (design only — `GATES.reassign = false`, nothing reassigns today)
+A task belongs to a home station (branzino processing → Table Side), but a cook who has finished their own tasks can take others, whatever the station.
+- **Task ≠ person.** Each card keeps its home station. An assignment says *who* does it on one shift; it never moves the need to another station (no duplicates).
+- **Who decides.** The Chef or the shift lead offers or assigns; a cook can ask "anything else?" when their list is complete. No automatic reassignment until a new GO.
+- **When it is offered.** Only when the home station has open cards near their deadline and another cook has 100% of their own cards ticked. The suggestion names the task, not a ranking of people.
+- **Trust level.** The cook who takes the task sees it at their own level (step 1 tick). Step 2/3 rules stay per cook and per station: helping elsewhere does not raise a level and does not count as a worked shift at that station.
+- **Record (needs the ticks migration).** One extra field per tick: `assigned_from_station` + `assigned_by`. Without the migration nothing is stored.
+- **Not now.** No screen, no API, no writes. Turning it on = new release with tag and rollback, after the Chef's GO.

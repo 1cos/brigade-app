@@ -20,7 +20,10 @@
     sc_yes: ['Yes, ready', 'Sì, pronto', 'Sí, listo'], sc_ready: ['Ready', 'Pronto', 'Listo'],
     sc_undo: ['Undo', 'Annulla', 'Deshacer'], sc_save: ['Save', 'Salva', 'Guardar'],
     sc_enough: ['Enough for today', 'Basta per oggi', 'Alcanza para hoy'], sc_more: ['{q} more needed', 'Ne servono altri {q}', 'Faltan {q}'],
-    sc_thaw: ['Thaw this morning (about 15 min). Need more during service? Thaw them then.', 'Scongela stamattina (circa 15 min). Ne servono altre in servizio? Scongelale al momento.', 'Descongela esta mañana (unos 15 min). ¿Faltan en servicio? Descongélalas en el momento.'],
+    sc_thaw: ['Thaw this morning (about {m} min). Need more during service? Thaw them then.', 'Scongela stamattina (circa {m} min). Ne servono altre in servizio? Scongelale al momento.', 'Descongela esta mañana (unos {m} min). ¿Faltan en servicio? Descongélalas en el momento.'],
+    sc_thaw_min: ['Thaw time: about {m} min.', 'Tempo di scongelamento: circa {m} min.', 'Tiempo de descongelación: unos {m} min.'],
+    sc_ref: ['Chef\'s reference: about {r}', 'Riferimento dello Chef: circa {r}', 'Referencia del Chef: unos {r}'],
+    sc_refnote: ['No POS number (a dish that sells has no reliable amount per portion): the Chef\'s reference is shown, not a fixed amount.', 'Nessun numero dal POS (un piatto venduto non ha una quantità per porzione affidabile): si mostra il riferimento dello Chef, non una quantità fissa.', 'Sin número del POS (un plato vendido no tiene cantidad por porción fiable): se muestra la referencia del Chef, no una cantidad fija.'],
     sc_left: ['Leftovers from {d}: use them only if checked and still good.', 'Avanzi di {d}: usali solo se controllati e ancora buoni.', 'Sobras del {d}: úsalas solo si están revisadas y en buen estado.'],
     sc_why: ['Why?', 'Perché?', '¿Por qué?'], sc_events: ['Events', 'Eventi', 'Eventos'],
     sc_closed: ['Closed today (no POS sales on this weekday). Showing the next service day.', 'Oggi chiuso (nessuna vendita POS in questo giorno). Mostro il prossimo giorno di servizio.', 'Hoy cerrado (sin ventas POS este día). Muestro el próximo día de servicio.'],
@@ -39,6 +42,7 @@
   const shortD = iso => new Intl.DateTimeFormat(I.locale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(iso + 'T12:00:00Z'));
   const longD = iso => new Intl.DateTimeFormat(I.locale(), { weekday: 'long', timeZone: 'UTC' }).format(new Date(iso + 'T12:00:00Z'));
   const addDay = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10)
+  const refTxt = r => r.lo === r.hi ? String(r.lo) : r.lo + '–' + r.hi
   const what = (c, esc) => `<b class="num">${qty(c.qty, c.unit)}</b> ${esc(c.what)}`;
   function question(c, d, esc) {
     const fd = c.for_day || {}
@@ -49,11 +53,12 @@
   // Chef only: where the number comes from. A cook never needs it.
   function why(c, esc) {
     const x = c.why.day
-    const day = x ? `<div class="scw-day"><b>${esc(x.weekday)} ${esc(shortD(x.day))}</b>: ${x.forecast == null ? '—' : `${qty(x.mean, c.unit)} avg + ${c.why.margin}% → <b>${qty(x.forecast, c.unit)}</b> → ${qty(c.qty, c.unit)}`}${x.trend != null ? ` <span class="muted">(last 2 weeks ${x.trend > 0 ? '+' : ''}${x.trend}%)</span>` : ''}
-      <table class="scw-t">${x.samples.map(s => `<tr><td>${esc(shortD(s.date))}</td><td>${s.portions} sold</td><td>${qty(s.amount, c.unit)}</td></tr>`).join('')}</table></div>` : ''
+    const day = x ? `<div class="scw-day"><b>${esc(x.weekday)} ${esc(shortD(x.day))}</b>: ${x.forecast == null || c.qty == null ? (c.ref ? esc(t('sc_ref', { r: refTxt(c.ref) })) : '—') : `${qty(x.mean, c.unit)} avg + ${c.why.margin}% → <b>${qty(x.forecast, c.unit)}</b> → ${qty(c.qty, c.unit)}`}${x.trend != null ? ` <span class="muted">(last 2 weeks ${x.trend > 0 ? '+' : ''}${x.trend}%)</span>` : ''}
+      <table class="scw-t">${x.samples.map(s => `<tr><td>${esc(shortD(s.date))}</td><td>${s.portions} sold</td>${c.qty == null ? '' : `<td>${qty(s.amount, c.unit)}</td>`}</tr>`).join('')}</table></div>` : ''
     return `<details class="scw"><summary>${t('sc_why')}</summary><div class="scw-b">
       <div class="muted">${esc(c.why.method)}</div>${day}
       <div><b>Dishes</b>: ${c.why.dishes.map(dd => `${esc(dd.title)} ${qty(dd.per_portion, dd.unit)}/portion <span class="muted">(${esc(dd.source)}${dd.path && dd.path !== dd.title ? ' · ' + esc(dd.path) : ''})</span>`).join(' · ') || '—'}</div>
+      ${(c.why.notes || []).map(n => `<div class="muted">${esc(n)}</div>`).join('')}
       ${c.why.round ? `<div class="muted">${esc(c.why.round)}</div>` : ''}${c.why.batch ? `<div class="muted">${esc(c.why.batch)}</div>` : ''}
       ${c.why.not_counted.length ? `<div class="wtx">${t('sc_not_counted')}: ${esc(c.why.not_counted.join(' · '))}</div>` : ''}
       ${c.why.lead_note ? `<div class="muted">${esc(c.why.lead_note)}</div>` : ''}
@@ -62,8 +67,9 @@
   }
   function card(c, d, st, esc, chefView, level) {
     const s = st[c.key] || {}
-    const hints = [c.how === 'thaw_morning' && !s.done ? t('sc_thaw') : '', c.leftovers_from && !s.done ? esc(t('sc_left', { d: longD(c.leftovers_from.day) })) : '']
-      .filter(Boolean).map(h => `<div class="meta">${h}</div>`).join('') + (chefView && c.qty == null ? `<div class="meta wtx">${t('sc_noqty')}</div>` : '')
+    const hints = [c.ref && !s.done ? `<b>${esc(t('sc_ref', { r: refTxt(c.ref) }))}</b>` : '',
+      c.thaw_min && !s.done ? t(c.how === 'thaw_morning' ? 'sc_thaw' : 'sc_thaw_min', { m: c.thaw_min }) : '', c.leftovers_from && !s.done ? esc(t('sc_left', { d: longD(c.leftovers_from.day) })) : '']
+      .filter(Boolean).map(h => `<div class="meta">${h}</div>`).join('') + (chefView && c.qty == null ? `<div class="meta wtx">${t(c.ref ? 'sc_refnote' : 'sc_noqty')}</div>` : '')
     let acts
     if (level >= 2) {   // Step 2 (built, off): how many are ready? → enough / N more. Still only on this phone.
       const r = s.ready != null ? s.ready : null, short = r == null || c.qty == null ? null : Math.max(0, c.qty - r)

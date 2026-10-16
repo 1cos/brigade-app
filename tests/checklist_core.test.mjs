@@ -26,15 +26,27 @@ ok(Object.values(CL.MARGINS).some(m => m[5] !== m[6]) && !Object.values(CL.MARGI
 // ---------- fish: stations, today only, no invented amounts (R1.11b, Chef 16/10) ----------
 const allItems = Object.entries(CL.STATIONS).flatMap(([k, v]) => v.items.map(i => ({ st: k, key: i.key })))
 ok(new Set(allItems.map(x => x.key)).size === allItems.length && Object.values(CL.STATIONS).every(v => v.items.every(i => CL.STATIONS[i.station].items.includes(i))), `each item in ONE station only (${Object.entries(CL.STATIONS).map(([k, v]) => k + ': ' + v.items.map(i => i.key).join('+')).join(' · ')})`)
-ok(CL.STATIONS.pasta.items.map(i => i.key).join() === 'lobster,shrimp,gnocco,arrabbiata' && CL.STATIONS.oven.items.map(i => i.key).join() === 'calamari,salmon' && CL.STATIONS.tableside.items.map(i => i.key).join() === 'branzino_filet,branzino_whole', 'lobster+shrimp → Pasta, calamari+salmon → Oven, branzino → Table Side (as in Brigade prep classification)')
+ok(CL.STATIONS.pasta.items.map(i => i.key).join() === 'lobster,shrimp,gnocco,arrabbiata' && CL.STATIONS.oven.items.map(i => i.key).join() === 'calamari,salmon,branzino_filet' && CL.STATIONS.tableside.items.map(i => i.key).join() === 'branzino_whole', 'Pasta: lobster+shrimp · Oven: calamari+salmon+branzino filets for the Siciliana · Table Side: whole branzino only (Chef 16/10)')
 const O = run('2026-10-16', { station: 'oven' }), T = run('2026-10-16', { station: 'tableside' })
 const ca = by(O, 'calamari'), sa = by(O, 'salmon')
 ok(O.station === 'Oven Station' && ca.for_day.today && ca.qty > 0 && ca.why.dishes.some(d => d.title === 'Fried calamari' && d.per_portion === 165), `calamari: ${ca.qty} g for today from Fried calamari 165 g/portion`)
-ok(sa.for_day.today && sa.unit === 'pz' && sa.why.dishes.some(d => d.title === 'Salmon Whole' && d.source === 'POS modifiers') && sa.why.dishes.some(d => d.title === 'Amalfi Salmon') && sa.why.not_counted.some(x => /Salmon Pistachio/.test(x)), `salmon: ${sa.qty} filets for today (Amalfi Salmon + "Add salmon whole" modifier), Salmon Pistachio by weight noted`)
-const bf = by(T, 'branzino_filet'), bw = by(T, 'branzino_whole')
-ok(bf.qty === null && bf.need === null && bf.status === 'missing' && bf.why.not_counted.some(x => /Siciliana/.test(x)), 'branzino filets: Siciliana sells but has no amount per portion → NO number (not invented)')
-ok(bw.qty >= 1 && bw.why.dishes[0].title === 'Branzino Chef Style', `whole branzino: ${bw.qty} for today (Branzino Chef Style)`)
-ok([...F.items, ...O.items, ...T.items].filter(c => c.how).map(c => c.key).join() === 'lobster', 'thaw time only on lobster (the only one the Chef gave): no common time for all fish')
+ok(sa.for_day.today && sa.unit === 'pz' && sa.what === 'salmon filets (200 g)' && sa.why.dishes.map(d => d.title + ' ' + d.per_portion + ' ' + d.source).sort().join(' | ') === 'Amalfi Salmon 1 POS menu items | Salmon Whole 1 POS modifiers', `salmon: ${sa.qty} filets of 200 g = Amalfi Salmon (1 filet) + "Add salmon whole" modifier (1 filet), nothing else`)
+ok(!sa.why.dishes.some(d => /Pistachio/.test(d.title)) && sa.why.not_counted.some(x => /Salmon Pistachio: off the menu \(last POS sale 26\/06\/2026\)/.test(x)), 'Salmon Pistachio: off the menu, not added to the forecast')
+{ const x = sa.why.day, mean = x.samples.reduce((a, s) => a + s.amount, 0) / x.samples.length, exp = Math.max(1, Math.ceil(mean * 1.25))
+  ok(x.samples.length === 4 && x.samples.every(s => s.amount === s.portions) && sa.qty === exp, `salmon calc: last 4 Fridays ${x.samples.map(s => s.portions).join('+')} → mean ${mean} +25% → ${sa.qty} (expected ${exp})`) }
+const bf = by(O, 'branzino_filet'), bw = by(T, 'branzino_whole')
+ok(bf.qty === null && bf.need === null && bf.status === 'missing' && bf.why.not_counted.some(x => /Siciliana/.test(x)), 'branzino filets: Siciliana has no amount per portion → no POS number (not invented)')
+ok(bf.ref && bf.ref.lo === 10 && bf.ref.hi === 10 && bf.ref.weekend, 'branzino filets Friday: Chef reference about 10 (weekend)')
+{ const W = run('2026-10-15', { station: 'oven' }), S = run('2026-10-17', { station: 'oven' }), M = run('2026-10-19', { station: 'oven' }), r = R => by(R, 'branzino_filet').ref
+  ok(r(W).lo === 5 && r(W).hi === 7 && r(M).lo === 5 && r(M).hi === 7 && r(S).lo === 10 && !r(W).weekend, 'branzino filets: about 5–7 Monday–Thursday, about 10 Friday–Saturday (reference, not a fixed amount)') }
+ok(by(O, 'calamari').ref === null && sa.ref === null, 'the Chef reference appears only where the POS gives no number')
+ok(T.items.length === 1 && bw.what === 'whole branzino (gutted and cleaned)' && bw.qty >= 1 && bw.why.dishes.length === 1 && bw.why.dishes[0].title === 'Branzino Chef Style', `Table Side: ${bw.qty} whole branzino gutted and cleaned for today (Branzino Chef Style), nothing else`)
+{ const all = Object.values(CL.STATIONS).flatMap(s => s.items), tg = all.map(i => JSON.stringify(i.target))
+  ok(new Set(tg).size === tg.length && all.filter(i => /branzino/.test(i.key)).map(i => i.station + ':' + i.key).join() === 'oven:branzino_filet,tableside:branzino_whole', 'no need asked twice: filets only in Oven, whole fish only in Table Side') }
+{ const th = Object.fromEntries([...F.items, ...O.items, ...T.items].filter(c => c.thaw_min).map(c => [c.key, c.thaw_min]))
+  ok(JSON.stringify(th) === '{"lobster":15,"salmon":20,"branzino_filet":10}', `thaw times only where the Chef gave them: ${JSON.stringify(th)} (none for shrimp, calamari, whole branzino)`) }
+ok([...F.items, ...O.items].filter(c => c.thaw_min).every(c => c.why.notes.some(n => /not an HACCP validation/.test(n))), 'thaw time labelled as current practice, not an HACCP validation (Chef view)')
+ok(CL.GATES.reassign === false, 'dynamic reassignment: design only, switched off')
 ok([...F.items, ...O.items, ...T.items].every(c => c.for_day.today), 'all fish (and every other item) for TODAY\'s service')
 // ---------- cook view: nothing technical ----------
 const ck = CL.forCook(F), s = JSON.stringify(ck)

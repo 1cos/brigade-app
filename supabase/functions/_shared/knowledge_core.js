@@ -174,7 +174,7 @@ export function knowledgeCard(id, data, chef) {
   let theo = 0, theoUnit = null, theoStatus = C; const theoWhy = []
   dishes.forEach(d => {
     const src = d.addon ? sold.modifier : sold.item
-    d.sold = d.pos_names.reduce((a, n) => a + (src[n.toLowerCase()] || 0), 0)
+    d.sold = [...new Set(d.pos_names.map(n => n.toLowerCase()))].reduce((a, n) => a + (src[n] || 0), 0)   // one name counted once, whatever its spelling
     d.sold_f = f(d.sold, V, `POS ${d.addon ? 'modifiers' : 'menu items'}, last ${data.days} days`)
     if (!d.sold) return
     if (d.per_portion == null) { theoStatus = M; theoWhy.push(`${d.title}: ${d.why[0] || 'amount per portion missing'}`); return }

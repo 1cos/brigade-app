@@ -18,7 +18,7 @@ export const SAMPLES = 4            // last 4 same weekdays
    a cook can reach. staffVisible: cooks see the checklist · step2: confirm quantities exists for cooks the Chef enabled ·
    step3: stock & production writes (not implemented: stays false until the Chef approves it, with permissions and
    deduction tests). */
-export const GATES = Object.freeze({ staffVisible: false, step2: false, step3: false })
+export const GATES = Object.freeze({ staffVisible: false, step2: false, step3: false, reassign: false })   // reassign: design only (docs/PROGRESSIVE_TRUST.md)
 export const STEPS = Object.freeze({
   1: { name: 'Checklist', active: true },
   2: { name: 'Confirm quantities', active: false, built: true },
@@ -37,41 +37,50 @@ export const MARGINS = Object.freeze({
   arrabbiata: { weekday: 0.25, 5: 0.30, 6: 0.20 },
   calamari:   { weekday: 0.15, 5: 0.15, 6: 0.10 },
   salmon:     { weekday: 0, 5: 0.25, 6: 0 },               // small numbers (2–4 a day): rounding up to whole filets already covers
-  branzino_filet: { weekday: 0, 5: 0, 6: 0 },              // no reliable amount yet (Siciliana cartoccio has no yield): never asked with a number
+  branzino_filet: { weekday: 0, 5: 0, 6: 0 },              // no POS number (Siciliana cartoccio has no yield): the Chef's reference is shown instead
   branzino_whole: { weekday: 0, 5: 0, 6: 0 },              // 0–3 a day: rounding up to a whole fish already covers
 })
 export const DEFAULT_MARGIN = 0.15
 export function marginFor(key, iso) { const m = MARGINS[key]; if (!m) return DEFAULT_MARGIN; const w = dow(iso); return m[w] != null ? m[w] : m.weekday }
 
-/* Checklist items per station. Station = where Brigade already puts the prep (prep_task_classifications / prep category,
-   read 16/10): Thaw Lobster #296 + Shrimp #470 → Pasta · Calamari #266 + Thaw Salmon #413 → Oven · Clean/Filet Branzino
-   #447/#448 → Table Side ("Fish Processing"). Each item lives in ONE station only.
-   Fish (Chef 16/10): checked and prepared in the morning for TODAY's service. Thaw time is shown only where the Chef gave it
-   (lobster ~15 min); never the same time for every product.
-   ask: 'ready'. target: ingredient (item) or sub-recipe (recipe). as_modifier: recipes sold as POS modifiers although their
-   recipe is not in the Add-ons group (Salmon Whole = "Add salmon whole"). step: rounding of the question amount. */
+/* Checklist items per station. Station = where the prep is used for TODAY's service (Chef 16/10, R1.11.2):
+   Thaw Lobster #296 + Shrimp #470 → Pasta · Calamari #266 + Thaw Salmon #413 + branzino filets for the Siciliana → Oven ·
+   whole branzino, gutted and cleaned for Branzino Chef Style → Table Side. Each need lives in ONE station only.
+   Branzino arrives whole; Table Side processes it: part gutted and left whole (Table Side card), part filleted, wrapped and
+   frozen (that stock is not a daily need: no card until Step 3 counts it and the Chef gives the filets per fish).
+   Salmon arrives as large whole filets, portioned to 200 g: one Amalfi Salmon = one filet; Salmon Pistachio is off the menu.
+   thaw_min: the Chef's current practice (lobster ~15, branzino filet ~10, salmon ~20) — shown as said, it is NOT an HACCP
+   validation of the method. No time where the Chef gave none.
+   ref: the Chef's operational reference, shown as "about N" when POS + recipes cannot give a reliable number; never a fixed
+   amount, never multiplied into a forecast. ask: 'ready'. target: ingredient (item) or sub-recipe (recipe). as_modifier:
+   recipes sold as POS modifiers although their recipe is not in the Add-ons group (Salmon Whole = "Add salmon whole").
+   step: rounding of the question amount. */
 export const PASTA = [
   { key: 'lobster', station: 'pasta', ask: 'ready', what: 'lobsters', unit: 'pz', target: { item: '2e9405f8-7ff2-4bf2-a572-5b343c52c9d0' }, name: 'Lobster Tail', step: 1, lead: 0, lead_ok: true,
-    how: 'thaw_morning', leftovers: true },                    // Chef 16/10: thawed the same morning, about 15 minutes
+    how: 'thaw_morning', thaw_min: 15, leftovers: true },      // Chef 16/10: thawed the same morning, about 15 minutes
   { key: 'shrimp', station: 'pasta', ask: 'ready', what: 'shrimp', unit: 'g', target: { item: '4edc611c-e281-4c6a-85e9-f57fb27d1b61' }, name: 'Shrimp', step: 150, step_label: 'portions of 150 g', lead: 0, lead_ok: true },
   { key: 'gnocco', station: 'pasta', ask: 'ready', what: 'Gnocco dough', unit: 'g', target: { recipe: 'e4804f67-5220-4bc8-abd0-aa925ecfa06f' }, name: 'GNOCCO FRITTO DOUGH', step: 100, lead: 0, lead_ok: true, batch: true },
   { key: 'arrabbiata', station: 'pasta', ask: 'ready', what: 'Arrabbiata', unit: 'g', target: { recipe: '3252e642-e3c5-4c9b-9bba-9603cc086f92' }, name: 'ARRABBIATA', step: 500, lead: 0, lead_ok: true, batch: true },
 ]
 export const OVEN = [
   { key: 'calamari', station: 'oven', ask: 'ready', what: 'calamari', unit: 'g', target: { item: 'f1224e5b-8bc4-43c2-9d32-02a851a8e363' }, name: 'Calamari', step: 500, lead: 0, lead_ok: true },
-  { key: 'salmon', station: 'oven', ask: 'ready', what: 'salmon filets', unit: 'pz', target: { recipe: 'c2fe373a-e589-4208-82ff-8277578e7343' }, name: 'Thaw Salmon', step: 1, lead: 0, lead_ok: true,
-    as_modifier: ['78d90bc9-574f-4dd7-9493-2b56b9682336'],
-    not_counted: ['Salmon Pistachio: uses salmon by weight (200 g), not a filet from Thaw Salmon'] },
+  { key: 'salmon', station: 'oven', ask: 'ready', what: 'salmon filets (200 g)', unit: 'pz', target: { recipe: 'c2fe373a-e589-4208-82ff-8277578e7343' }, name: 'Thaw Salmon', step: 1, lead: 0, lead_ok: true,
+    thaw_min: 20, as_modifier: ['78d90bc9-574f-4dd7-9493-2b56b9682336'],
+    not_counted: ['Salmon Pistachio: off the menu (last POS sale 26/06/2026)'],
+    notes: ['1 Amalfi Salmon = 1 filet of 200 g (Chef). Brigade sub-recipe "Salmon Filets" says 190 g: to align in the official recipe (separate OK)'] },
+  { key: 'branzino_filet', station: 'oven', ask: 'ready', what: 'branzino filets for the Siciliana', unit: 'pz', target: { recipe: 'f7f46c56-a865-4ea3-9514-869e7a3a1226' }, name: 'Filet Branzino (frozen)', step: 1, lead: 0, lead_ok: true,
+    thaw_min: 10, ref: { weekday: [5, 7], 5: [10, 10], 6: [10, 10] },   // Chef 16/10: about 5–7 on quiet days, about 10 at the weekend
+    notes: ['Filets come from Table Side already cleaned, wrapped and frozen'] },
 ]
 export const TABLESIDE = [
-  { key: 'branzino_filet', station: 'tableside', ask: 'ready', what: 'branzino filets', unit: 'pz', target: { recipe: 'f7f46c56-a865-4ea3-9514-869e7a3a1226' }, name: 'Filet Branzino', step: 1, lead: 0, lead_ok: true },
-  { key: 'branzino_whole', station: 'tableside', ask: 'ready', what: 'whole branzino', unit: 'pz', target: { recipe: '5b06254f-7679-4686-96fc-9fe993c923d2' }, name: 'Branzino Tableside', step: 1, lead: 0, lead_ok: true },
+  { key: 'branzino_whole', station: 'tableside', ask: 'ready', what: 'whole branzino (gutted and cleaned)', unit: 'pz', target: { recipe: '5b06254f-7679-4686-96fc-9fe993c923d2' }, name: 'Branzino Tableside', step: 1, lead: 0, lead_ok: true },
 ]
 export const STATIONS = Object.freeze({
   pasta: { name: 'Pasta Station', items: PASTA },
   oven: { name: 'Oven Station', items: OVEN },
-  tableside: { name: 'Table Side', items: TABLESIDE, note: 'Station to confirm by the Chef: Brigade lists branzino under Table Side (Fish Processing), not Oven' },
+  tableside: { name: 'Table Side', items: TABLESIDE, note: 'Table Side processes the whole branzino. Filleting and freezing for the Siciliana is not a daily card: the filets are asked once, in Oven.' },
 })
+export function refFor(it, iso) { const r = it.ref; if (!r) return null; const w = dow(iso), x = r[w] || r.weekday; return x ? { lo: x[0], hi: x[1], weekend: w === 5 || w === 6 } : null }
 
 /** Amount per portion of each dish that uses a target (ingredient or sub-recipe), via the Knowledge walk. */
 export function dishesFor(target, bom, recipes, yields) {
@@ -87,7 +96,8 @@ function dailyByDish(dishes, sales) {
   const idx = { item: {}, modifier: {} }
   for (const s of sales) { const m = idx[s.kind === 'modifier' ? 'modifier' : 'item'], k = String(s.name || '').trim().toLowerCase(); (m[k] = m[k] || {})[s.date] = (m[k][s.date] || 0) + (num(s.qty) || 0) }
   return dishes.map(d => { const src = d.addon ? idx.modifier : idx.item, per = {}
-    d.pos_names.forEach(n => { const m = src[n.toLowerCase()] || {}; Object.entries(m).forEach(([dt, q]) => { per[dt] = (per[dt] || 0) + q }) })
+    // one POS name counted once: recipes list the same name in several spellings ("Add salmon whole|add salmon whole")
+    ;[...new Set(d.pos_names.map(n => n.trim().toLowerCase()))].forEach(n => { const m = src[n] || {}; Object.entries(m).forEach(([dt, q]) => { per[dt] = (per[dt] || 0) + q }) })
     return { d, per } })
 }
 function dow(iso) { return new Date(iso + 'T12:00:00Z').getUTCDay() }
@@ -140,7 +150,8 @@ export function stationPriorities(data) {
     const soldMissing = rows.filter(r => r.d.per_portion == null && Object.keys(r.per).length)
     const need = f && f.forecast != null && !soldMissing.length ? f.forecast : null
     const qty = need == null ? null : need > 0 ? Math.max(it.step, Math.ceil(need / it.step) * it.step) : 0
-    const card = { key: it.key, ask: it.ask, what: it.what, unit: it.unit, how: it.how || null,
+    const card = { key: it.key, ask: it.ask, what: it.what, unit: it.unit, how: it.how || null, thaw_min: it.thaw_min || null,
+      ref: need == null && day ? refFor(it, day) : null,
       for_day: day ? { day, weekday: DOW[dow(day)], today: day === data.today } : null, need: need == null ? null : r1(need), qty,
       status: need == null ? 'missing' : missing.length ? 'partial' : 'estimated', level: 1,
       // Step 2 (built, switched off): the question it would ask instead of the tick
@@ -150,6 +161,7 @@ export function stationPriorities(data) {
         day: f ? { day: f.day, weekday: f.weekday, mean: f.mean == null ? null : r1(f.mean), forecast: f.forecast == null ? null : r1(f.forecast), trend: f.trend == null ? null : Math.round(f.trend * 100), samples: f.samples.map(s => ({ date: s.date, amount: r1(s.amount), portions: s.portions })) } : null,
         dishes: counted.map(r => ({ title: r.d.title, per_portion: r1(r.d.per_portion), unit: r.d.unit, path: r.d.paths[0], source: r.d.addon ? 'POS modifiers' : 'POS menu items' })),
         not_counted: missing.map(d => `${d.title}: ${d.why[0] || 'amount per portion missing'}`).concat(it.not_counted || []),
+        notes: (it.notes || []).concat(it.thaw_min ? [`thaw ~${it.thaw_min} min: the Chef's current practice, not an HACCP validation of the method`] : []),
         round: it.step > 1 ? `rounded up to ${it.step_label || (it.unit === 'g' ? it.step + ' g' : it.step)}` : null,
         lead_note: it.lead_ok === false ? `timing to confirm by the Chef: shown as ${it.lead === 1 ? 'one day ahead' : it.lead ? it.lead + ' days ahead' : 'the same day'}` : null } }
     if (it.batch) {
@@ -173,7 +185,7 @@ export function stationPriorities(data) {
 /** What a cook sees: the question and the tick. No Why?, no margins, no events, no technical fields. */
 export function forCook(res, level = 1) {
   return { station: res.station, station_key: res.station_key, today: res.today, service_days: res.service_days, closed_today: res.closed_today, level,
-    items: res.items.map(c => ({ key: c.key, ask: c.ask, what: c.what, unit: c.unit, how: c.how, for_day: c.for_day, qty: c.qty, leftovers_from: c.leftovers_from || null, level,
+    items: res.items.map(c => ({ key: c.key, ask: c.ask, what: c.what, unit: c.unit, how: c.how, thaw_min: c.thaw_min, ref: c.ref, for_day: c.for_day, qty: c.qty, leftovers_from: c.leftovers_from || null, level,
       ...(level >= 2 ? { confirm: c.confirm } : {}) })) }
 }
 
