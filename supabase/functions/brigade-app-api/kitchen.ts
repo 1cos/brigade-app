@@ -123,7 +123,7 @@ export async function knowledge(u: U, id: string, svc: any, opt: { facts?: (ids:
   ]) as any[][]
   const dn: Record<string, string> = {}; docs.forEach(d => { dn[d.id] = d.document_number })
   ;(inv as any[]).forEach(l => { l.doc_number = l.import_id ? dn[l.import_id] || null : null })
-  return KN.knowledgeCard(id, { ingredients: ing, bom, recipes, yields, prep, vendors: chef ? vend : [], aliases, invoices: inv, facts: (facts as any)[id] || null,
+  return KN.knowledgeCard(id, { ingredients: ing, bom, recipes, yields, prep, vendors: vend, aliases, invoices: inv, facts: (facts as any)[id] || null,
     conv: [], each, sales, counts, days: KDAYS, since, today: dayIso(today) }, chef)
 }
 

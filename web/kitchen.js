@@ -34,7 +34,15 @@
     k_fix_portions: ['To complete: portions per batch not set', 'Da completare: porzioni per lotto non impostate', 'Por completar: porciones por lote sin definir'],
     k_fix_edit: ['Edit (test copy)', 'Modifica (copia di prova)', 'Editar (copia de prueba)'], k_fix_photo_where: ['Photos are added in Brigade.', 'Le foto si aggiungono in Brigade.', 'Las fotos se añaden en Brigade.'],
     // Knowledge Engine (B-51 phase 1)
-    kn_v: ['Verified', 'Verificato', 'Verificado'], kn_e: ['Estimated', 'Stima', 'Estimado'], kn_m: ['Missing', 'Manca', 'Falta'],
+    kn_v: ['Verified', 'Verificato', 'Verificado'], kn_e: ['Estimated', 'Stima', 'Estimado'], kn_m: ['Missing', 'Manca', 'Falta'], kn_c: ['Calculated', 'Calcolato', 'Calculado'],
+    kn_vendor: ['Vendor', 'Fornitore', 'Proveedor'], kn_unit_cost: ['Unit cost', 'Costo unitario', 'Costo unitario'],
+    kn_vpurchase: ['Verified purchase · {n} days', 'Acquisto verificato · {n} giorni', 'Compra verificada · {n} días'],
+    kn_cusage: ['Calculated usage · {n} days', 'Consumo calcolato · {n} giorni', 'Consumo calculado · {n} días'],
+    kn_cstock: ['Counted stock', 'Scorta contata', 'Stock contado'],
+    kn_cusage_note: ['POS sales × recipes. A calculation, not a count.', 'Vendite POS × ricette. Un calcolo, non un conteggio.', 'Ventas POS × recetas. Un cálculo, no un conteo.'],
+    kn_tech: ['technical name', 'nome tecnico', 'nombre técnico'], kn_more_v: ['+{n} more', '+{n} altri', '+{n} más'],
+    kn_pack_unread: ['Pack price from the invoice; the price per piece or per gram cannot be computed from this pack.', 'Prezzo della confezione da fattura; il prezzo a pezzo o al grammo non si calcola da questa confezione.', 'Precio del empaque de la factura; el precio por pieza o por gramo no se calcula con este empaque.'],
+    kn_buy_details: ['Buying details', 'Dettagli acquisto', 'Detalles de compra'], kn_not_needed: ['not needed', 'non serve', 'no hace falta'], kn_needed: ['needed', 'serve', 'hace falta'],
     kn_buy: ['Buying', 'Acquisto', 'Compra'], kn_pack: ['Pack', 'Confezione', 'Empaque'], kn_pack_price: ['Pack price', 'Prezzo confezione', 'Precio del empaque'],
     kn_each: ['Price each', 'Prezzo al pezzo', 'Precio por pieza'], kn_cost_price: ['Price used for cost', 'Prezzo usato per il costo', 'Precio usado para el costo'],
     kn_per_g: ['per 100 g', 'per 100 g', 'por 100 g'], kn_conv: ['Conversions', 'Conversioni', 'Conversiones'], kn_piece: ['One piece', 'Un pezzo', 'Una pieza'], kn_density: ['Density', 'Densità', 'Densidad'],
@@ -85,43 +93,63 @@
     ing: { title: p => { const d = H.peek('knowledge', { id: p.id }); return d ? d.ingredient.name : (p.name || t('k_ing')); }, c: '--rest', render(p) {
       const { esc } = H, d = H.need('knowledge', { id: p.id }, 10 * 60000);
       if (!d) return `<div class="page">${H.backBtn()}${H.waiting('knowledge')}</div>`;
-      const i = d.ingredient, sub = local(i);
-      const st = x => x ? `<span class="kn ${x.s === 'verified' ? 'v' : x.s === 'estimated' ? 'e' : 'm'}">${t(x.s === 'verified' ? 'kn_v' : x.s === 'estimated' ? 'kn_e' : 'kn_m')}</span>` : '';
+      const i = d.ingredient, sub = local(i), chef = !!d.can_price;
+      const SK = { verified: ['v', 'kn_v'], estimated: ['e', 'kn_e'], missing: ['m', 'kn_m'], calculated: ['c', 'kn_c'] };
+      const st = x => x && SK[x.s] ? `<span class="kn ${SK[x.s][0]}">${t(SK[x.s][1])}</span>` : '';
       const src = x => x && (x.src || x.why) ? `<div class="meta">${esc([x.src, x.why].filter(Boolean).join(' · '))}</div>` : '';
       const kv = (label, val, x, extra) => `<div class="row kvr"><span class="main"><div class="name">${esc(label)}</div>${src(x)}${extra || ''}</span><span class="right"><b class="num">${val == null || val === '' ? '—' : esc(String(val))}</b>${st(x)}</span></div>`;
-      const sect = (h, body, n) => body ? `<section><div class="chap"><h2>${esc(h)}</h2><span>${n || ''}</span></div><div class="list">${body}</div></section>` : '';
       const q = (v, u) => v == null ? null : `${fmt(v)} ${u || ''}`.trim();
-      // buying (Chef only: the server sends vendors, invoices and prices only to the Chef)
-      const buy = (d.vendors_k || []).map(v => `<div class="row kvr kvstack"><span class="main"><div class="name">${esc(v.vendor)}${v.sku ? ` <span class="muted" style="font-size:14px">#${esc(v.sku)}</span>` : ''}</div>
+      // collapsible section; open/closed is remembered in the screen state (kept when you come back)
+      const fold = (k, h, body, n, openDef) => body ? `<details class="kfold" data-k="${k}" ${(p['o_' + k] ?? openDef) ? 'open' : ''}><summary><span>${esc(h)}</span><span class="muted">${n != null ? n : ''}</span></summary><div class="list">${body}</div></details>` : '';
+      // ---- summary: what the Chef reads first ----
+      const vs = d.vendors_k || [], v0 = vs.slice().sort((a, b) => String(b.last_invoice_date || '').localeCompare(String(a.last_invoice_date || '')))[0]
+      const sum = []
+      if (chef) {
+        sum.push(`<div class="ksum-row"><span class="k">${t('kn_vendor')}</span><span class="v">${v0 ? `<b>${esc(v0.vendor)}</b>${v0.sku ? ` <span class="muted">#${esc(v0.sku)}</span>` : ''}${vs.length > 1 ? ` <span class="muted">${t('kn_more_v', { n: vs.length - 1 })}</span>` : ''}${v0.vendor_ref ? `<div class="meta">${t('kn_tech')}: ${esc(v0.vendor_ref)}</div>` : ''}` : `<span class="muted">${t('k_no_vend')}</span> ${st({ s: 'missing' })}`}</span></div>`)
+        if (v0) sum.push(`<div class="ksum-row"><span class="k">${t('kn_pack')}</span><span class="v"><b>${esc(v0.pack.v || v0.pack_text || '—')}</b>${st(v0.pack)}${v0.pack.v && v0.pack_text ? ` <span class="muted">“${esc(v0.pack_text)}”</span>` : ''}</span></div>`)
+        const each = v0 && v0.price_each, cp = d.price
+        const uc = each ? `<b>${money(each.v)}</b> <span class="muted">each</span>${st(each)}` : cp && cp.per_each != null ? `<b>${money(cp.per_each)}</b> <span class="muted">each</span>${st(cp)}` : cp && cp.per_g != null ? `<b>${money(cp.per_g * 100)}</b> <span class="muted">/ 100 g</span>${st(cp.per_g_status ? { s: cp.per_g_status } : cp)}` : v0 && v0.unit_price != null ? `<b>${money(v0.unit_price)}</b> <span class="muted">/ pack${v0.pack_text ? ' “' + esc(v0.pack_text) + '”' : ''}</span>${st({ s: 'verified' })}<div class="meta">${esc(t('kn_pack_unread'))}</div>` : `— ${st({ s: 'missing' })}`
+        sum.push(`<div class="ksum-row"><span class="k">${t('kn_unit_cost')}</span><span class="v">${uc}</span></div>`)
+        if (d.bought) sum.push(`<div class="ksum-row"><span class="k">${t('kn_vpurchase', { n: d.days })}</span><span class="v"><b>${esc(d.bought.v != null ? q(d.bought.v, d.bought.unit) : '—')}</b>${st(d.bought)}${d.bought.v == null && d.bought.why ? `<div class="meta">${esc(d.bought.why)}</div>` : ''}</span></div>`)
+      }
+      const th = d.theoretical
+      sum.push(`<div class="ksum-row"><span class="k">${t('kn_cusage', { n: d.days })}</span><span class="v"><b>${esc(th.v != null ? (th.partial ? '≥ ' : '') + q(th.v, th.unit) : '—')}</b>${st(th)}<div class="meta">${t('kn_cusage_note')}${th.why ? ' ' + esc(th.why) : ''}</div></span></div>`)
+      sum.push(`<div class="ksum-row"><span class="k">${t('kn_cstock')}</span><span class="v"><b>${esc(d.stock.v != null ? q(d.stock.v, d.stock.unit) : '—')}</b>${st(d.stock)}<div class="meta">${esc([d.stock.src, d.stock.why].filter(Boolean).join(' · '))}</div></span></div>`)
+      // ---- details, collapsible ----
+      const buy = vs.map(v => `<div class="row kvr kvstack"><span class="main"><div class="name">${esc(v.vendor)}${v.sku ? ` <span class="muted" style="font-size:14px">#${esc(v.sku)}</span>` : ''}</div>
+          ${v.vendor_ref ? `<div class="meta">${t('kn_tech')}: ${esc(v.vendor_ref)}</div>` : ''}
           <div class="kvvals"><span>${t('kn_pack')} <b class="num">${esc(v.pack.v || v.pack_text || '—')}</b>${st(v.pack)}</span>${v.unit_price != null ? `<span>${t('kn_pack_price')} <b class="num">${money(v.unit_price)}</b></span>` : ''}${v.price_each ? `<span>${t('kn_each')} <b class="num">${money(v.price_each.v)}</b>${st(v.price_each)}</span>` : ''}</div>
           <div class="meta">${esc([v.pack_text && v.pack.v ? `“${v.pack_text}”` : '', v.pack.why, v.price_each ? v.price_each.src : '', v.last_invoice_date ? t('k_last_inv', { d: H.shortDay(v.last_invoice_date) }) : ''].filter(Boolean).join(' · '))}</div>
           ${v.checks.map(c => `<div class="meta knw">${esc(c.msg)}</div>`).join('')}${v.do_not_order ? `<div class="meta wtx">${t('k_dno')}</div>` : ''}</span></div>`).join('')
-      // price used for cost (FC05): the price each and the per-gram price can have different trust, so two rows
+      // price used for cost (FC05): price each and per-gram price can have different trust, so two rows
       const pr = d.price ? (d.price.per_each != null ? kv(t('kn_cost_price') + ' · ' + t('kn_each').toLowerCase(), money(d.price.per_each), Object.assign({}, d.price, { why: null })) : '')
         + (d.price.per_g != null ? kv(t('kn_cost_price') + ' · ' + t('kn_per_g'), money(d.price.per_g * 100), d.price.per_g_status === 'estimated' ? { s: 'estimated', src: d.price.src, why: 'rests on a piece weight that is not approved' } : d.price) : '')
         + (d.price.per_each == null && d.price.per_g == null ? kv(t('kn_cost_price'), d.price.per_ml != null ? money(d.price.per_ml) + '/ml' : null, d.price) : '') : ''
       const pol = d.policy ? kv(t('kn_policy'), d.policy.v, d.policy) : ''
-      const cv = d.conversions, conv = [(cv.needed.piece || cv.piece_g.v != null) ? kv(t('kn_piece'), q(cv.piece_g.v, 'g'), cv.piece_g) : '', (cv.needed.volume || cv.density.v != null) ? kv(t('kn_density'), cv.density.v != null ? cv.density.v + ' g/ml' : null, cv.density) : ''].join('')
-      const recs = d.recipes.map(r => `<button class="row kvr" data-a="openRecipe" data-r="${esc(r.recipe_id)}"><span class="main"><div class="name">${esc(r.title)}</div>${r.unit_ok ? `<div class="meta wtx">${esc(r.unit_ok)}</div>` : src(r.per_portion.s !== 'verified' ? r.per_portion : null)}</span>
+      // conversions: shown, but asked for only when buying and using do not meet
+      const cv = d.conversions, need = (ok, why) => `<div class="meta">${ok ? t('kn_needed') : t('kn_not_needed')}${why ? ': ' + esc(why) : ''}</div>`
+      const conv = [(cv.needed.piece_why || cv.piece_g.v != null) ? kv(t('kn_piece'), q(cv.piece_g.v, 'g'), cv.needed.piece || cv.piece_g.v != null ? cv.piece_g : null, need(cv.needed.piece, cv.needed.piece_why)) : '',
+        (cv.needed.volume_why || cv.density.v != null) ? kv(t('kn_density'), cv.density.v != null ? cv.density.v + ' g/ml' : null, cv.needed.volume || cv.density.v != null ? cv.density : null, need(cv.needed.volume, cv.needed.volume_why)) : ''].join('')
+      const recs = d.recipes.map(r => `<button class="row kvr" data-a="openRecipe" data-r="${esc(r.recipe_id)}"><span class="main"><div class="name">${esc(I.dn(r.title))}</div>${r.unit_ok ? `<div class="meta wtx">${esc(r.unit_ok)}</div>` : src(r.per_portion.s !== 'verified' ? r.per_portion : null)}</span>
         <span class="right kvcol"><span><b class="num">${esc(q(r.qty, r.unit) || '—')}</b> <span class="muted">${t('kn_lot')}</span></span><span><b class="num">${esc(q(r.per_portion.v, r.unit) || '—')}</b> <span class="muted">${t('kn_portion')}</span>${r.per_portion.s !== 'verified' ? st(r.per_portion) : ''}</span></span><span class="chev">›</span></button>`).join('')
-      const dishes = d.dishes.filter(x => x.sold).concat(d.dishes.filter(x => !x.sold)).map(x => `<button class="row kvr" data-a="openRecipe" data-r="${esc(x.recipe_id)}"><span class="main"><div class="name">${esc(x.title)}</div><div class="meta">${esc(x.paths[0] || '')}${x.why.length ? ' · ' + esc(x.why[0]) : ''}</div></span>
+      const dishes = d.dishes.filter(x => x.sold).concat(d.dishes.filter(x => !x.sold)).map(x => `<button class="row kvr" data-a="openRecipe" data-r="${esc(x.recipe_id)}"><span class="main"><div class="name">${esc(I.dn(x.title))}</div><div class="meta">${esc((x.paths[0] || '').split(' › ').map(I.dn).join(' › '))}${x.why.length ? ' · ' + esc(x.why[0]) : ''}</div></span>
         <span class="right kvcol"><span><b class="num">${t('kn_sold', { n: fmt(x.sold) })}</b></span><span><b class="num">${esc(q(x.per_portion, x.unit) || '—')}</b> <span class="muted">${t('kn_portion')}</span>${x.status !== 'verified' ? st({ s: x.status }) : ''}</span></span><span class="chev">›</span></button>`).join('')
-      const use = kv(t('kn_theo'), d.theoretical.v != null ? (d.theoretical.partial ? '≥ ' : '') + q(d.theoretical.v, d.theoretical.unit) : null, d.theoretical) + (d.bought ? kv(t('kn_bought'), d.bought.v != null ? q(d.bought.v, d.bought.unit) : null, d.bought) : '')
       const invAll = d.invoices || [], invShown = p.m_inv ? invAll : invAll.slice(0, 3)
       const inv = invShown.map(l => `<div class="row kvr"><span class="main"><div class="name">${H.shortDay(l.date)} · ${esc(l.number || t('kn_no_number'))}</div><div class="meta">${esc([l.vendor, l.description, l.number_src === 'original document' ? 'no. from the original document' : ''].filter(Boolean).join(' · '))}</div>
         <div class="meta">${esc(`${fmt(l.qty)} ${l.unit || ''} · ${l.pack || '—'}`)}${l.amount ? ' ' + esc(t('kn_amount', { q: q(l.amount.qty, l.amount.unit) })) + ` <span class="muted">(${esc(l.amount.rule)})</span>` : l.amount_why ? ` · <span class="wtx">${esc(l.amount_why)}</span>` : ''}</div></span>
         <span class="right"><b class="num">${money(l.total)}</b></span></div>`).join('') + (invShown.length < invAll.length ? `<button class="more" data-a="kMore" data-k="m_inv">${t('k_show_all', { n: invAll.length })}</button>` : '')
       return `<div class="page" style="--c:var(--rest)">${H.backBtn()}${H.head(t('k_ing') + (i.category ? ' · ' + esc(H.cat(i.category)) : ''), esc(i.name), sub ? esc(sub) : '')}
         ${i.notes ? `<p class="note">${esc(i.notes)}</p>` : ''}
-        ${d.can_price ? sect(t('kn_buy'), (buy || `<div class="row"><span class="main"><div class="meta">${t('k_no_vend')}</div></span></div>`) + pr + pol) : pol ? sect(t('kn_policy'), pol) : ''}
-        ${sect(t('kn_conv'), conv)}
-        ${sect(t('kn_recipes'), recs || `<div class="row"><span class="main"><div class="meta">${t('k_not_used')}</div></span></div>`, d.recipes.length)}
-        ${d.recipes.length ? sect(t('kn_dishes', { n: d.days }), dishes || `<div class="row"><span class="main"><div class="meta">${t('kn_nodish')}</div></span></div>`, d.dishes.length) : ''}
-        ${sect(t('kn_use', { n: d.days }), use)}
-        ${sect(t('kn_stock'), kv(t('kn_stock'), d.stock.v != null ? q(d.stock.v, d.stock.unit) : null, d.stock))}
-        ${d.preps.length ? sect(t('k_prep'), d.preps.map(x => `<button class="row" data-a="openPrep" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div></span><span class="chev">›</span></button>`).join('')) : ''}
-        ${inv ? sect(t('kn_inv'), inv, (d.invoices || []).length) : ''}
+        <div class="ksum">${sum.join('')}</div>
+        ${fold('recipes', t('kn_recipes'), recs || `<div class="row"><span class="main"><div class="meta">${t('k_not_used')}</div></span></div>`, d.recipes.length, true)}
+        ${d.recipes.length ? fold('dishes', t('kn_dishes', { n: d.days }), dishes || `<div class="row"><span class="main"><div class="meta">${t('kn_nodish')}</div></span></div>`, d.dishes.filter(x => x.sold).length + ' / ' + d.dishes.length, false) : ''}
+        ${chef ? fold('buy', t('kn_buy_details'), (buy || `<div class="row"><span class="main"><div class="meta">${t('k_no_vend')}</div></span></div>`) + pr + pol, vs.length, false) : pol ? fold('buy', t('kn_policy'), pol, '', false) : ''}
+        ${fold('conv', t('kn_conv'), conv, (cv.needed.piece && cv.piece_g.s !== 'verified') || (cv.needed.volume && cv.density.s !== 'verified') ? '!' : '', false)}
+        ${inv ? fold('inv', t('kn_inv'), inv, invAll.length, false) : ''}
+        ${d.preps.length ? fold('prep', t('k_prep'), d.preps.map(x => `<button class="row" data-a="openPrep" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div></span><span class="chev">›</span></button>`).join(''), d.preps.length, false) : ''}
         <p class="note" style="font-size:14px">${t('kn_ro')}</p>${roNote('k_ro')}</div>`;
+    }, after(p) {
+      document.querySelectorAll('#main details.kfold').forEach(el => el.addEventListener('toggle', () => { p['o_' + el.dataset.k] = el.open; H.save && H.save(); }));
     } },
     kgaps: { title: () => t('kn_gaps'), c: '--office', render(p) {
       const { esc } = H;

@@ -21,12 +21,18 @@ function ctxFor(d, id, rootDoc) {
   return { doc: x => x === id && rootDoc ? rootDoc : d.docs[x], facts: x => d.facts[x], measures: d.measures };
 }
 function lineName(d, ln) {
-  if (ln.kind === 'recipe') { const s = d.docs[ln.ref]; return s ? s.title : '?'; }
+  if (ln.kind === 'recipe') { const s = d.docs[ln.ref]; return s ? I.dn(s.title) : '?'; }   // display name (Grated Parmesan); ids unchanged
   const f = d.facts[ln.ref] || {};
   return (I.lang === 'it' && f.name_it) || (I.lang === 'es' && f.name_es) || f.name || '?';
 }
 const stepText = (s) => (s && (s[I.lang] || s.it || s.en || s.es)) || '';
 const stepTitle = (s) => s && (s['title_' + I.lang] || s.title_it || s.title_en || '');
+
+/* ---------- names you can tap: ingredient → its card, sub-recipe → its recipe ---------- */
+function navName(l, name) {
+  if (l.kind === 'recipe') return `<button class="mr-sub" data-m="sub:${esc(l.id)}">${esc(name)} ›</button>`;
+  return `<button class="mr-sub mr-ingl" data-a="openIng" data-id="${esc(l.ref)}">${esc(name)}</button>`;
+}
 
 /* ---------- bold, tappable quantity ---------- */
 const Q = (key, n, u, extra) => `<b class="mq" data-mq="${esc(key)}" data-u="${esc(u || '')}"><span class="n">${esc(n)}</span>${u ? ' ' + esc(u) : ''}</b>${extra || ''}`;
@@ -48,34 +54,39 @@ function render(p) {
   // head
   h += `<div class="mr-head"><div class="mr-row1"><span class="mr-cat">${esc(cat(doc.category))}</span>${chef && !edit ? `<button class="mr-link" data-m="edit">${T('edit')}</button>` : ''}</div>`;
   if (edit) h += `<div class="mr-editbar">${T('editing', { v: d.recipe.current_version + 1 })}${p.saved ? ' · ' + T('draft_saved') : ''}</div><div class="mr-muted mr-isol">${T('isolated')}</div>` + approvedReminder(d);
-  h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(doc.title)}</h1>`;
+  h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(I.dn(doc.title))}</h1>`;
   const parts = [];
   if (Number(y.g) > 0) { const s = E().showMass(y.g * f, pref, loc()); parts.push(`${T('yield')} ${Q('y:g', s.n, s.u)}`); }
   else if (edit) parts.push(`${T('yield')} ${Q('y:g', '—', 'g')}`);
   if (Number(y.portions) > 0 || edit) parts.push(`${Q('y:p', Number(y.portions) > 0 ? nf(y.portions * f, 1) : '—', '')} ${T('portions')}`);
   if (!edit) parts.push(`${Q('y:l', nf(f, 2), '')} ${f === 1 ? T('batch') : T('batches')}`);
   h += `<div class="mr-yield">${parts.join(' · ')}</div>`;
-  if (edit) h += `<div class="mr-meta">${T('yield_label')}: <span contenteditable="true" data-mt="label" data-mred="1" class="mr-txt">${esc(y.label || '')}</span> · ${T('stock')}: <select data-ms="has_stock" class="mr-sel"><option value="1" ${doc.has_stock ? 'selected' : ''}>${T('yes')}</option><option value="0" ${!doc.has_stock ? 'selected' : ''}>${T('no')}</option></select></div>`;
+  if (edit) h += `<div class="mr-meta">${T('yield_label')}: <span contenteditable="true" data-mt="label" data-mred="1" class="mr-txt">${esc(y.label || '')}</span>${p.adv ? ` · ${T('stock')}: <select data-ms="has_stock" class="mr-sel"><option value="1" ${doc.has_stock ? 'selected' : ''}>${T('yes')}</option><option value="0" ${!doc.has_stock ? 'selected' : ''}>${T('no')}</option></select>` : ''}</div>`;
   if (!edit && f !== 1) {
     const rounded = (doc.lines || []).filter(l => E().dimOf(l.unit) === 'c').map(l => ({ l, s: E().showLine(l, f, ctx, pref, loc()) })).filter(x => x.s.theo);
     h += `<div class="mr-scaled">${T('scaled_from', { ref: esc(p.ref || '') })}${rounded.map(x => ' · ' + T('rounded', { name: esc(lineName(d, x.l).toLowerCase()), v: x.s.theo })).join('')} · <button class="mr-link acc" data-m="reset">${T('reset')}</button></div>`;
   }
+  if (chef && !edit) { const c = d.cost || E().cost(p.id, 1, ctx); const pp = c.per_portion;
+    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + T('portion')}</b>${c.complete ? '' : ` <span class="mr-bad">${T('incomplete', { n: c.missing })}</span>`}</div>`; }
   if (chef && !edit && d.diffs && d.diffs.length && !d.diffs_checked) h += `<div class="mr-scaled"><button class="mr-link" data-m="p:diffs">${T('imported_n', { n: d.diffs.length })}</button></div>`;
   h += `</div>`;
 
   // ingredients + steps
-  h += `<div class="mr-cols"><div class="mr-left"><div class="mr-sec"><span>${T('ingredients')}</span><button class="mr-link" data-m="units">${p.imp ? 'oz · <b>g</b>' : 'g · <b>oz</b>'}</button></div><ul class="mr-ings">`;
+  h += `<div class="mr-cols"><div class="mr-left"><div class="mr-sec"><span>${T('ingredients')}</span>${edit ? `<button class="mr-link ${p.adv ? 'acc' : ''}" data-m="adv">${T('advanced')}${p.adv ? ' ✓' : ''}</button>` : `<button class="mr-link" data-m="units">${p.imp ? 'oz · <b>g</b>' : 'g · <b>oz</b>'}</button>`}</div>${edit && p.adv ? `<p class="mr-muted mr-advnote">${T('adv_note')}</p>` : ''}<ul class="mr-ings">`;
   for (const l of doc.lines || []) {
     const s = E().showLine(l, f, ctx, pref, loc()), name = lineName(d, l);
-    const nameHtml = l.kind === 'recipe' && !edit ? `<button class="mr-sub" data-m="sub:${esc(l.id)}">${esc(name)}</button>` : esc(name);
+    const nameHtml = navName(l, name);
     const qty = s.status === 'da_definire' ? `<span class="mr-muted">${T('to_define')}</span>` : Q('l:' + l.id, s.n, s.u);
     if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${l.note ? `<span class="mr-note">${esc(l.note)}</span>` : ''}</span>${qty}</li>`; continue; }
     const units = ['g', 'kg', 'ml', 'l', 'pz', 'oz', 'lb', 'nests'], ucur = l.unit || '';
-    h += `<li class="mr-eline"><span class="mr-nm">${esc(name)}<span class="mr-note">
-        <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select>
-        · ${statusOf(d, l)} · <button class="mr-link" data-m="del:${esc(l.id)}">${T('remove')}</button></span>
-        <span class="mr-note">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span></span>
-      <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option ${u === ucur ? 'selected' : ''}>${esc(u || '—')}</option>`).join('')}</select></span></li>`;
+    // editor line: name, quantity and unit first; role and technical note only under Advanced (logic unchanged)
+    const stx = statusOf(d, l), bad = /mr-bad/.test(stx), adv = p.adv;
+    h += `<li class="mr-eline"><span class="mr-nm">${nameHtml}${l.kind === 'recipe' ? ` <span class="mr-muted mr-kind">${T('sub_recipe')}</span>` : ''}
+        ${bad || adv ? `<span class="mr-note">${stx}</span>` : ''}
+        ${adv ? `<span class="mr-note mr-adv">${T('role')}: <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select></span>
+        <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : (l.note ? `<span class="mr-note">${esc(l.note)}</span>` : '')}
+</span>
+      <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option ${u === ucur ? 'selected' : ''}>${esc(u || '—')}</option>`).join('')}</select><button class="mr-x" data-m="del:${esc(l.id)}" aria-label="${esc(T('remove'))}" title="${esc(T('remove'))}">×</button></span></li>`;
   }
   h += `</ul>`;
   if (edit) h += addHtml(p);
@@ -121,7 +132,8 @@ function statusOf(d, l) {
   if (!f) return `<span class="mr-bad">${T('missing_product')}</span>`;
   const a = E().ingredientAmount(l.qty == null ? 0 : l.qty, l.unit, f, d.measures);
   if (a.status === 'densita_mancante') return `<span class="mr-bad">${T('need_density')}</span>`;
-  if (a.status === 'peso_pezzo_mancante') return `<span class="mr-bad">${T('need_piece')}</span>`;
+  // bought and used by the piece (price each known): no weight needed (Chef 16/10). Only when the cost really needs it.
+  if (a.status === 'peso_pezzo_mancante') return f.price && f.price.cost_per_each != null ? esc(T('by_piece')) : `<span class="mr-bad">${T('need_piece')}</span>`;
   if (a.status === 'da_definire' || a.status === 'unita_sconosciuta') return `<span class="mr-bad">${T('need_unit')}</span>`;
   if (f.piece_g && E().dimOf(l.unit) === 'c') return esc(T('piece_is', { g: nf(f.piece_g.v, 1) }));
   if (H.isChef() && !f.price && f.policy !== 'non_food' && f.policy !== 'zero_cost') return `<span class="mr-bad">${T('no_price')}</span>`;
@@ -267,7 +279,9 @@ function onClick(ev) {
   if (k === 'reset') { p.f = 1; p.ref = ''; w.prod = null; }
   else if (k === 'units') p.imp = !p.imp;
   else if (k === 'p') p.panel = p.panel === a1 ? null : a1;
-  else if (k === 'sub') { const l = d.doc.lines.find(x => x.id === a1), sub = d.docs[l.ref]; const fr = E().subFraction(l.qty * (p.f || 1), l.unit, sub); H.openRecipe(l.ref, sub ? sub.title : '', fr.f || 1, T('from_parent', { t: d.doc.title })); return; }
+  else if (k === 'sub') { const src = (p.edit && WORK[p.id]) || d.doc, l = src.lines.find(x => x.id === a1); if (!l) return; const sub = d.docs[l.ref];
+      const fr = sub && l.qty != null ? E().subFraction(l.qty * (p.edit ? 1 : (p.f || 1)), l.unit, sub) : { f: null }; H.openRecipe(l.ref, sub ? sub.title : '', fr.f || 1, T('from_parent', { t: src.title })); return; }
+  else if (k === 'adv') p.adv = !p.adv;
   else if (k === 'edit') { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.panel = null; p.saved = !!d.draft; }
   else if (k === 'cancel') { (async () => { if (d.draft || p.saved) await call('mre_discard', { id: p.id }, T('discarded')); delete WORK[p.id]; p.edit = false; p.saved = false; forget(); H.render(true); })(); return; }
   else if (k === 'publish') { (async () => { clearTimeout(saveT); const s = await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); if (!s) return;

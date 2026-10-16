@@ -4,12 +4,13 @@
 //   verified  = read from a confirmed source (invoice, approved conversion, POS, BOM)
 //   estimated = present in Brigade but not confirmed (e.g. a piece weight nobody approved), or derived from one
 //   missing   = not in Brigade, with the reason
+//   calculated = usage computed from POS × recipes (complete inputs). It is NOT a count: only "counted" stock is physical.
 // NO SILENT ASSUMPTIONS: nothing here invents a pack, a weight, a price or a quantity. Pure functions, no I/O:
 // the server runs them on live data, the tests on read-only dumps. Prices/vendors/invoices only when chef = true.
 import { ingredientCard } from './kitchen_core.js'
 import { normUnit, dimOf, subFraction } from './mre_engine.js'
 
-export const V = 'verified', E = 'estimated', M = 'missing'
+export const V = 'verified', E = 'estimated', M = 'missing', C = 'calculated'   // calculated = POS × recipes: a computation, never a physical measure
 const f = (v, s, src, why) => ({ v: v ?? null, s, src: src || null, why: why || null })
 const num = x => { const n = Number(x); return x == null || x === '' || !isFinite(n) ? null : n }
 const r2 = x => x == null ? null : Math.round(x * 100) / 100
@@ -51,10 +52,15 @@ export function lineAmount(l) {
   return pk.dim === 'mass' ? { s: V, amt: n * MASS_G[pk.unit], unit: 'g', rule: perCase ? 'per case' : 'whole line' } : { s: V, amt: n, unit: pk.unit, rule: perCase ? 'per case' : 'whole line' }
 }
 
+/* ---------------- vendor names: the name the Chef knows, the technical one kept as reference ----------------
+   Display only. Invoices, aliases and prices keep matching on the technical name stored in Brigade. */
+export const VENDOR_DISPLAY = { "Hardie's Fresh Foods / Dairyland Produce": "Chef's Warehouse" }
+export const vendorName = v => VENDOR_DISPLAY[v] || v
+
 /* ---------------- one vendor row: pack, price and coherence ---------------- */
 function vendorFacts(v, ing) {
   const p = parsePack(v.pack_description)
-  const out = { vendor: v.vendor, sku: v.vendor_sku || null, pack_text: v.pack_description || null, pack: f(packLabel(p), p.status, 'pack text on vendor sheet / invoice', p.why),
+  const out = { vendor: vendorName(v.vendor), vendor_ref: VENDOR_DISPLAY[v.vendor] ? v.vendor : null, sku: v.vendor_sku || null, pack_text: v.pack_description || null, pack: f(packLabel(p), p.status, 'pack text on vendor sheet / invoice', p.why),
     pack_total: p.status === V ? { qty: p.total, unit: p.unit, dim: p.dim, outer: p.outer, inner: p.inner } : null,
     purchase_unit: v.purchase_unit || null, unit_price: num(v.unit_price), last_invoice_date: v.last_invoice_date || null, do_not_order: !!v.do_not_order, checks: [] }
   if (out.unit_price != null && p.status === V && p.dim === 'count') out.price_each = f(r2(out.unit_price / p.total * 10000) / 10000, V, `invoice price ÷ ${p.total} pieces`)
@@ -71,7 +77,7 @@ function vendorFacts(v, ing) {
 }
 
 /* ---------------- conversions: approved vs present-but-not-approved vs missing ---------------- */
-function conversions(ing, facts, convRows, eachRows, usedUnits) {
+function conversions(ing, facts, convRows, eachRows, usedUnits, vendors) {
   const fc = facts || {}
   const piece = fc.piece_g && num(fc.piece_g.v) ? f(num(fc.piece_g.v), V, `approved conversion${fc.piece_g.fonte ? ' · ' + fc.piece_g.fonte : ''}`)
     : num(ing.avg_unit_weight_g) ? f(num(ing.avg_unit_weight_g), E, 'ingredient sheet (avg weight)', 'not approved: the cost and recipe engine does not use it')
@@ -80,7 +86,18 @@ function conversions(ing, facts, convRows, eachRows, usedUnits) {
   const pending = (convRows || []).filter(c => c.tipo === 'peso_pezzo' && !/approvat/i.test(c.stato || ''))
   if (piece.s !== V && pending.length) piece.why = (piece.why ? piece.why + '; ' : '') + `${pending.length} proposal(s) waiting for approval`
   const dens = fc.density && num(fc.density.v) ? f(num(fc.density.v), V, `approved conversion${fc.density.fonte ? ' · ' + fc.density.fonte : ''}`) : f(null, M, null, 'no density (ml → g) in Brigade')
-  const needs = { piece: usedUnits.some(u => dimOf(u) === 'c' && normUnit(u) === 'pz'), volume: usedUnits.some(u => dimOf(u) === 'v') }
+  // a conversion is asked for ONLY when buying and using do not meet: bought and used by the piece needs no weight (Chef 16/10)
+  const packs = (vendors || []).map(v => parsePack(v.pack_description)).filter(p => p.status === V)
+  const pr = fc.price || {}
+  const countPrice = num(pr.cost_per_each) != null, massPrice = pr.basis_dim === 'mass' && num(pr.cost_per_base) != null, volPrice = num(pr.cost_per_ml) != null
+  const buyCount = packs.some(p => p.dim === 'count') || countPrice
+  const buyMass = packs.some(p => p.dim === 'mass') || massPrice
+  const buyVol = packs.some(p => p.dim === 'volume') || volPrice
+  const useCount = usedUnits.some(u => dimOf(u) === 'c' && normUnit(u) === 'pz'), useMass = usedUnits.some(u => dimOf(u) === 'm'), useVol = usedUnits.some(u => dimOf(u) === 'v')
+  // needed only when a recipe unit cannot meet any way of buying/pricing it
+  const pieceNeed = useCount && !buyCount ? 'used by the piece, bought and priced only by weight' : useMass && !buyMass && buyCount ? 'used by weight, bought and priced only by the piece' : null
+  const volNeed = useVol && !buyVol ? 'used by volume, bought and priced only by weight' : useMass && !buyMass && buyVol ? 'used by weight, bought and priced only by volume' : null
+  const needs = { piece: !!pieceNeed, piece_why: pieceNeed || (useCount ? 'bought and used by the piece: no weight needed' : null), volume: !!volNeed, volume_why: volNeed || (useVol ? 'bought and used by volume: no density needed' : null) }
   return { piece_g: piece, density: dens, needed: needs }
 }
 
@@ -154,7 +171,7 @@ export function knowledgeCard(id, data, chef) {
   // POS: sold in the window per dish (name = recipes.pos_name, the same rule the POS cleaner uses first)
   // dishes count menu items; add-ons (menu group "Add-ons", e.g. ADD LOBSTER = "Lobsters") count POS modifiers
   const sold = { item: {}, modifier: {} }; (data.sales || []).forEach(s => { const m = sold[s.kind === 'modifier' ? 'modifier' : 'item'], k = String(s.name || '').trim().toLowerCase(); m[k] = (m[k] || 0) + (num(s.qty) || 0) })
-  let theo = 0, theoUnit = null, theoStatus = V; const theoWhy = []
+  let theo = 0, theoUnit = null, theoStatus = C; const theoWhy = []
   dishes.forEach(d => {
     const src = d.addon ? sold.modifier : sold.item
     d.sold = d.pos_names.reduce((a, n) => a + (src[n.toLowerCase()] || 0), 0)
@@ -162,14 +179,14 @@ export function knowledgeCard(id, data, chef) {
     if (!d.sold) return
     if (d.per_portion == null) { theoStatus = M; theoWhy.push(`${d.title}: ${d.why[0] || 'amount per portion missing'}`); return }
     if (theoUnit && theoUnit !== d.unit) { theoStatus = M; theoWhy.push(`${d.title}: unit ${d.unit} cannot be added to ${theoUnit} without an approved conversion`); return }
-    theoUnit = d.unit; theo += d.sold * d.per_portion; if (d.status === E && theoStatus === V) theoStatus = E
+    theoUnit = d.unit; theo += d.sold * d.per_portion; if (d.status === E && theoStatus === C) theoStatus = E
   })
   const theoretical = dishes.some(d => d.sold) ? f(theoUnit ? r2(theo) : null, theoUnit ? theoStatus : M, `POS × recipes, last ${data.days} days`, theoWhy.join(' · ') || null) : f(null, M, null, `no dish using it was sold in the last ${data.days} days`)
   if (theoretical.v != null) { theoretical.unit = theoUnit; if (theoStatus === M) theoretical.partial = true }   // a lower bound: some dishes could not be counted
   const out = Object.assign(base, {
     knowledge: true, days: data.days,
     identity: { id: ing.id, name: ing.name, name_it: ing.name_it || null, name_es: ing.name_es || null, base_unit: f(ing.base_unit, ing.base_unit ? V : M, 'ingredient sheet'), category: ing.category || null },
-    conversions: conversions(ing, facts, data.conv, data.each, usedUnits),
+    conversions: conversions(ing, facts, data.conv, data.each, usedUnits, (data.vendors || []).filter(v => v.ingredient_id === id && v.active !== false)),
     policy: facts && facts.policy ? f(facts.policy, V, 'food_cost ingredient policy') : null,
     recipes, dishes, theoretical,
     stock: stockOf(data, id),
@@ -227,10 +244,10 @@ export function gaps(data) {
       if (vf.pack.s !== V) L.pack_unclear.push(row(id, `${v.vendor}: "${v.pack_description || '—'}"${vf.pack.why ? ' — ' + vf.pack.why : ''}`))
       vf.checks.filter(c => /Purchase unit/.test(c.msg)).forEach(c => L.unit_mismatch.push(row(id, `${v.vendor}: ${c.msg}`))) })
     if (fc.policy) return   // non-food / zero-cost items: counted as they are, no weight needed
-    const c = conversions(ing, fc, [], [], units)
-    if (c.needed.piece && c.piece_g.s === E) L.piece_estimate.push(row(id, `${c.piece_g.v} g · ${c.piece_g.src}`))
-    if (c.needed.piece && c.piece_g.s === M) L.piece_missing.push(row(id, [...new Set(units.filter(u => dimOf(u) === 'c'))].join(', ') + ` · ${units.length} recipe line(s)`))
-    if (c.needed.volume && c.density.s === M) L.density_missing.push(row(id, [...new Set(units.filter(u => dimOf(u) === 'v'))].join(', ') + ` · ${units.length} recipe line(s)`))
+    const c = conversions(ing, fc, [], [], units, vs)
+    if (c.needed.piece && c.piece_g.s === E) L.piece_estimate.push(row(id, `${c.piece_g.v} g (${c.piece_g.src}) · ${c.needed.piece_why}`))
+    if (c.needed.piece && c.piece_g.s === M) L.piece_missing.push(row(id, `${c.needed.piece_why} · ${units.length} recipe line(s)`))
+    if (c.needed.volume && c.density.s === M) L.density_missing.push(row(id, `${c.needed.volume_why} · ${units.length} recipe line(s)`))
     if (!fc.price && !fc.policy && vs.length) L.price_missing.push(row(id, 'vendor present, no usable invoice price'))
   })
   const mapped = new Set((data.recipes || []).flatMap(r => posNames(r).map(n => n.toLowerCase())))

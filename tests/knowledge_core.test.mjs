@@ -25,6 +25,11 @@ const v = art.vendors_k[0]
 ok(v.pack.s === 'verified' && v.pack_total.qty === 80 && v.pack_total.outer === 4 && v.pack_total.inner === 20, `Artichokes: pack ${v.pack.v} (verified)`)
 ok(v.price_each.s === 'verified' && Math.abs(v.price_each.v - 1.9985) < 1e-9, `Artichokes: price each $${v.price_each.v} = $159.88 ÷ 80 (verified)`)
 ok(art.conversions.piece_g.s === 'estimated' && art.conversions.piece_g.v === 128, 'Artichokes: 128 g stays "estimated" (not approved)')
+ok(art.conversions.needed.piece === false && /bought and used by the piece/.test(art.conversions.needed.piece_why), `Artichokes: piece weight NOT asked (${art.conversions.needed.piece_why})`)
+ok(v.vendor === "Chef's Warehouse" && v.vendor_ref === "Hardie's Fresh Foods / Dairyland Produce", 'Artichokes: vendor shown as Chef\'s Warehouse, technical name kept as reference')
+ok(art.theoretical.s === 'calculated', 'usage from POS × recipes is labelled "calculated", never "verified"')
+const G = (await import('../supabase/functions/_shared/knowledge_core.js')).gaps({ ingredients: A.ingredients, bom: A.bom, vendors: A.vendors, facts: A.facts, recipes: A.recipes, posFood: [] })
+ok(!G.lists.piece_estimate.concat(G.lists.piece_missing).some(r => r.name === 'Artichokes'), `To complete: Artichokes no longer asked for a weight (piece lists ${G.lists.piece_estimate.length} + ${G.lists.piece_missing.length})`)
 ok(art.price.per_g_status === 'estimated', 'Artichokes: FC05 per-gram price flagged as resting on the unapproved 128 g')
 ok(v.checks.some(c => /Purchase unit says "lb"/.test(c.msg)), 'Artichokes: vendor sheet "lb" vs counted pack reported')
 const soldArt = A.sales.filter(s => s.kind === 'item' && s.name === 'Artichoke').reduce((t, s) => t + Number(s.qty), 0)
@@ -51,10 +56,10 @@ ok(!st.vendors && !st.vendors_k && !st.invoices && !st.price && !st.bought && !s
 
 // 7. every ingredient used in a recipe: no crash, no NaN, every value labelled, every non-verified explained
 const used = [...new Set(A.bom.filter(b => b.item_id).map(b => b.item_id))].filter(id => A.ingredients.some(i => i.id === id))
-let crash = 0, nan = 0, unlabeled = 0, unexplained = 0; const S = { verified: 0, estimated: 0, missing: 0 }
+let crash = 0, nan = 0, unlabeled = 0, unexplained = 0; const S = { verified: 0, estimated: 0, missing: 0, calculated: 0 }
 const walk = o => { if (!o || typeof o !== 'object') return; if ('s' in o && 'v' in o) { if (!S.hasOwnProperty(o.s)) unlabeled++; else S[o.s]++; if (o.s !== 'verified' && !o.why && !o.src) unexplained++ } Object.values(o).forEach(walk) }
 for (const id of used) { try { const c = cardFor(A, id, true); if (/NaN|Infinity/.test(JSON.stringify(c))) nan++; walk(c) } catch (e) { crash++; console.log('  crash', id, e.message) } }
 ok(crash === 0 && nan === 0, `${used.length} ingredients used in recipes: ${crash} errors, ${nan} with NaN/Infinity`)
-ok(unlabeled === 0 && unexplained === 0, `every value labelled (verified ${S.verified} · estimated ${S.estimated} · missing ${S.missing}); every estimated/missing has a reason or source`)
+ok(unlabeled === 0 && unexplained === 0, `every value labelled (verified ${S.verified} · estimated ${S.estimated} · missing ${S.missing} · calculated ${S.calculated}); every estimated/missing has a reason or source`)
 console.log(`\nRISULTATO: ${pass} superati, ${fail} falliti`)
 process.exitCode = fail ? 1 : 0

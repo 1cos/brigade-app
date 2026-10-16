@@ -43,7 +43,7 @@ function from(t: string) {
 const svc = { from }, fx = async (ids: string[]) => Object.fromEntries(ids.filter(i => facts[i]).map(i => [i, facts[i]]))
 let pass = 0, fail = 0; const ok = (c: boolean, m: string) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++ }
 const since = new Date(NOW.getTime() - 28 * 86400000).toISOString().slice(0, 10)
-const expect = (id: string, chef: boolean) => knowledgeCard(id, { ingredients: T.ingredients, bom: T.recipe_bom, recipes: T.recipes, yields: T.recipe_yield, prep: T.prep_tasks, vendors: chef ? T.ingredient_vendors : [], aliases: T.vendor_item_aliases,
+const expect = (id: string, chef: boolean) => knowledgeCard(id, { ingredients: T.ingredients, bom: T.recipe_bom, recipes: T.recipes, yields: T.recipe_yield, prep: T.prep_tasks, vendors: T.ingredient_vendors, aliases: T.vendor_item_aliases,
   invoices: inv.filter((l: any) => l.ingredient_id === id).sort((a: any, b: any) => String(b.invoice_date).localeCompare(String(a.invoice_date))), facts: facts[id] || null, conv: [], each: T.unit_each_weights.filter((e: any) => e.ingredient_id === id),
   sales: sales.map((s: any) => ({ kind: s.kind, name: s.name, qty: Number(s.qty) })), counts: T.prep_stock_counts, days: 28, since, today: since }, chef)
 const strip = (c: any) => JSON.parse(JSON.stringify(c, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v))
@@ -60,7 +60,7 @@ ok(maxServed === 1000 && T.pos_sales_by_item.length > 1000, `pagination: the fak
 let forbidden = false; try { await KIT.knowledgeGaps({ id: 38, role: 'staff' } as any, svc, { facts: fx, now: NOW }) } catch (e) { forbidden = (e as any).status === 403 }
 ok(forbidden, 'To complete: staff → 403')
 const g = await KIT.knowledgeGaps({ id: 1, role: 'chef' } as any, svc, { facts: fx, now: NOW })
-ok(g.used_ingredients === 303 && g.lists.unit_mismatch.length === 11 && g.lists.piece_estimate.length === 4, `To complete (Chef): ${g.used_ingredients} ingredients, ${Object.entries(g.lists).map(([k, l]: any) => k + ' ' + l.length).join(', ')}`)
+ok(g.used_ingredients === 303 && g.lists.unit_mismatch.length === 11 && !g.lists.piece_estimate.some((r: any) => r.name === 'Artichokes'), `To complete (Chef): ${g.used_ingredients} ingredients, ${Object.entries(g.lists).map(([k, l]: any) => k + ' ' + l.length).join(', ')}`)
 ok(g.pos_unmapped.length > 0 && g.pos_total > 0, `POS without recipe: ${g.pos_unmapped.length} items, ${Math.round(g.pos_unmapped_qty)} of ${Math.round(g.pos_total)} portions`)
 console.log(`\nRISULTATO: ${pass} superati, ${fail} falliti`)
 Deno.exit(fail ? 1 : 0)

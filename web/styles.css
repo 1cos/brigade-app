@@ -416,3 +416,30 @@ b.mq .n[contenteditable="true"]{color:var(--rest);box-shadow:inset 0 -2px 0 var(
 .knw{color:var(--warn);font-weight:600}
 .kvr{flex-wrap:wrap}
 @media (max-width:640px){ .kvr .right{max-width:none;flex-basis:100%;justify-content:flex-start;text-align:left;margin-top:4px} .kvr .kvcol{align-items:flex-start} .kvr .chev{display:none} }
+/* Knowledge card, compact (R1.9): the 7 facts first, everything else folded */
+.kn.c{background:color-mix(in srgb,var(--today) 14%,transparent);color:var(--today)}
+.ksum{display:flex;flex-direction:column;background:var(--surf);border:1px solid var(--line);border-radius:18px;padding:4px 16px}
+.ksum-row{display:grid;grid-template-columns:minmax(110px,38%) 1fr;gap:4px 12px;padding:11px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.ksum-row:last-child{border-bottom:0}
+.ksum-row .k{color:var(--tx2);font-size:15px;font-weight:600}
+.ksum-row .v{font-size:17px;min-width:0}
+@media (max-width:420px){.ksum-row{grid-template-columns:1fr}.ksum-row .k{font-size:13px;text-transform:uppercase;letter-spacing:.05em}}
+details.kfold{margin-top:4px}
+details.kfold>summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 4px;font-weight:700;font-size:17px;color:var(--tx)}
+details.kfold>summary::-webkit-details-marker{display:none}
+details.kfold>summary::after{content:'›';font-size:22px;color:var(--txm);transform:rotate(90deg);transition:transform .15s}
+details.kfold:not([open])>summary::after{transform:none}
+details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
+/* Recipe screen / editor (R1.9): names you can tap, food cost at a glance, Advanced hidden by default */
+.mr-ingl{color:inherit;text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--rest) 45%,transparent);text-underline-offset:3px}
+.mr-sub{color:var(--rest)}
+.mr-fc{margin-top:6px;font-size:16px}
+.mr-kind{font-size:13px}
+.mr-adv{display:block}
+.mr-advnote{font-size:14px;margin:4px 0 8px}
+.mr-eline .mr-nm{flex:1 1 auto;min-width:0}.mr-eline .mr-eq{flex:0 0 auto}
+@media (max-width:640px){.mr-eline{gap:8px!important}.mr-eq .mr-sel{max-width:76px}}
+.mr-x{margin-left:6px;width:32px;height:32px;border-radius:50%;color:var(--txm);font-size:20px;line-height:1;flex:0 0 auto}
+.mr-x:hover,.mr-x:focus-visible{color:var(--red,#dc2626);background:var(--surf2)}
+.mr-eq{display:inline-flex;align-items:center;gap:6px}
+@media (max-width:640px){.mr-kind{display:none}}

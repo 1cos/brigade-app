@@ -11,6 +11,7 @@ const [OUT] = process.argv.slice(2); fs.mkdirSync(OUT, { recursive: true })
 const A = load(), ENGINE = process.env.BROWSER === 'webkit' ? 'webkit' : 'chromium', P = ENGINE === 'webkit' ? 'wk_' : ''
 const byName = n => A.ingredients.find(i => i.name === n)
 const ART = byName('Artichokes'), LOB = byName('Lobster Tail'), CREAM = byName('Heavy Cream')
+const ARTC = cardFor(A, ART.id, true), USED = `${ARTC.theoretical.v} pz`
 const G = Object.assign(gaps({ ingredients: A.ingredients, bom: A.bom, vendors: A.vendors, facts: A.facts, recipes: A.recipes, unmatched: A.inv.filter(l => !l.ingredient_id).slice(0, 50),
   posFood: A.sales.filter(s => s.kind === 'item').map(s => ({ name: s.name, qty: Number(s.qty) })) }), { days: 28, invoices_no_number: 1090 })
 let role = 'chef', lang = 'en'; const asked = []
@@ -51,6 +52,7 @@ async function openIng(pg, ing) {
   await pg.click('button.w[data-w="restaurant"]'); await pg.waitForTimeout(300); await pg.click('button[data-a="openIngs"]'); await pg.waitForTimeout(300)
   await pg.fill('#q', ing.name); await pg.waitForTimeout(500)
   await pg.locator(`#main button[data-a="openIng"][data-id="${ing.id}"]`).click(); await pg.waitForTimeout(600)
+  await pg.evaluate(() => document.querySelectorAll('#main details.kfold').forEach(d => { d.open = true })); await pg.waitForTimeout(150)   // R1.9: details are folded; open them to read everything
 }
 for (const [dev, w, h] of [['telefono', 390, 844], ['tablet', 820, 1180], ['computer', 1440, 900]]) {
   role = 'chef'; lang = 'en'; const pg = await page(w, h)
@@ -61,7 +63,7 @@ for (const [dev, w, h] of [['telefono', 390, 844], ['tablet', 820, 1180], ['comp
   ok(/\$2\.00/.test(c) && /invoice price ÷ 80 pieces/.test(c), `${dev} · prezzo al pezzo $2.00 dalla fattura ÷ 80`)
   ok(/128 g/.test(c) && /Estimated/.test(c) && /not approved/.test(c), `${dev} · 128 g mostrato come Estimated, non approvato (non approvato in automatico)`)
   ok(/Purchase unit says "lb"/.test(c), `${dev} · avviso: unità d'acquisto "lb" ma confezione a pezzi`)
-  ok(/228 pz/.test(c) && /320 pz/.test(c), `${dev} · 28 giorni: usati 228 (POS × 2), comprati 320 (4 casse)`)
+  ok(c.includes(USED) && /320 pz/.test(c) && /Calculated/.test(c) && /Verified purchase/i.test(c) && /Counted stock/i.test(c), `${dev} · in alto: Verified purchase 320, Calculated usage ${USED} (Calculated, non Verified), Counted stock`)
   ok(/07167049/.test(c) && /from the original document/.test(c), `${dev} · fattura 12/10 con numero 07167049 preso dal documento originale`)
   ok(/Brigade does not count this ingredient/.test(c) && /Missing/.test(c), `${dev} · scorta: Missing con il motivo`)
   ok(!/\bkn_[a-z_]+|\bk_[a-z_]+|undefined|NaN/.test(c), `${dev} · nessuna chiave grezza, undefined o NaN`)
@@ -97,7 +99,7 @@ role = 'staff'; lang = 'en'; asked.length = 0
 { const pg = await page(390, 844)
   await openIng(pg, ART); const c = await pg.locator('#main').innerText()
   ok((await H1(pg)) === 'Artichokes' && !/\$|Buying|Recent invoices|Hardie|23386/.test(c), 'cuoco: nessun prezzo, fornitore, SKU o fattura')
-  ok(/In recipes/i.test(c) && /228 pz/.test(c), 'cuoco: vede ricette e consumo dal venduto')
+  ok(/In recipes/i.test(c) && c.includes(USED), 'cuoco: vede ricette e consumo calcolato dal venduto')
   ok(await pg.locator('button[data-a="openGaps"]').count() === 0 && !asked.some(x => /knowledge_gaps|office/.test(x)), 'cuoco: niente "Ingredients to complete", nessuna richiesta all\'Ufficio')
   await pg.screenshot({ path: `${OUT}/${P}cuoco_artichokes.png`, fullPage: true })
   await pg.context().close() }

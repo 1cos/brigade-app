@@ -170,7 +170,7 @@ SCREENS.restaurant = { title: () => t('w_rest'), c: '--rest', render(p) {
   return `<div class="page" style="--c:var(--rest)">${top}${ings}${lab}
     ${lab ? `<div class="chap"><h2>${t('m_lab_others')}</h2></div>` : ''}
     <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: d.recipes.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
-    ${Object.keys(groups).sort().map(g => `<section><div class="chap"><h2>${esc(g)}</h2><span>${groups[g].length}</span></div><div class="list">${groups[g].map(r => `<button class="row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(r.title)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>`).join('') || `<p class="note">${esc(t('nothing_for', { q }))}</p>`}
+    ${Object.keys(groups).sort().map(g => `<section><div class="chap"><h2>${esc(g)}</h2><span>${groups[g].length}</span></div><div class="list">${groups[g].map(r => `<button class="row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(I.dn(r.title))}</div></span><span class="chev">›</span></button>`).join('')}</div></section>`).join('') || `<p class="note">${esc(t('nothing_for', { q }))}</p>`}
   </div>`;
 }, after(p, active) { searchBind(active); } };
 function searchBind(active) {
@@ -188,9 +188,9 @@ function recipeBody(v, p, d) {
   return (p.focus === 'photo' || photo ? `<section><h2>${t('k_photo')}</h2><div class="list">${photo ? `<img class="rc-photo" src="${esc(photo)}" alt="${esc(v.rec.title)}" loading="lazy">` : `<div class="rc-empty">${t('k_no_photo')}</div>`}</div></section>` : '')
     + RC.prepView(v)
     + (d.preps.length ? `<section><h2>${RC.R('prep_list')}</h2><div class="list">${d.preps.map(x => `<button class="row" data-a="openPrep" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>` : '')
-    + (d.used_in.length ? `<section><h2>${RC.R('used_in')}</h2><div class="list">${d.used_in.map(u => `<button class="row" data-a="openRecipe" data-r="${u.id}"><span class="main"><div class="name">${esc(u.title)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>` : '');
+    + (d.used_in.length ? `<section><h2>${RC.R('used_in')}</h2><div class="list">${d.used_in.map(u => `<button class="row" data-a="openRecipe" data-r="${u.id}"><span class="main"><div class="name">${esc(I.dn(u.title))}</div></span><span class="chev">›</span></button>`).join('')}</div></section>` : '');
 }
-SCREENS.recipe = { title: p => { const d = API.peek('recipe', { id: p.id }); return d ? d.recipe.title : (p.name || t('recipe_word')); }, c: '--rest', render(p) {
+SCREENS.recipe = { title: p => { const d = API.peek('recipe', { id: p.id }); return d ? I.dn(d.recipe.title) : (p.name || t('recipe_word')); }, c: '--rest', render(p) {
   const d = need('recipe', { id: p.id }, 10 * 60000);
   if (!d) return `<div class="page">${backBtn()}${waiting('recipe')}</div>`;
   const v = RC.model(d, p);
@@ -199,7 +199,7 @@ SCREENS.recipe = { title: p => { const d = API.peek('recipe', { id: p.id }); ret
   if (v.tab === 'struct') need('recipe_tree', { id: p.id }, 10 * 60000);
   const fromPrep = p.prep ? +p.prep : null;
   return `<div class="page" style="--c:var(--rest)">${backBtn()}
-    <div><div class="eyebrow rc-headrow"><span>${esc(RC.headMeta(v))}</span>${isChef() ? `<button class="mr-link" data-a="editRecipe" data-r="${esc(p.id)}">${t('edit_recipe')}</button>` : ''}</div><h1>${esc(v.rec.title)}</h1></div>
+    <div><div class="eyebrow rc-headrow"><span>${esc(RC.headMeta(v))}</span>${isChef() ? `<button class="mr-link" data-a="editRecipe" data-r="${esc(p.id)}">${t('edit_recipe')}</button>` : ''}</div><h1>${esc(I.dn(v.rec.title))}</h1></div>
     ${fixBox(p)}
     <div class="rc-sticky">${RC.amountHtml(v)}${RC.segHtml(v)}</div>
     ${RC.notes(v)}
@@ -270,7 +270,7 @@ function mreSection(p) {
   const L = need('mre_list', null, 2 * 60000);
   if (!L || !L.recipes) return '';
   const q = (p.q || '').trim().toLowerCase();
-  const row = r => `<button class="row" data-a="openMre" data-r="${r.id}"><span class="main"><div class="name">${esc(r.title)}</div>${isChef() ? `<div class="meta">${r.draft ? t('m_lab_draft') + ' · ' : ''}${r.state === 'importata' ? t('m_lab_imported') : t('m_lab_published', { v: r.current_version })}${r.pending ? ' · ' + t('m_n_new', { n: r.pending }) : ''}</div>` : ''}</span><span class="chev">›</span></button>`;
+  const row = r => `<button class="row" data-a="openMre" data-r="${r.id}"><span class="main"><div class="name">${esc(I.dn(r.title))}</div>${isChef() ? `<div class="meta">${r.draft ? t('m_lab_draft') + ' · ' : ''}${r.state === 'importata' ? t('m_lab_imported') : t('m_lab_published', { v: r.current_version })}${r.pending ? ' · ' + t('m_n_new', { n: r.pending }) : ''}</div>` : ''}</span><span class="chev">›</span></button>`;
   const pil = L.recipes.filter(r => r.pilot && (!q || r.title.toLowerCase().includes(q))), ex = L.recipes.filter(r => r.is_test && !q);
   return `<section><div class="chap"><h2>${t('m_lab_title')}</h2><span>${pil.length}</span></div><p class="note" style="font-size:14px;margin:0 0 8px">${t('m_lab_sub')}</p>
     <div class="list">${pil.map(row).join('')}</div>${ex.length ? `<div class="chap" style="margin-top:12px"><h2>${t('m_lab_example')}</h2></div><div class="list">${ex.map(row).join('')}</div>` : ''}</section>`;
@@ -542,7 +542,7 @@ function findResults(q) {
   const hit = s => String(s || '').toLowerCase().includes(q), out = [];
   ((API.peek('shift') || {}).items || []).filter(x => hit(x.name)).slice(0, 6).forEach(x => out.push(`<button class="row" data-a="openPrep" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div><div class="meta">${t('prep_word')} · ${esc(x.station || '')}</div></span><span class="chev">›</span></button>`));
   ((API.peek('ingredients') || {}).ingredients || []).filter(x => hit(x.name) || hit(x.name_it) || hit(x.name_es)).slice(0, 8).forEach(x => out.push(`<button class="row" data-a="openIng" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div><div class="meta">${t('k_ing')} · ${esc(cat(x.category))}</div></span><span class="chev">›</span></button>`));
-  ((API.peek('recipes') || {}).recipes || []).filter(x => hit(x.title)).slice(0, 10).forEach(x => out.push(`<button class="row" data-a="openRecipe" data-r="${x.id}"><span class="main"><div class="name">${esc(x.title)}</div><div class="meta">${t('recipe_word')} · ${esc(cat(x.category))}</div></span><span class="chev">›</span></button>`));
+  ((API.peek('recipes') || {}).recipes || []).filter(x => hit(x.title)).slice(0, 10).forEach(x => out.push(`<button class="row" data-a="openRecipe" data-r="${x.id}"><span class="main"><div class="name">${esc(I.dn(x.title))}</div><div class="meta">${t('recipe_word')} · ${esc(cat(x.category))}</div></span><span class="chev">›</span></button>`));
   return out.length ? `<div class="list">${out.join('')}</div>` : `<p class="note">${esc(t('nothing_for', { q }))}</p>`;
 }
 document.addEventListener('click', ev => { const el = ev.target.closest('[data-a]'); if (!el) return; const f = A[el.dataset.a]; if (f) { ev.preventDefault(); f(el); } });
@@ -582,7 +582,7 @@ function signedIn(user) {
 function signedOut(msg) { ME = null; wipeLocal(); $('main').innerHTML = ''; $('main')._h = null; $('tabs').innerHTML = ''; $('worlds').innerHTML = ''; $('worlds').dataset.h = ''; $('who').textContent = ''; $('switch').hidden = true; closeSheet(); pinBuf = ''; showLogin(msg || ''); }
 window.addEventListener('app-signed-out', () => { API.clearToken(); if (ME) toast(t('signed_out')); signedOut(); });
 
-if (window.KitchenUI) { window.KitchenUI.init({ esc, need, waiting, backBtn, head, shortDay, isChef, cat, peek: API.peek });
+if (window.KitchenUI) { window.KitchenUI.init({ esc, need, waiting, backBtn, head, shortDay, isChef, cat, peek: API.peek, save: () => save() });
   Object.assign(SCREENS, window.KitchenUI.screens); SCREENS.ings.after = (p, active) => searchBind(active); }
 if (window.MreUI) window.MreUI.init({ need, peek: API.peek, render, toast, isChef, entry: () => cur().p,
   openRecipe: (id, name, f, ref) => openMre(id, name, f, ref) });

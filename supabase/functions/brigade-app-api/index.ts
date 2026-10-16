@@ -13,7 +13,7 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 
-const BUILD = 'api-r1.8.3-knowledge'
+const BUILD = 'api-r1.9-ui'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''

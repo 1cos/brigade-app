@@ -126,7 +126,7 @@ function subFactor(qty, u0, factor, sub) {
 }
 const lots = n => n > 0 && n < 0.01 ? R('lt001') : `${N(Math.round(n * 100) / 100, 2)} ${Math.round(n * 100) === 100 ? R('lot') : R('lots')}`;
 function ingName(row) {
-  if (row.component_type === 'RECIPE') return row.recipes?.title || '—';
+  if (row.component_type === 'RECIPE') return window.I18N.dn(row.recipes?.title || '—');   // display name only (Grated Parmesan)
   const i = row.ingredients || {}; const l = L();
   return (l === 'it' && i.name_it) || (l === 'es' && i.name_es) || i.name || '—';
 }
