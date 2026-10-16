@@ -82,6 +82,8 @@ export async function knowledge(u: U, id: string, svc: any, opt: { facts?: (ids:
   const today = opt.now || new Date(), since = dayIso(new Date(today.getTime() - KDAYS * 86400000))
   // recipe chain: direct lines, then the recipes that use those recipes (up to 6 levels), walked in memory
   const BOMC = 'parent_recipe_id,component_type,item_id,sub_recipe_id,quantity,unit'
+  // FC05 facts come through the lab connection (~1 s): started first, so it overlaps every other read
+  const factsP = (opt.facts || ingredientFacts)([id])
   const [ing, direct, subLines, salesP] = await Promise.all([
     svc.from('ingredients').select(ING_COLS).eq('id', id).then(must),
     pageAll(() => svc.from('recipe_bom').select(BOMC).eq('item_id', id).order('bom_id')),
@@ -103,7 +105,7 @@ export async function knowledge(u: U, id: string, svc: any, opt: { facts?: (ids:
     svc.from('prep_tasks').select('id,name,ingredient_id').eq('ingredient_id', id).not('archived', 'is', true).then(must),
     svc.from('unit_each_weights').select('ingredient_id,avg_weight_g,source').eq('ingredient_id', id).then(must),
     Promise.resolve(salesP),
-    (opt.facts || ingredientFacts)([id]),
+    factsP,
     svc.from('ingredient_vendors').select('id,ingredient_id,vendor,vendor_sku,purchase_unit,pack_description,unit_price,conversion_to_base,price_per_100g,price_per_each,last_invoice_date,do_not_order,do_not_order_reason,active').eq('ingredient_id', id).then(must),
     chef ? svc.from('vendor_item_aliases').select('ingredient_id,vendor,vendor_sku,vendor_description,confirmed_by,active').eq('ingredient_id', id).then(must) : Promise.resolve([]),
     // invoices: every line of the window (for "bought") + the 8 newest (for the list), merged by id
@@ -140,7 +142,7 @@ export async function knowledgeGaps(u: U, svc: any, opt: { facts?: (ids: string[
   ]) as any[]
   const ids = [...new Set((bom as any[]).map(b => b.item_id))] as string[]
   const facts: any = {}
-  for (const c of chunks(ids, 200)) Object.assign(facts, await (opt.facts || ingredientFacts)(c))
+  ;(await Promise.all(chunks(ids, 200).map(c => (opt.facts || ingredientFacts)(c)))).forEach(f => Object.assign(facts, f))
   const pos: Record<string, number> = {}; (items as any[]).forEach(r => { pos[r.menu_item] = (pos[r.menu_item] || 0) + (Number(r.quantity) || 0) })
   const g = KN.gaps({ ingredients: ing, bom, vendors: vend, facts, recipes, unmatched, posFood: Object.entries(pos).map(([name, qty]) => ({ name, qty })) })
   return Object.assign(g, { days: KDAYS, invoices_no_number: (nonum as any)?.count ?? null })
