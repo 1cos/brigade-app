@@ -15,7 +15,7 @@ async function call(who, op, body = {}) {
 }
 const strip = c => JSON.parse(JSON.stringify(c, (k, v) => typeof v === 'number' ? Math.round(v * 1000) / 1000 : v))
 const A = load(), today = new Date().toISOString().slice(0, 10), by = n => A.ingredients.find(i => i.name === n)
-let r = await call(null, 'ping'); ok(/^api-r1\.8/.test(r.j.build), `ping: ${r.j.build}`)
+let r = await call(null, 'ping'); ok(/^api-r1\.(8|9)/.test(r.j.build), `ping: ${r.j.build}`)
 r = await call(null, 'knowledge', { id: by('Artichokes').id }); ok(r.status === 401, 'knowledge senza sessione: 401')
 r = await call(null, 'knowledge_gaps'); ok(r.status === 401, 'knowledge_gaps senza sessione: 401')
 r = await call('staff', 'knowledge_gaps'); ok(r.status === 403, `cuoco → Ingredients to complete: ${r.status}`)
@@ -37,7 +37,7 @@ for (const n of names) {
 const art = (await call('chef', 'knowledge', { id: by('Artichokes').id })).j, v = art.vendors_k[0]
 ok(v.pack.s === 'verified' && v.pack_total.qty === 80 && v.pack_total.outer === 4 && v.pack_total.inner === 20 && v.sku === '23386', `Artichokes dal vivo: ${v.vendor} #${v.sku}, ${v.pack.v} (Verified)`)
 ok(v.price_each.s === 'verified' && art.conversions.piece_g.s === 'estimated' && art.conversions.piece_g.v === 128 && art.price.per_g_status === 'estimated', `Artichokes: $${v.price_each.v} al pezzo Verified; 128 g Estimated (non approvato); prezzo/g Estimated`)
-ok(art.theoretical.s === 'verified' && art.bought.s === 'verified', `Artichokes 28 giorni: usati ${art.theoretical.v} ${art.theoretical.unit}, comprati ${art.bought.v} ${art.bought.unit}`)
+ok(art.theoretical.s === 'calculated' && art.bought.s === 'verified' && v.vendor === "Chef's Warehouse" && art.conversions.needed.piece === false, `Artichokes: usage ${art.theoretical.v} ${art.theoretical.unit} Calculated, purchase ${art.bought.v} ${art.bought.unit} Verified, vendor Chef's Warehouse, piece weight not asked`)
 const t0 = Date.now(); r = await call('chef', 'knowledge_gaps'); const gms = Date.now() - t0
 const G = gaps({ ingredients: A.ingredients, bom: A.bom, vendors: A.vendors, facts: A.facts, recipes: A.recipes, posFood: Object.entries(A.sales.filter(s => s.kind === 'item').reduce((m, s) => (m[s.name] = (m[s.name] || 0) + Number(s.qty), m), {})).map(([name, qty]) => ({ name, qty })) })
 const cnt = L => Object.fromEntries(Object.entries(L).map(([k, l]) => [k, l.length]))
