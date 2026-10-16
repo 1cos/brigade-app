@@ -60,7 +60,7 @@ export const PASTA = [
   { key: 'lobster', station: 'pasta', ask: 'ready', what: 'lobsters', unit: 'pz', target: { item: '2e9405f8-7ff2-4bf2-a572-5b343c52c9d0' }, name: 'Lobster Tail', step: 1, lead: 0, lead_ok: true,
     how: 'thaw_morning', thaw_min: 15, leftovers: true, review: /lobster/i },      // Chef 16/10: thawed the same morning, about 15 minutes
   { key: 'shrimp', station: 'pasta', ask: 'ready', what: 'shrimp', unit: 'g', target: { item: '4edc611c-e281-4c6a-85e9-f57fb27d1b61' }, name: 'Shrimp', step: 150, step_label: 'portions of 150 g', lead: 0, lead_ok: true, review: /shrimp|prawn/i,
-    notes: ['Fettuccine Allo Scoglio (POS, ~40 a week): the Brigade recipe has clams and mussels only, no shrimp or calamari — Chef to confirm'] },
+    notes: ['Fettuccine Allo Scoglio (POS: 250 sold 9/6→15/10, about 14 a week): the Brigade recipe has clams and mussels only, no shrimp or calamari — Chef to confirm'] },
   { key: 'gnocco', station: 'pasta', ask: 'ready', what: 'Gnocco dough', unit: 'g', target: { recipe: 'e4804f67-5220-4bc8-abd0-aa925ecfa06f' }, name: 'GNOCCO FRITTO DOUGH', step: 100, lead: 0, lead_ok: true, batch: true },
   { key: 'arrabbiata', station: 'pasta', ask: 'ready', what: 'Arrabbiata', unit: 'g', target: { recipe: '3252e642-e3c5-4c9b-9bba-9603cc086f92' }, name: 'ARRABBIATA', step: 500, lead: 0, lead_ok: true, batch: true },
 ]
