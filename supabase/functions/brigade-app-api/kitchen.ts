@@ -149,7 +149,7 @@ export async function knowledgeGaps(u: U, svc: any, opt: { facts?: (ids: string[
   return Object.assign(g, { days: KDAYS, invoices_no_number: (nonum as any)?.count ?? null })
 }
 
-/* ---------- Smart Station Checklists, phase 1 (B-51, Chef Max GO 16/10/2026) — SIMULATION, read only, Chef only ----------
+/* ---------- Smart Station Checklists (B-51; R1.11 Progressive Trust, Chef Max GO 16/10/2026) — SIMULATION, read only, Chef only ----------
    Pasta Station pilot. Real POS sales × recipes (same walk as the Knowledge Engine), read here, computed in
    ../_shared/checklist_core.js. Ticks stay on the phone (simulation): nothing is written, nothing moves stock. */
 const ctDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
@@ -166,9 +166,10 @@ async function salesDaily(svc: any, since: string) {
   const out = { at: Date.now(), rows, open: [...open].sort() }; dailyCache[since] = out; return out
 }
 export async function smartChecklist(u: U, body: any, svc: any, opt: { now?: Date } = {}) {
-  if (u.role !== 'chef') throw new KitchenError(403, 'forbidden')          // phase 1: Chef only
+  const chef = u.role === 'chef'
+  if (!chef && !CL.GATES.staffVisible) throw new KitchenError(403, 'forbidden')   // simulation: Chef only until a new GO
   if (body?.station && body.station !== 'pasta') throw new KitchenError(400, 'bad_station')
-  const today = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.day || '')) ? String(body.day) : ctDay(opt.now)
+  const today = chef && /^\d{4}-\d{2}-\d{2}$/.test(String(body?.day || '')) ? String(body.day) : ctDay(opt.now)   // past days: Chef only
   const since = new Date(Date.parse(today + 'T12:00:00Z') - 42 * 86400000).toISOString().slice(0, 10)
   const until = new Date(Date.parse(today + 'T12:00:00Z') + 7 * 86400000).toISOString().slice(0, 10)
   const [bom, recipes, yields, sd, events] = await Promise.all([
@@ -181,6 +182,10 @@ export async function smartChecklist(u: U, body: any, svc: any, opt: { now?: Dat
   // a past day (simulation of an earlier service): only the history BEFORE that day is used
   const sales = (sd.rows as any[]).filter(r => r.date < today), open = (sd.open as string[]).filter(d => d < today)
   const past = today < ctDay(opt.now)
-  return CL.stationPriorities({ today, bom, recipes, yields, sales, openDates: open, salesAll: past ? sd.rows : null,
+  const res = CL.stationPriorities({ today, bom, recipes, yields, sales, openDates: open, salesAll: past && chef ? sd.rows : null,
     events: (events as any[]).map(e => ({ name: e.name, date: e.event_date, guests: e.guest_count, status: e.status, menu_linked: false })) })
+  // Progressive Trust: the level comes only from here (release switches + Chef grants). No grants are stored yet → step 1.
+  const level = CL.levelFor(u, [], CL.GATES)
+  if (!chef) return CL.forCook(res, level)
+  return Object.assign(res, { level, steps: CL.STEPS, gates: CL.GATES, margins: CL.MARGINS })
 }
