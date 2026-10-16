@@ -17,6 +17,7 @@
     sc_noqty: ['No amount: a dish that sells has no reliable amount per portion (see Why?).', 'Nessuna quantità: un piatto venduto non ha una quantità per porzione affidabile (vedi Perché?).', 'Sin cantidad: un plato vendido no tiene una cantidad por porción fiable (ver ¿Por qué?).'],
     q_count: ['How many {w} are ready?', 'Quanti {w} sono pronti?', '¿Cuántos {w} hay listos?'],
     q_count_kg: ['How much {w} is ready? (kg)', 'Quanto {w} è pronto? (kg)', '¿Cuánto {w} hay listo? (kg)'],
+    sc_pcs: ['{n} pcs', '{n} pz', '{n} uds'],
     sc_yes: ['Yes, ready', 'Sì, pronto', 'Sí, listo'], sc_ready: ['Ready', 'Pronto', 'Listo'],
     sc_undo: ['Undo', 'Annulla', 'Deshacer'], sc_save: ['Save', 'Salva', 'Guardar'],
     sc_enough: ['Enough for today', 'Basta per oggi', 'Alcanza para hoy'], sc_more: ['{q} more needed', 'Ne servono altri {q}', 'Faltan {q}'],
@@ -48,7 +49,7 @@
   const longD = iso => new Intl.DateTimeFormat(I.locale(), { weekday: 'long', timeZone: 'UTC' }).format(new Date(iso + 'T12:00:00Z'));
   const addDay = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10)
   const refTxt = r => r.lo === r.hi ? String(r.lo) : r.lo + '–' + r.hi
-  const what = (c, esc) => `<b class="num">${qty(c.qty, c.unit)}</b> ${esc(c.what)}`;
+  const what = (c, esc) => `<b class="num">${qty(c.qty, c.unit)}</b> ${esc(c.what)}${c.pieces ? ` (${t('sc_pcs', { n: c.pieces })})` : ''}`;   // shrimp: also the count, the cook counts shrimp
   function question(c, d, esc) {
     const fd = c.for_day || {}
     if (c.qty == null) return t('q_noqty', { w: esc(c.what) })   // no reliable amount: ask without a number, never invent one

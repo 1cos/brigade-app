@@ -14,7 +14,7 @@ async function call(who, op, body = {}) { const t0 = Date.now(); const r = await
 const ALL = (() => { const j = JSON.parse(fs.readFileSync(`${process.env.HOME}/brigade-audit-work/b52/data/k_sales_daily_all.json`, 'utf8')); return (j.rows || j).map(s => ({ date: s.date, kind: s.kind, name: s.name, qty: Number(s.qty) })) })()
 const win = d => { const since = new Date(Date.parse(d + 'T12:00:00Z') - 42 * 86400000).toISOString().slice(0, 10); return ALL.filter(s => s.date >= since) }
 const C = loadC(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
-let r = await call(null, 'ping'); ok(r.j.build === 'api-r1.11.4-chef', `ping: ${r.j.build}`)
+let r = await call(null, 'ping'); ok(r.j.build === 'api-r1.11.5-shrimp', `ping: ${r.j.build}`)
 r = await call(null, 'smart_checklist'); ok(r.status === 401, 'no session → 401')
 r = await call('staff', 'smart_checklist'); ok(r.status === 403, `staff → ${r.status} (not activated for the brigade)`)
 r = await call('chef', 'smart_checklist', { station: 'pasta', level: 3, step: 2, gates: { step2: true, staffVisible: true } }); ok(r.status === 200 && r.j.level === 1 && r.j.items.every(c => c.level === 1) && !r.j.gates.step2 && !r.j.gates.staffVisible && !r.j.gates.step3, 'request asking for level 2/3 or switches on → level 1, switches off')
@@ -44,7 +44,7 @@ await pg.goto('https://1cos.github.io/brigade-app/?v=' + Date.now()); await pg.w
 const t0 = Date.now(); await pg.click('button[data-a="openSmart"][data-v="pasta"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 }); const tOpen = Date.now() - t0
 const txt = await pg.locator('#main').innerText()
 ok((await pg.locator('#main h1').innerText()) === "Today's Checklist" && await pg.locator('#main .sc').count() === 4, `site: My Shift → Pasta Station → Today's Checklist, 4 questions in ${tOpen} ms`)
-ok(/Do we have \d+ lobsters ready for today\?/.test(txt) && /Do we have [\d.,]+ kg shrimp ready for today\?/.test(txt) && !/tomorrow|pulled/i.test(txt) && /Gnocco dough ready/.test(txt) && /Arrabbiata ready/.test(txt) && /not saved/.test(txt) && await pg.locator('#main .sc input').count() === 0, 'site: 4 questions, one tick each, no quantity to type, simulation notice')
+ok(/Do we have \d+ lobsters ready for today\?/.test(txt) && /Do we have [\d.,]+ kg shrimp \(\d+ pcs\) ready for today\?/.test(txt) && !/tomorrow|pulled/i.test(txt) && /Gnocco dough ready/.test(txt) && /Arrabbiata ready/.test(txt) && /not saved/.test(txt) && await pg.locator('#main .sc input').count() === 0, 'site: 4 questions, one tick each, no quantity to type, simulation notice')
 await pg.screenshot({ path: `${OUT}/1_site_checklist.png` })
 await pg.locator('#main button[data-a="scDone"][data-k="lobster"]').click(); await pg.waitForTimeout(300)
 ok(/✓ Ready/.test(await pg.locator('#main .sc').first().innerText()), 'site: one tap → Ready (on this phone only)')

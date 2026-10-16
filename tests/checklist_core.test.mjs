@@ -17,7 +17,7 @@ ok(!ls.tonight && !F.items.some(c => c.for_day.weekday === 'Saturday' && c.key =
 const M = run('2026-10-19'), lm = by(M, 'lobster')
 ok(lm.leftovers_from && lm.leftovers_from.weekday === 'Saturday' && lm.qty === Math.ceil(lm.why.day.mean * 1.10), `Monday: ${lm.qty} lobsters (+10%), Saturday leftovers only mentioned, NOT subtracted`)
 ok(!by(F, 'lobster').leftovers_from && !by(run('2026-10-20'), 'lobster').leftovers_from, 'leftover note only after a closed day (not Friday, not Tuesday)')
-const sh = by(F, 'shrimp'); ok(sh.ask === 'ready' && sh.for_day.today && sh.for_day.weekday === 'Friday' && sh.qty % 50 === 0 && !sh.why.lead_note && !sh.how, `shrimp: for TODAY, ${sh.qty} g rounded to whole shrimp (50 g), no thaw time`)
+const sh = by(F, 'shrimp'), shn = Math.round(sh.qty / 21.8); ok(sh.ask === 'ready' && sh.for_day.today && sh.for_day.weekday === 'Friday' && Math.abs(sh.qty - shn * 21.8) < 0.06 && sh.why.notes[0] === `${sh.qty} g = ${shn} shrimp (21.8 g each)` && !sh.why.lead_note && !sh.how, `shrimp: for TODAY, ${sh.qty} g = ${shn} whole shrimp (21.8 g each), no thaw time`)
 const ar = by(F, 'arrabbiata'), gn = by(F, 'gnocco')
 ok(ar.for_day.today && ar.qty % 500 === 0 && ar.why.margin === 30 && /3150 g per batch/.test(ar.why.batch), `arrabbiata: today only, ${ar.qty} g (+30% Friday), batch info in Why only`)
 ok(gn.for_day.today && gn.qty % 100 === 0 && gn.why.dishes[0].title === 'Coccoli Toscani', `gnocco dough: today only, ${gn.qty} g`)
@@ -48,14 +48,17 @@ ok(T.items.length === 1 && bw.what === 'whole branzino (gutted and cleaned)' && 
 { const th = Object.fromEntries([...F.items, ...O.items, ...T.items].filter(c => c.thaw_min).map(c => [c.key, c.thaw_min]))
   ok(JSON.stringify(th) === '{"lobster":15,"salmon":20,"branzino_filet":10}', `thaw times only where the Chef gave them: ${JSON.stringify(th)} (none for shrimp, calamari, whole branzino)`) }
 ok([...F.items, ...O.items].filter(c => c.thaw_min).every(c => c.why.notes.some(n => /not an HACCP validation/.test(n))), 'thaw time labelled as current practice, not an HACCP validation (Chef view)')
-// ---------- Chef 16/10 definitive quantities: the forecast follows the OFFICIAL recipes, pending shown until they agree ----------
-{ const sco = sh.why.dishes.find(d => d.title === 'Fettuccine Allo Scoglio'), add = sh.why.dishes.find(d => d.title === 'ADD SHRIMP')
-  ok(sco && sco.per_portion === 100 && add.per_portion === 250 && !sh.why.notes.some(n => /^Pending/.test(n)), `official recipes saved (R1.11.4): Add shrimp 250 g + Scoglio 100 g counted, nothing pending → shrimp ${sh.qty} g`)
-  const P = JSON.parse(JSON.stringify(C))   // the recipes as they were BEFORE R1.11.4 (in memory only): the Chef must see "pending"
-  P.bom.find(b => b.parent_recipe_id === '8346fbee-7306-4d79-a90a-7228a7f9b766' && b.sub_recipe_id === 'dc5cf3dd-f130-46ec-a868-849110d59cdf').quantity = 150
-  P.bom = P.bom.filter(b => !(b.parent_recipe_id === '93e0f4f1-9889-407d-841c-c225659b684c' && b.sub_recipe_id === 'dc5cf3dd-f130-46ec-a868-849110d59cdf'))
-  const s0 = CL.stationPriorities(Object.assign({}, P, { today: '2026-10-16' })).items.find(c => c.key === 'shrimp'), pend = s0.why.notes.filter(n => /^Pending in the official recipe/.test(n))
-  ok(pend.length === 2 && /250 g \(Brigade says 150 g\)/.test(pend[0]) && /100 g \(Brigade says nothing\)/.test(pend[1]) && s0.qty < sh.qty, `if the official recipes disagree with the Chef, the Why? says "pending" (old recipes: ${s0.qty} g)`)
+// ---------- Chef 16/10 scale weighing (15 thawed shrimp = 327 g): the forecast follows the OFFICIAL recipes, pending until they agree ----------
+{ const SH = 'dc5cf3dd-f130-46ec-a868-849110d59cdf', IT = '4edc611c-e281-4c6a-85e9-f57fb27d1b61'
+  const LINES = [['8346fbee-7306-4d79-a90a-7228a7f9b766', SH, 250, 109], ['93e0f4f1-9889-407d-841c-c225659b684c', SH, 100, 43.6], ['b524fc74-5a2f-48eb-9b86-0fde506c4d8c', SH, 150, 109],
+    ['b2c3d4e5-f6a7-4b8c-9d0e-f1a2b3c4d5e6', SH, 150, 109], ['a1b2c3d4-e5f6-4a7b-8c9d-e0f1a2b3c4d5', SH, 150, 109], ['8ae35762-022c-427b-8829-28f316dd2771', IT, 150, 109], ['f5ef7d5c-9734-4dcc-b652-0093eac0c2c1', IT, 60, 109]]
+  const withRecipes = col => { const P = JSON.parse(JSON.stringify(C))   // in memory only
+    for (const L of LINES) { const b = P.bom.find(x => x.parent_recipe_id === L[0] && (x.sub_recipe_id === L[1] || x.item_id === L[1])); b.quantity = L[col] } return P }
+  const shOf = P => CL.stationPriorities(Object.assign({}, P, { today: '2026-10-16' })).items.find(c => c.key === 'shrimp'), pendOf = c => c.why.notes.filter(n => /^Pending in the official recipe/.test(n))
+  const s4 = shOf(withRecipes(2)), s5 = shOf(withRecipes(3)), p4 = pendOf(s4), dd = t => s5.why.dishes.find(d => d.title === t)
+  ok(p4.length === 7 && /109 g \(Brigade says 60 g\)/.test(p4[6]) && /109 g \(Brigade says 250 g\)/.test(p4[0]) && /43\.6 g \(Brigade says 100 g\)/.test(p4[1]) && p4.slice(2, 6).every(n => /109 g \(Brigade says 150 g\)/.test(n)), `recipes of R1.11.4 (250 / 100 / 150 g): the Chef sees 7 "pending" lines, the forecast stays on the official recipes (${s4.qty} g)`)
+  ok(!pendOf(s5).length && dd('ADD SHRIMP').per_portion === 109 && dd('Fettuccine Allo Scoglio').per_portion === 43.6 && dd('Shrimp Gnocchi').per_portion === 109 && dd('Risotto Citrus And Shrimp').per_portion === 109 && dd('Ciopino').per_portion === 109 && s5.qty < s4.qty, `recipes corrected (109 g, Scoglio 43.6 g): nothing pending → shrimp ${s5.qty} g (was ${s4.qty} g)`)
+  ok(JSON.stringify(withRecipes(2).bom.filter(b => b.parent_recipe_id === '54c73352-3ec1-4c17-aa76-d70b52a78390' || b.parent_recipe_id === '8999db79-21bb-4cca-a5b2-d7d6fe0cf6e3')) === JSON.stringify(C.bom.filter(b => b.parent_recipe_id === '54c73352-3ec1-4c17-aa76-d70b52a78390' || b.parent_recipe_id === '8999db79-21bb-4cca-a5b2-d7d6fe0cf6e3')), 'batch recipes (buffet 10 lb, fritters 2.2 lb) are not touched')
   ok(sa.why.notes.some(n => /190 g/.test(n)) && !sa.why.notes.some(n => /200 g/.test(n)), 'salmon: 190 g (Chef), no 200 g anywhere')
   const bwn = T.items[0].why.notes.join(' '), bfn = bf.why.notes.join(' ')
   ok(/2\.2 lb/.test(bwn) && !/2\.1/.test(bwn + bfn) && /1\.1 lb/.test(bfn), 'branzino: 2.2 lb per fish, 1.1 lb per filet in theory (purchase only)') }
@@ -63,7 +66,7 @@ ok(CL.GATES.reassign === false, 'dynamic reassignment: design only, switched off
 // ---------- POS add-ons: counted once, nothing sold dropped silently ----------
 { const all = [...F.items, ...O.items, ...T.items], rv = k => all.find(c => c.key === k).why.review || []
   const names = k => rv(k).map(x => x.name.toLowerCase())
-  ok(rv('shrimp').some(x => x.name === 'Shrimp' && x.kind === 'adds' && x.qty > 0) && !names('shrimp').includes('add shrimp') && !names('shrimp').includes('extra shrimp'), `shrimp: "Add shrimp"/"Extra shrimp" counted (150 g); unmapped ones flagged with volume (${rv('shrimp').filter(x => x.kind === 'adds').map(x => x.name + ' ' + x.qty).join(', ')})`)
+  ok(rv('shrimp').some(x => x.name === 'Shrimp' && x.kind === 'adds' && x.qty > 0) && !names('shrimp').includes('add shrimp') && !names('shrimp').includes('extra shrimp'), `shrimp: "Add shrimp"/"Extra shrimp" counted (ADD SHRIMP recipe); unmapped ones flagged with volume (${rv('shrimp').filter(x => x.kind === 'adds').map(x => x.name + ' ' + x.qty).join(', ')})`)
   ok(rv('salmon').some(x => x.name === 'Salmon whole' && x.kind === 'adds') && !names('salmon').some(n => ['add salmon whole', 'add salmon'].includes(n)) && !names('salmon').some(n => /salmon cake/.test(n)), 'salmon: "Add salmon whole"/"Add salmon" counted; "Salmon whole" flagged; Salmon Cakes (cured salmon) not mixed in')
   ok(rv('lobster').some(x => x.kind === 'no_recipe' && /Risotto/.test(x.name)) && rv('branzino_whole').some(x => x.name === 'Porchini Mushroom Branzino'), 'seafood dishes sold without a recipe are listed for the Chef (lobster risottos, branzino specials)')
   ok(CL.modKind('Shrimp on side') === 'note' && CL.modKind('No shrimp') === 'removal' && CL.modKind('Salmon instead of shrimp') === 'sub' && CL.modKind('Side of shrimp') === 'adds' && CL.modKind('Shellfish allergy') === 'note', 'add-on kinds: adds / substitution / removal / note')

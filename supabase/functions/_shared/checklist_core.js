@@ -59,10 +59,13 @@ export function marginFor(key, iso) { const m = MARGINS[key]; if (!m) return DEF
 export const PASTA = [
   { key: 'lobster', station: 'pasta', ask: 'ready', what: 'lobsters', unit: 'pz', target: { item: '2e9405f8-7ff2-4bf2-a572-5b343c52c9d0' }, name: 'Lobster Tail', step: 1, lead: 0, lead_ok: true,
     how: 'thaw_morning', thaw_min: 15, leftovers: true, review: /lobster/i },      // Chef 16/10: thawed the same morning, about 15 minutes
-  { key: 'shrimp', station: 'pasta', ask: 'ready', what: 'shrimp', unit: 'g', target: { item: '4edc611c-e281-4c6a-85e9-f57fb27d1b61' }, name: 'Shrimp', step: 50, step_label: 'whole shrimp (50 g each)', lead: 0, lead_ok: true, review: /shrimp|prawn/i,
-    notes: ['1 shrimp = 50 g (weighed by the Chef 15/10): Add shrimp = 5 shrimp = 250 g; Fettuccine Allo Scoglio = 2 shrimp = 100 g'],
-    // Chef 16/10. The forecast reads the OFFICIAL recipes; until they say the same, the Chef sees it as pending (never patched here)
-    expect: [{ dish: 'ADD SHRIMP', per_portion: 250, label: 'Add shrimp = 5 shrimp = 250 g' }, { dish: 'Fettuccine Allo Scoglio', per_portion: 100, label: 'Fettuccine Allo Scoglio = 2 shrimp = 100 g' }] },
+  { key: 'shrimp', station: 'pasta', ask: 'ready', what: 'shrimp', unit: 'g', target: { item: '4edc611c-e281-4c6a-85e9-f57fb27d1b61' }, name: 'Shrimp', step: 21.8, piece: 'shrimp', step_label: 'whole shrimp (21.8 g each)', lead: 0, lead_ok: true, review: /shrimp|prawn/i,
+    notes: ['1 shrimp = 21.8 g thawed (the Chef weighed 15 thawed shrimp = 327 g, 16/10). Every shrimp dish and Add shrimp = 5 shrimp = 109 g; Fettuccine Allo Scoglio = 2 shrimp = 43.6 g'],
+    // Chef 16/10 (definitive, scale weighing). The forecast reads the OFFICIAL recipes; until they say the same, the Chef sees it as pending (never patched here)
+    expect: [{ dish: 'ADD SHRIMP', per_portion: 109, label: 'Add shrimp = 5 shrimp = 109 g' }, { dish: 'Fettuccine Allo Scoglio', per_portion: 43.6, label: 'Fettuccine Allo Scoglio = 2 shrimp = 43.6 g' },
+      { dish: 'Shrimp Gnocchi', per_portion: 109, label: 'Shrimp Gnocchi = 5 shrimp = 109 g' }, { dish: 'Risotto Citrus And Shrimp', per_portion: 109, label: 'Risotto Citrus = 5 shrimp = 109 g' },
+      { dish: 'Risotto Peach And Shrimp', per_portion: 109, label: 'Risotto Peach = 5 shrimp = 109 g' }, { dish: 'SHRIMP IN PINK SAUCE', per_portion: 109, label: 'Shrimp In Pink Sauce = 5 shrimp = 109 g' },
+      { dish: 'Ciopino', per_portion: 109, label: 'Ciopino = 5 shrimp = 109 g' }] },   // buffet and fritters are batches: not plated portions
   { key: 'gnocco', station: 'pasta', ask: 'ready', what: 'Gnocco dough', unit: 'g', target: { recipe: 'e4804f67-5220-4bc8-abd0-aa925ecfa06f' }, name: 'GNOCCO FRITTO DOUGH', step: 100, lead: 0, lead_ok: true, batch: true },
   { key: 'arrabbiata', station: 'pasta', ask: 'ready', what: 'Arrabbiata', unit: 'g', target: { recipe: '3252e642-e3c5-4c9b-9bba-9603cc086f92' }, name: 'ARRABBIATA', step: 500, lead: 0, lead_ok: true, batch: true },
 ]
@@ -185,10 +188,11 @@ export function stationPriorities(data) {
     // never a number when a dish that SELLS has no reliable amount per portion: it would be too low (Chef 16/10: don't invent)
     const soldMissing = rows.filter(r => r.d.per_portion == null && Object.keys(r.per).length)
     const need = f && f.forecast != null && !soldMissing.length ? f.forecast : null
-    const qty = need == null ? null : need > 0 ? Math.max(it.step, Math.ceil(need / it.step) * it.step) : 0
+    const pieces = need == null ? null : need > 0 ? Math.max(1, Math.ceil(need / it.step - 1e-9)) : 0   // -1e-9: 109 / 21.8 is 5, not 6
+    const qty = pieces == null ? null : r1(pieces * it.step)
     const card = { key: it.key, ask: it.ask, what: it.what, unit: it.unit, how: it.how || null, thaw_min: it.thaw_min || null,
       ref: need == null && day ? refFor(it, day) : null,
-      for_day: day ? { day, weekday: DOW[dow(day)], today: day === data.today } : null, need: need == null ? null : r1(need), qty,
+      for_day: day ? { day, weekday: DOW[dow(day)], today: day === data.today } : null, need: need == null ? null : r1(need), qty, pieces: it.piece && qty ? pieces : null,
       status: need == null ? 'missing' : missing.length ? 'partial' : 'estimated', level: 1,
       // Step 2 (built, switched off): the question it would ask instead of the tick
       confirm: { question: 'how_many_ready', unit: it.unit === 'pz' ? 'pz' : 'kg' },
@@ -201,6 +205,7 @@ export function stationPriorities(data) {
         notes: (it.notes || []).concat(it.thaw_min ? [`thaw ~${it.thaw_min} min: the Chef's current practice, not an HACCP validation of the method`] : []),
         round: it.step > 1 ? `rounded up to ${it.step_label || (it.unit === 'g' ? it.step + ' g' : it.step)}` : null,
         lead_note: it.lead_ok === false ? `timing to confirm by the Chef: shown as ${it.lead === 1 ? 'one day ahead' : it.lead ? it.lead + ' days ahead' : 'the same day'}` : null } }
+    if (it.piece && qty) card.why.notes.unshift(`${qty} g = ${pieces} ${it.piece} (${it.step} g each)`)
     if (it.fillet && qty != null) card.why.notes.unshift(`${qty} filets = ${Math.ceil(qty / it.fillet.per_fish)} whole fish if filleted today (${it.fillet.per_fish} filets per fish, Chef). Frozen filets already in stock are not counted.`)
     const cn = { item: new Set(), modifier: new Set() }; dishes.forEach(d => d.pos_names.forEach(n => cn[d.addon ? 'modifier' : 'item'].add(n.trim().toLowerCase())))
     card.why.review = reviewFor(it, data.sales, data.recipes, cn)
@@ -227,7 +232,7 @@ export function stationPriorities(data) {
 /** What a cook sees: the question and the tick. No Why?, no margins, no events, no technical fields. */
 export function forCook(res, level = 1) {
   return { station: res.station, station_key: res.station_key, today: res.today, service_days: res.service_days, closed_today: res.closed_today, level,
-    items: res.items.map(c => ({ key: c.key, ask: c.ask, what: c.what, unit: c.unit, how: c.how, thaw_min: c.thaw_min, ref: c.ref, for_day: c.for_day, qty: c.qty, leftovers_from: c.leftovers_from || null, level,
+    items: res.items.map(c => ({ key: c.key, ask: c.ask, what: c.what, unit: c.unit, how: c.how, thaw_min: c.thaw_min, ref: c.ref, for_day: c.for_day, qty: c.qty, pieces: c.pieces || null, leftovers_from: c.leftovers_from || null, level,
       ...(level >= 2 ? { confirm: c.confirm } : {}) })) }
 }
 
