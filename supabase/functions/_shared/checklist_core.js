@@ -107,11 +107,11 @@ export function reviewFor(it, sales, recipes, countedNames) {
     const n = String(s.name || '').trim(), k = n.toLowerCase()
     if (!it.review.test(n) || (it.review_skip && it.review_skip.test(n))) continue
     if (s.kind === 'modifier' ? countedNames.modifier.has(k) : (countedNames.item.has(k) || owned.has(k))) continue
-    const key = s.kind + '|' + k, o = g[key] || (g[key] = { name: n, source: s.kind === 'modifier' ? 'POS modifier' : 'POS menu item', kind: s.kind === 'modifier' ? modKind(n) : 'no_recipe', qty: 0, days: new Set(), last: '' })
-    o.qty += num(s.qty) || 0; o.days.add(s.date); if (s.date > o.last) o.last = s.date
+    const key = s.kind + '|' + k, o = g[key] || (g[key] = { spell: new Set(), source: s.kind === 'modifier' ? 'POS modifier' : 'POS menu item', kind: s.kind === 'modifier' ? modKind(n) : 'no_recipe', qty: 0, days: new Set(), last: '' })
+    o.spell.add(n); o.qty += num(s.qty) || 0; o.days.add(s.date); if (s.date > o.last) o.last = s.date
   }
   const rank = { no_recipe: 0, adds: 1, sub: 2, removal: 3, note: 4 }
-  return Object.values(g).map(o => ({ name: o.name, source: o.source, kind: o.kind, qty: o.qty, days: o.days.size, last: o.last }))
+  return Object.values(g).map(o => ({ name: [...o.spell].sort().join(' / '), source: o.source, kind: o.kind, qty: o.qty, days: o.days.size, last: o.last }))
     .sort((a, b) => rank[a.kind] - rank[b.kind] || b.qty - a.qty || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))   // fixed order, whatever the row order
 }
 
