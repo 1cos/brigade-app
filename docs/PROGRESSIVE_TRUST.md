@@ -67,3 +67,8 @@ A task belongs to a home station (branzino processing → Table Side), but a coo
 - **Nothing sold is dropped silently.** Every sold POS name that matches the product (lobster, shrimp, calamari, salmon, branzino) and is not counted shows in the Chef's Why? under "Sold but not counted", with its sales: dish without recipe · add-on without quantity · substitution · removal · note only. They enter the forecast only once a quantity is mapped (Chef).
 - **Branzino.** Bought whole by weight (~2.1 lb average: a purchasing figure, never a filet weight). One cleaned whole fish per Branzino Chef Style (Table Side). One fish = 2 filets. Siciliana = 1 filet per portion (`chef_per_portion`, forecast only; the official recipe is not changed). Filets for the Siciliana are asked in Oven; the whole-fish equivalent (filets ÷ 2) is shown only as information; frozen stock is not counted until Step 3.
 - **Margins for filets** (backtest 9/6→15/10): Mon–Thu +25%, Fri/Sat +30%.
+
+## Chef definitive quantities (R1.11.4, 16/10)
+- Salmon filet 190 g (the official "Salmon Filets" recipe is right). Branzino 2.2 lb per whole fish = 2 filets (1.1 lb purchase weight per filet, theory only); 1 Siciliana = 1 filet; 1 Branzino Chef Style = 1 whole fish.
+- Shrimp: 1 shrimp = 50 g; Add shrimp = 5 shrimp = 250 g; Fettuccine Allo Scoglio = 2 shrimp = 100 g. Shrimp rounded to whole shrimp (50 g).
+- One source: the forecast reads the OFFICIAL recipes. While they differ from the Chef's numbers, the Chef's Why? says "Pending in the official recipe" (`expect`). The recipe change itself is a separate, approved write (~/brigade-audit-work/b51/r114/apply).

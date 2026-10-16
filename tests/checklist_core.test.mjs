@@ -17,7 +17,7 @@ ok(!ls.tonight && !F.items.some(c => c.for_day.weekday === 'Saturday' && c.key =
 const M = run('2026-10-19'), lm = by(M, 'lobster')
 ok(lm.leftovers_from && lm.leftovers_from.weekday === 'Saturday' && lm.qty === Math.ceil(lm.why.day.mean * 1.10), `Monday: ${lm.qty} lobsters (+10%), Saturday leftovers only mentioned, NOT subtracted`)
 ok(!by(F, 'lobster').leftovers_from && !by(run('2026-10-20'), 'lobster').leftovers_from, 'leftover note only after a closed day (not Friday, not Tuesday)')
-const sh = by(F, 'shrimp'); ok(sh.ask === 'ready' && sh.for_day.today && sh.for_day.weekday === 'Friday' && sh.qty % 150 === 0 && !sh.why.lead_note && !sh.how, `shrimp: for TODAY (no more "for tomorrow"), ${sh.qty} g in 150 g portions, no thaw time`)
+const sh = by(F, 'shrimp'); ok(sh.ask === 'ready' && sh.for_day.today && sh.for_day.weekday === 'Friday' && sh.qty % 50 === 0 && !sh.why.lead_note && !sh.how, `shrimp: for TODAY, ${sh.qty} g rounded to whole shrimp (50 g), no thaw time`)
 const ar = by(F, 'arrabbiata'), gn = by(F, 'gnocco')
 ok(ar.for_day.today && ar.qty % 500 === 0 && ar.why.margin === 30 && /3150 g per batch/.test(ar.why.batch), `arrabbiata: today only, ${ar.qty} g (+30% Friday), batch info in Why only`)
 ok(gn.for_day.today && gn.qty % 100 === 0 && gn.why.dishes[0].title === 'Coccoli Toscani', `gnocco dough: today only, ${gn.qty} g`)
@@ -30,7 +30,7 @@ ok(CL.STATIONS.pasta.items.map(i => i.key).join() === 'lobster,shrimp,gnocco,arr
 const O = run('2026-10-16', { station: 'oven' }), T = run('2026-10-16', { station: 'tableside' })
 const ca = by(O, 'calamari'), sa = by(O, 'salmon')
 ok(O.station === 'Oven Station' && ca.for_day.today && ca.qty > 0 && ca.why.dishes.some(d => d.title === 'Fried calamari' && d.per_portion === 165), `calamari: ${ca.qty} g for today from Fried calamari 165 g/portion`)
-ok(sa.for_day.today && sa.unit === 'pz' && sa.what === 'salmon filets (200 g)' && sa.why.dishes.map(d => d.title + ' ' + d.per_portion + ' ' + d.source).sort().join(' | ') === 'Amalfi Salmon 1 POS menu items | Salmon Whole 1 POS modifiers', `salmon: ${sa.qty} filets of 200 g = Amalfi Salmon (1 filet) + "Add salmon whole" modifier (1 filet), nothing else`)
+ok(sa.for_day.today && sa.unit === 'pz' && sa.what === 'salmon filets (190 g)' && sa.why.dishes.map(d => d.title + ' ' + d.per_portion + ' ' + d.source).sort().join(' | ') === 'Amalfi Salmon 1 POS menu items | Salmon Whole 1 POS modifiers', `salmon: ${sa.qty} filets of 190 g = Amalfi Salmon (1 filet) + "Add salmon whole" modifier (1 filet), nothing else`)
 ok(!sa.why.dishes.some(d => /Pistachio/.test(d.title)) && sa.why.not_counted.some(x => /Salmon Pistachio: off the menu \(last POS sale 26\/06\/2026\)/.test(x)), 'Salmon Pistachio: off the menu, not added to the forecast')
 { const x = sa.why.day, mean = x.samples.reduce((a, s) => a + s.amount, 0) / x.samples.length, exp = Math.max(1, Math.ceil(mean * 1.25))
   ok(x.samples.length === 4 && x.samples.every(s => s.amount === s.portions) && sa.qty === exp, `salmon calc: last 4 Fridays ${x.samples.map(s => s.portions).join('+')} → mean ${mean} +25% → ${sa.qty} (expected ${exp})`) }
@@ -48,6 +48,18 @@ ok(T.items.length === 1 && bw.what === 'whole branzino (gutted and cleaned)' && 
 { const th = Object.fromEntries([...F.items, ...O.items, ...T.items].filter(c => c.thaw_min).map(c => [c.key, c.thaw_min]))
   ok(JSON.stringify(th) === '{"lobster":15,"salmon":20,"branzino_filet":10}', `thaw times only where the Chef gave them: ${JSON.stringify(th)} (none for shrimp, calamari, whole branzino)`) }
 ok([...F.items, ...O.items].filter(c => c.thaw_min).every(c => c.why.notes.some(n => /not an HACCP validation/.test(n))), 'thaw time labelled as current practice, not an HACCP validation (Chef view)')
+// ---------- Chef 16/10 definitive quantities: the forecast follows the OFFICIAL recipes, pending shown until they agree ----------
+{ const pend = sh.why.notes.filter(n => /^Pending in the official recipe/.test(n))
+  ok(pend.length === 2 && /Add shrimp = 5 shrimp = 250 g \(Brigade says 150 g\)/.test(pend[0]) && /Scoglio = 2 shrimp = 100 g \(Brigade says nothing\)/.test(pend[1]), 'shrimp: Add shrimp 250 g and Scoglio 100 g shown as pending while the official recipes say otherwise')
+  const P = JSON.parse(JSON.stringify(C))   // the official recipes as they will be after R1.11.4 (in memory only)
+  P.bom.find(b => b.parent_recipe_id === '8346fbee-7306-4d79-a90a-7228a7f9b766' && b.sub_recipe_id === 'dc5cf3dd-f130-46ec-a868-849110d59cdf').quantity = 250
+  P.bom.push({ parent_recipe_id: '93e0f4f1-9889-407d-841c-c225659b684c', component_type: 'RECIPE', sub_recipe_id: 'dc5cf3dd-f130-46ec-a868-849110d59cdf', item_id: null, quantity: 100, unit: 'g' })
+  const s2 = CL.stationPriorities(Object.assign({}, P, { today: '2026-10-16' })).items.find(c => c.key === 'shrimp')
+  const sco = s2.why.dishes.find(d => d.title === 'Fettuccine Allo Scoglio'), add = s2.why.dishes.find(d => d.title === 'ADD SHRIMP')
+  ok(sco && sco.per_portion === 100 && add.per_portion === 250 && !s2.why.notes.some(n => /^Pending/.test(n)) && s2.qty > sh.qty, `after the recipe fix: Add shrimp 250 g + Scoglio 100 g counted, nothing pending → ${sh.qty} g becomes ${s2.qty} g`)
+  ok(sa.why.notes.some(n => /190 g/.test(n)) && !sa.why.notes.some(n => /200 g/.test(n)), 'salmon: 190 g (Chef), no 200 g anywhere')
+  const bwn = T.items[0].why.notes.join(' '), bfn = bf.why.notes.join(' ')
+  ok(/2\.2 lb/.test(bwn) && !/2\.1/.test(bwn + bfn) && /1\.1 lb/.test(bfn), 'branzino: 2.2 lb per fish, 1.1 lb per filet in theory (purchase only)') }
 ok(CL.GATES.reassign === false, 'dynamic reassignment: design only, switched off')
 // ---------- POS add-ons: counted once, nothing sold dropped silently ----------
 { const all = [...F.items, ...O.items, ...T.items], rv = k => all.find(c => c.key === k).why.review || []

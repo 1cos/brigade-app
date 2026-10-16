@@ -59,28 +59,30 @@ export function marginFor(key, iso) { const m = MARGINS[key]; if (!m) return DEF
 export const PASTA = [
   { key: 'lobster', station: 'pasta', ask: 'ready', what: 'lobsters', unit: 'pz', target: { item: '2e9405f8-7ff2-4bf2-a572-5b343c52c9d0' }, name: 'Lobster Tail', step: 1, lead: 0, lead_ok: true,
     how: 'thaw_morning', thaw_min: 15, leftovers: true, review: /lobster/i },      // Chef 16/10: thawed the same morning, about 15 minutes
-  { key: 'shrimp', station: 'pasta', ask: 'ready', what: 'shrimp', unit: 'g', target: { item: '4edc611c-e281-4c6a-85e9-f57fb27d1b61' }, name: 'Shrimp', step: 150, step_label: 'portions of 150 g', lead: 0, lead_ok: true, review: /shrimp|prawn/i,
-    notes: ['Fettuccine Allo Scoglio (POS: 250 sold 9/6→15/10, about 14 a week): the Brigade recipe has clams and mussels only, no shrimp or calamari — Chef to confirm'] },
+  { key: 'shrimp', station: 'pasta', ask: 'ready', what: 'shrimp', unit: 'g', target: { item: '4edc611c-e281-4c6a-85e9-f57fb27d1b61' }, name: 'Shrimp', step: 50, step_label: 'whole shrimp (50 g each)', lead: 0, lead_ok: true, review: /shrimp|prawn/i,
+    notes: ['1 shrimp = 50 g (weighed by the Chef 15/10): Add shrimp = 5 shrimp = 250 g; Fettuccine Allo Scoglio = 2 shrimp = 100 g'],
+    // Chef 16/10. The forecast reads the OFFICIAL recipes; until they say the same, the Chef sees it as pending (never patched here)
+    expect: [{ dish: 'ADD SHRIMP', per_portion: 250, label: 'Add shrimp = 5 shrimp = 250 g' }, { dish: 'Fettuccine Allo Scoglio', per_portion: 100, label: 'Fettuccine Allo Scoglio = 2 shrimp = 100 g' }] },
   { key: 'gnocco', station: 'pasta', ask: 'ready', what: 'Gnocco dough', unit: 'g', target: { recipe: 'e4804f67-5220-4bc8-abd0-aa925ecfa06f' }, name: 'GNOCCO FRITTO DOUGH', step: 100, lead: 0, lead_ok: true, batch: true },
   { key: 'arrabbiata', station: 'pasta', ask: 'ready', what: 'Arrabbiata', unit: 'g', target: { recipe: '3252e642-e3c5-4c9b-9bba-9603cc086f92' }, name: 'ARRABBIATA', step: 500, lead: 0, lead_ok: true, batch: true },
 ]
 export const OVEN = [
   { key: 'calamari', station: 'oven', ask: 'ready', what: 'calamari', unit: 'g', target: { item: 'f1224e5b-8bc4-43c2-9d32-02a851a8e363' }, name: 'Calamari', step: 500, lead: 0, lead_ok: true, review: /calamar|squid/i },
-  { key: 'salmon', station: 'oven', ask: 'ready', what: 'salmon filets (200 g)', unit: 'pz', target: { recipe: 'c2fe373a-e589-4208-82ff-8277578e7343' }, name: 'Thaw Salmon', step: 1, lead: 0, lead_ok: true,
+  { key: 'salmon', station: 'oven', ask: 'ready', what: 'salmon filets (190 g)', unit: 'pz', target: { recipe: 'c2fe373a-e589-4208-82ff-8277578e7343' }, name: 'Thaw Salmon', step: 1, lead: 0, lead_ok: true,
     thaw_min: 20, as_modifier: ['78d90bc9-574f-4dd7-9493-2b56b9682336'], review: /salmon/i, review_skip: /salmon cake|salmon sauce|salmon aioli/i,
     not_counted: ['Salmon Pistachio: off the menu (last POS sale 26/06/2026)'],
-    notes: ['1 Amalfi Salmon = 1 filet of 200 g (Chef). Brigade sub-recipe "Salmon Filets" says 190 g: to align in the official recipe (separate OK)'] },
+    notes: ['1 Amalfi Salmon = 1 filet of 190 g (Chef 16/10, as the official "Salmon Filets" recipe)'] },
   { key: 'branzino_filet', station: 'oven', ask: 'ready', what: 'branzino filets for the Siciliana', unit: 'pz', target: { recipe: 'f7f46c56-a865-4ea3-9514-869e7a3a1226' }, name: 'Filet Branzino (frozen)', step: 1, lead: 0, lead_ok: true,
     thaw_min: 10, ref: { weekday: [5, 7], 5: [10, 10], 6: [10, 10] },   // Chef 16/10: about 5–7 on quiet days, about 10 at the weekend (comparison only now)
     // Chef 16/10: ONE filet per Siciliana. Brigade's "Siciliana cartoccio" has 1 filet but no yield, so the walk gives no amount;
     // this fills that one gap for the forecast only (the official recipe is not changed).
     chef_per_portion: { '445b2309-6da9-4b77-8163-d1c875ec53f0': { qty: 1, why: 'Chef 16/10: 1 filet per Siciliana' } },
     fillet: { per_fish: 2 },                                              // Chef 16/10: one whole fish gives TWO filets
-    notes: ['Filets come from Table Side already cleaned, wrapped and frozen'] },
+    notes: ['Filets come from Table Side already cleaned, wrapped and frozen', 'Purchase weight per filet: 1.1 lb in theory (a 2.2 lb fish gives 2 filets) — never used as a filet weight'] },
 ]
 export const TABLESIDE = [
   { key: 'branzino_whole', station: 'tableside', ask: 'ready', what: 'whole branzino (gutted and cleaned)', unit: 'pz', target: { recipe: '5b06254f-7679-4686-96fc-9fe993c923d2' }, name: 'Branzino Tableside', step: 1, lead: 0, lead_ok: true, review: /branzino|sea ?bass/i,
-    notes: ['Purchased whole by weight, about 2.1 lb per fish on average (Chef): a purchasing figure, not a filet weight'] },
+    notes: ['Purchased whole by weight, about 2.2 lb per fish on average (Chef 16/10): a purchasing figure, not a filet weight. One Branzino Chef Style = one whole fish'] },
 ]
 export const STATIONS = Object.freeze({
   pasta: { name: 'Pasta Station', items: PASTA },
@@ -202,6 +204,8 @@ export function stationPriorities(data) {
     if (it.fillet && qty != null) card.why.notes.unshift(`${qty} filets = ${Math.ceil(qty / it.fillet.per_fish)} whole fish if filleted today (${it.fillet.per_fish} filets per fish, Chef). Frozen filets already in stock are not counted.`)
     const cn = { item: new Set(), modifier: new Set() }; dishes.forEach(d => d.pos_names.forEach(n => cn[d.addon ? 'modifier' : 'item'].add(n.trim().toLowerCase())))
     card.why.review = reviewFor(it, data.sales, data.recipes, cn)
+    for (const e of it.expect || []) { const d = dishes.find(x => x.title === e.dish)
+      if (!d || d.per_portion == null || Math.abs(d.per_portion - e.per_portion) > 0.01) card.why.notes.push(`Pending in the official recipe: ${e.label} (Brigade says ${d && d.per_portion != null ? r1(d.per_portion) + ' ' + d.unit : 'nothing'}) — the forecast uses the official recipe`) }
     if (it.batch) {
       const y = Y[it.target.recipe], g = y && y.yield_dim === 'mass' ? num(y.yield_qty) : null
       card.why.batch = g ? `recipe yield (${it.name}): ${g} g per batch` : 'batch size missing in the recipe yield'
