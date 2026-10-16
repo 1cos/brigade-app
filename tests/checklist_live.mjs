@@ -10,6 +10,9 @@ const TOK = { chef: fs.readFileSync(tc, 'utf8').trim(), staff: fs.readFileSync(t
 const API = 'https://ydqmumpytgrlceuinoqt.supabase.co/functions/v1/brigade-app-api'
 let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++ }
 async function call(who, op, body = {}) { const t0 = Date.now(); const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(who ? { Authorization: 'Bearer ' + TOK[who] } : {}) }, body: JSON.stringify({ op, ...body }) }); let j = null; try { j = await r.json() } catch (e) {}; return { status: r.status, j, ms: Date.now() - t0 } }
+// the server reads the 42 days before the day it simulates: the expected result uses the same window (from the full dump)
+const ALL = (() => { const j = JSON.parse(fs.readFileSync(`${process.env.HOME}/brigade-audit-work/b52/data/k_sales_daily_all.json`, 'utf8')); return (j.rows || j).map(s => ({ date: s.date, kind: s.kind, name: s.name, qty: Number(s.qty) })) })()
+const win = d => { const since = new Date(Date.parse(d + 'T12:00:00Z') - 42 * 86400000).toISOString().slice(0, 10); return ALL.filter(s => s.date >= since) }
 const C = loadC(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
 let r = await call(null, 'ping'); ok(r.j.build === 'api-r1.11.3-addons', `ping: ${r.j.build}`)
 r = await call(null, 'smart_checklist'); ok(r.status === 401, 'no session → 401')
@@ -20,14 +23,14 @@ const strip = x => JSON.parse(JSON.stringify(x, (k, v) => typeof v === 'number' 
 for (const day of [null, '2026-10-09', '2026-10-10']) {
   const g = await call('chef', 'smart_checklist', day ? { station: 'pasta', day } : { station: 'pasta' })
   const d = day || today
-  const e = stationPriorities(Object.assign({}, C, { today: d, sales: C.sales.filter(s => s.date < d), openDates: C.openDates.filter(x => x < d), salesAll: day ? C.sales : null }))
+  const e = stationPriorities(Object.assign({}, C, { today: d, sales: win(d).filter(s => s.date < d), openDates: C.openDates.filter(x => x < d), salesAll: day ? win(d) : null }))
   // events come from the live table for the next 7 days of THAT day: compare items only when the dump covers it
   const same = g.status === 200 && JSON.stringify(strip(g.j.items)) === JSON.stringify(strip(e.items))
   if (!same && g.status === 200) g.j.items.forEach((c, i) => { if (JSON.stringify(strip(c)) !== JSON.stringify(strip(e.items[i]))) console.log('   diff', c.key, JSON.stringify(strip(c)).slice(0, 300), '\n   exp ', JSON.stringify(strip(e.items[i])).slice(0, 300)) })
   ok(same, `${day ? 'past day ' + day : 'today ' + today}: live = engine on the data just read (${g.ms} ms) · ${g.j.items.map(c => `${c.key} ${c.qty} for ${c.for_day.weekday} +${c.why.margin}%${c.actual != null ? ' (sold ' + c.actual + ')' : ''}`).join(', ')}`)
 }
 for (const st of ['oven', 'tableside']) {
-  const g = await call('chef', 'smart_checklist', { station: st }), e = stationPriorities(Object.assign({}, C, { station: st, today, sales: C.sales.filter(s => s.date < today), openDates: C.openDates.filter(x => x < today) }))
+  const g = await call('chef', 'smart_checklist', { station: st }), e = stationPriorities(Object.assign({}, C, { station: st, today, sales: win(today).filter(s => s.date < today), openDates: C.openDates.filter(x => x < today) }))
   ok(g.status === 200 && JSON.stringify(strip(g.j.items)) === JSON.stringify(strip(e.items)), `${st} today: live = engine (${g.j.items.map(c => `${c.key} ${c.qty}`).join(', ')})`)
 }
 // published site, WebKit on an iPhone screen

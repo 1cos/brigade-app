@@ -112,7 +112,7 @@ export function reviewFor(it, sales, recipes, countedNames) {
   }
   const rank = { no_recipe: 0, adds: 1, sub: 2, removal: 3, note: 4 }
   return Object.values(g).map(o => ({ name: o.name, source: o.source, kind: o.kind, qty: o.qty, days: o.days.size, last: o.last }))
-    .sort((a, b) => rank[a.kind] - rank[b.kind] || b.qty - a.qty)
+    .sort((a, b) => rank[a.kind] - rank[b.kind] || b.qty - a.qty || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))   // fixed order, whatever the row order
 }
 
 /** Amount per portion of each dish that uses a target (ingredient or sub-recipe), via the Knowledge walk. */
