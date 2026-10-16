@@ -306,7 +306,7 @@ SCREENS.office = { title: () => t('w_office'), c: '--office', render() {
   if (!isChef()) return `<div class="page">${top}<p class="note">${t('chef_only')}</p></div>`;
   const d = need('office', null, 5 * 60000);
   if (!d) return `<div class="page">${top}${waiting('office')}</div>`;
-  const comp = window.KitchenUI ? window.KitchenUI.completeRow(need('completeness', null, 5 * 60000)) : '';
+  const comp = window.KitchenUI ? window.KitchenUI.completeRow(need('completeness', null, 5 * 60000)) + window.KitchenUI.gapsRow() : '';
   return `<div class="page" style="--c:var(--office)">${top}${window.OfficeUI.home(d, ICON, comp)}</div>`;
 } };
 /* one decision, opened straight from My Shift or the Ufficio */
@@ -460,6 +460,7 @@ const A = {
   openIng(el) { openTab('ing', el.dataset.id, { s: 'ing', p: { id: el.dataset.id } }); },
   openIngs() { openTab('ings', 'all', { s: 'ings', p: {} }); },
   openComplete() { openTab('complete', 'all', { s: 'complete', p: {} }); },
+  openGaps() { openTab('kgaps', 'all', { s: 'kgaps', p: {} }); },
   kMore(el) { cur().p = Object.assign(cur().p || {}, { [el.dataset.k]: 1 }); render(true); },
   openDecision(el) { openTab('decision', el.dataset.key, { s: 'decision', p: { key: el.dataset.key } }); },
   ofAll() { remember(); stack().push({ s: 'decisions', p: { scope: 'all' } }); render(); },

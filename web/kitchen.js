@@ -33,6 +33,31 @@
     k_fix_procedure: ['To complete: the procedure is missing', 'Da completare: manca il procedimento', 'Por completar: falta el procedimiento'],
     k_fix_portions: ['To complete: portions per batch not set', 'Da completare: porzioni per lotto non impostate', 'Por completar: porciones por lote sin definir'],
     k_fix_edit: ['Edit (test copy)', 'Modifica (copia di prova)', 'Editar (copia de prueba)'], k_fix_photo_where: ['Photos are added in Brigade.', 'Le foto si aggiungono in Brigade.', 'Las fotos se añaden en Brigade.'],
+    // Knowledge Engine (B-51 phase 1)
+    kn_v: ['Verified', 'Verificato', 'Verificado'], kn_e: ['Estimated', 'Stima', 'Estimado'], kn_m: ['Missing', 'Manca', 'Falta'],
+    kn_buy: ['Buying', 'Acquisto', 'Compra'], kn_pack: ['Pack', 'Confezione', 'Empaque'], kn_pack_price: ['Pack price', 'Prezzo confezione', 'Precio del empaque'],
+    kn_each: ['Price each', 'Prezzo al pezzo', 'Precio por pieza'], kn_cost_price: ['Price used for cost', 'Prezzo usato per il costo', 'Precio usado para el costo'],
+    kn_per_g: ['per 100 g', 'per 100 g', 'por 100 g'], kn_conv: ['Conversions', 'Conversioni', 'Conversiones'], kn_piece: ['One piece', 'Un pezzo', 'Una pieza'], kn_density: ['Density', 'Densità', 'Densidad'],
+    kn_recipes: ['In recipes', 'Nelle ricette', 'En recetas'], kn_lot: ['per batch', 'per lotto', 'por lote'], kn_portion: ['per portion', 'a porzione', 'por porción'],
+    kn_dishes: ['Dishes sold · last {n} days', 'Piatti venduti · ultimi {n} giorni', 'Platos vendidos · últimos {n} días'], kn_sold: ['{n} sold', '{n} venduti', '{n} vendidos'],
+    kn_use: ['Use and purchases · last {n} days', 'Consumo e acquisti · ultimi {n} giorni', 'Consumo y compras · últimos {n} días'],
+    kn_theo: ['Used, from sales × recipes', 'Usato, da vendite × ricette', 'Usado, de ventas × recetas'], kn_bought: ['Bought, from invoices', 'Comprato, da fatture', 'Comprado, de facturas'],
+    kn_stock: ['Stock', 'Scorta', 'Stock'], kn_inv: ['Recent invoices', 'Ultime fatture', 'Últimas facturas'], kn_no_number: ['no number', 'senza numero', 'sin número'],
+    kn_amount: ['= {q}', '= {q}', '= {q}'], kn_policy: ['Cost rule', 'Regola di costo', 'Regla de costo'], kn_nodish: ['No dish that uses it has a POS name.', 'Nessun piatto che lo usa ha un nome POS.', 'Ningún plato que lo usa tiene nombre POS.'],
+    kn_ro: ['Read only. Every value shows where it comes from; nothing is filled in by guess.', 'Sola lettura. Ogni valore dice da dove viene; niente è riempito a caso.', 'Solo lectura. Cada valor dice de dónde viene; nada se rellena adivinando.'],
+    kn_gaps: ['Ingredients to complete', 'Ingredienti da completare', 'Ingredientes por completar'], kn_gaps_sub: ['Packs, weights, vendors, prices, POS links', 'Confezioni, pesi, fornitori, prezzi, collegamenti POS', 'Empaques, pesos, proveedores, precios, enlaces POS'],
+    kn_g_no_vendor: ['Used in recipes, no vendor', 'Usati nelle ricette, senza fornitore', 'Usados en recetas, sin proveedor'],
+    kn_g_pack_unclear: ['Pack not readable as a number', 'Confezione non leggibile come numero', 'Empaque no legible como número'],
+    kn_g_unit_mismatch: ['Purchase unit does not match the pack', 'Unità d\'acquisto diversa dalla confezione', 'Unidad de compra distinta del empaque'],
+    kn_g_piece_estimate: ['Piece weight present, not approved', 'Peso a pezzo presente, non approvato', 'Peso por pieza presente, no aprobado'],
+    kn_g_piece_missing: ['Used in pieces, no piece weight', 'Usati a pezzi, senza peso a pezzo', 'Usados por pieza, sin peso'],
+    kn_g_density_missing: ['Used by volume, no density', 'Usati a volume, senza densità', 'Usados por volumen, sin densidad'],
+    kn_g_price_missing: ['Vendor present, no usable price', 'Fornitore presente, nessun prezzo usabile', 'Proveedor presente, sin precio usable'],
+    kn_g_inv: ['Invoice lines without ingredient · last 60 days', 'Righe di fattura senza ingrediente · ultimi 60 giorni', 'Líneas de factura sin ingrediente · últimos 60 días'],
+    kn_g_nonum: ['{n} invoice lines have no number on the line (the number is often in the original document).', '{n} righe di fattura non hanno il numero sulla riga (spesso è nel documento originale).', '{n} líneas de factura no tienen número en la línea (a menudo está en el documento original).'],
+    kn_g_pos: ['POS dishes without a recipe · last {n} days', 'Piatti POS senza ricetta · ultimi {n} giorni', 'Platos POS sin receta · últimos {n} días'],
+    kn_g_pos_sub: ['{u} of {t} portions sold', '{u} di {t} porzioni vendute', '{u} de {t} porciones vendidas'],
+    kn_g_ro: ['Nothing here is changed by the app. Fixes need the Chef\'s OK, one at a time.', 'L\'app qui non cambia niente. Le correzioni richiedono l\'OK dello Chef, una alla volta.', 'Aquí la app no cambia nada. Las correcciones requieren el OK del Chef, una a la vez.'],
     k_c_ro: ['Add photos and procedures in Brigade.', 'Foto e procedimenti si aggiungono in Brigade.', 'Fotos y procedimientos se añaden en Brigade.'],
   });
   const BRIGADE_URL = 'https://1cos.github.io/back-of-house/';
@@ -57,19 +82,62 @@
         ${shown.length < list.length ? `<button class="more" data-a="kMore" data-k="all">${t('k_show_all', { n: list.length })}</button>` : ''}</div>
         ${roNote('k_ro')}</div>`;
     }, search: true },
-    ing: { title: p => { const d = H.peek('ingredient', { id: p.id }); return d ? d.ingredient.name : (p.name || t('k_ing')); }, c: '--rest', render(p) {
-      const { esc } = H, d = H.need('ingredient', { id: p.id }, 10 * 60000);
-      if (!d) return `<div class="page">${H.backBtn()}${H.waiting('ingredient')}</div>`;
+    ing: { title: p => { const d = H.peek('knowledge', { id: p.id }); return d ? d.ingredient.name : (p.name || t('k_ing')); }, c: '--rest', render(p) {
+      const { esc } = H, d = H.need('knowledge', { id: p.id }, 10 * 60000);
+      if (!d) return `<div class="page">${H.backBtn()}${H.waiting('knowledge')}</div>`;
       const i = d.ingredient, sub = local(i);
-      const facts = [i.base_unit && `<span>${t('k_base_unit')} <b>${esc(i.base_unit)}</b></span>`, i.measure_type && `<span>${t('k_measured')} <b>${esc(t('k_m_' + i.measure_type) === 'k_m_' + i.measure_type ? i.measure_type : t('k_m_' + i.measure_type))}</b></span>`,
-        i.avg_unit_weight_g && `<span>${t('k_each')} <b>${fmt(i.avg_unit_weight_g)} g</b></span>`, i.yield_factor && `<span>${t('k_yield')} <b>${fmt(i.yield_factor)}</b></span>`, !i.active && `<span class="wtx">${t('k_inactive')}</span>`].filter(Boolean).join('');
-      const vend = d.can_price ? `<section><h2>${t('k_vend_prices')}</h2><div class="list">${(d.vendors || []).map(v => `<div class="row"><span class="main"><div class="name">${esc(v.vendor)}${v.sku ? ` <span class="muted" style="font-size:14px">#${esc(v.sku)}</span>` : ''}</div><div class="meta">${[v.pack ? esc(v.pack) : '', v.last_invoice_date ? t('k_last_inv', { d: H.shortDay(v.last_invoice_date) }) : '', v.price_per_100g != null ? money(v.price_per_100g) + '/100 g' : '', v.price_per_each != null ? t('k_each_price', { p: money(v.price_per_each) }) : ''].filter(Boolean).join(' · ')}</div>${v.do_not_order ? `<div class="meta wtx">${t('k_dno')}${v.do_not_order_reason ? ': ' + esc(v.do_not_order_reason) : ''}</div>` : ''}</span><span class="qty num" style="font-size:20px">${money(v.unit_price)}</span></div>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('k_no_vend')}</div></span></div>`}</div></section>` : '';
+      const st = x => x ? `<span class="kn ${x.s === 'verified' ? 'v' : x.s === 'estimated' ? 'e' : 'm'}">${t(x.s === 'verified' ? 'kn_v' : x.s === 'estimated' ? 'kn_e' : 'kn_m')}</span>` : '';
+      const src = x => x && (x.src || x.why) ? `<div class="meta">${esc([x.src, x.why].filter(Boolean).join(' · '))}</div>` : '';
+      const kv = (label, val, x, extra) => `<div class="row kvr"><span class="main"><div class="name">${esc(label)}</div>${src(x)}${extra || ''}</span><span class="right"><b class="num">${val == null || val === '' ? '—' : esc(String(val))}</b>${st(x)}</span></div>`;
+      const sect = (h, body, n) => body ? `<section><div class="chap"><h2>${esc(h)}</h2><span>${n || ''}</span></div><div class="list">${body}</div></section>` : '';
+      const q = (v, u) => v == null ? null : `${fmt(v)} ${u || ''}`.trim();
+      // buying (Chef only: the server sends vendors, invoices and prices only to the Chef)
+      const buy = (d.vendors_k || []).map(v => `<div class="row kvr kvstack"><span class="main"><div class="name">${esc(v.vendor)}${v.sku ? ` <span class="muted" style="font-size:14px">#${esc(v.sku)}</span>` : ''}</div>
+          <div class="kvvals"><span>${t('kn_pack')} <b class="num">${esc(v.pack.v || v.pack_text || '—')}</b>${st(v.pack)}</span>${v.unit_price != null ? `<span>${t('kn_pack_price')} <b class="num">${money(v.unit_price)}</b></span>` : ''}${v.price_each ? `<span>${t('kn_each')} <b class="num">${money(v.price_each.v)}</b>${st(v.price_each)}</span>` : ''}</div>
+          <div class="meta">${esc([v.pack_text && v.pack.v ? `“${v.pack_text}”` : '', v.pack.why, v.price_each ? v.price_each.src : '', v.last_invoice_date ? t('k_last_inv', { d: H.shortDay(v.last_invoice_date) }) : ''].filter(Boolean).join(' · '))}</div>
+          ${v.checks.map(c => `<div class="meta knw">${esc(c.msg)}</div>`).join('')}${v.do_not_order ? `<div class="meta wtx">${t('k_dno')}</div>` : ''}</span></div>`).join('')
+      // price used for cost (FC05): the price each and the per-gram price can have different trust, so two rows
+      const pr = d.price ? (d.price.per_each != null ? kv(t('kn_cost_price') + ' · ' + t('kn_each').toLowerCase(), money(d.price.per_each), Object.assign({}, d.price, { why: null })) : '')
+        + (d.price.per_g != null ? kv(t('kn_cost_price') + ' · ' + t('kn_per_g'), money(d.price.per_g * 100), d.price.per_g_status === 'estimated' ? { s: 'estimated', src: d.price.src, why: 'rests on a piece weight that is not approved' } : d.price) : '')
+        + (d.price.per_each == null && d.price.per_g == null ? kv(t('kn_cost_price'), d.price.per_ml != null ? money(d.price.per_ml) + '/ml' : null, d.price) : '') : ''
+      const pol = d.policy ? kv(t('kn_policy'), d.policy.v, d.policy) : ''
+      const cv = d.conversions, conv = [(cv.needed.piece || cv.piece_g.v != null) ? kv(t('kn_piece'), q(cv.piece_g.v, 'g'), cv.piece_g) : '', (cv.needed.volume || cv.density.v != null) ? kv(t('kn_density'), cv.density.v != null ? cv.density.v + ' g/ml' : null, cv.density) : ''].join('')
+      const recs = d.recipes.map(r => `<button class="row kvr" data-a="openRecipe" data-r="${esc(r.recipe_id)}"><span class="main"><div class="name">${esc(r.title)}</div>${r.unit_ok ? `<div class="meta wtx">${esc(r.unit_ok)}</div>` : src(r.per_portion.s !== 'verified' ? r.per_portion : null)}</span>
+        <span class="right kvcol"><span><b class="num">${esc(q(r.qty, r.unit) || '—')}</b> <span class="muted">${t('kn_lot')}</span></span><span><b class="num">${esc(q(r.per_portion.v, r.unit) || '—')}</b> <span class="muted">${t('kn_portion')}</span>${r.per_portion.s !== 'verified' ? st(r.per_portion) : ''}</span></span><span class="chev">›</span></button>`).join('')
+      const dishes = d.dishes.filter(x => x.sold).concat(d.dishes.filter(x => !x.sold)).map(x => `<button class="row kvr" data-a="openRecipe" data-r="${esc(x.recipe_id)}"><span class="main"><div class="name">${esc(x.title)}</div><div class="meta">${esc(x.paths[0] || '')}${x.why.length ? ' · ' + esc(x.why[0]) : ''}</div></span>
+        <span class="right kvcol"><span><b class="num">${t('kn_sold', { n: fmt(x.sold) })}</b></span><span><b class="num">${esc(q(x.per_portion, x.unit) || '—')}</b> <span class="muted">${t('kn_portion')}</span>${x.status !== 'verified' ? st({ s: x.status }) : ''}</span></span><span class="chev">›</span></button>`).join('')
+      const use = kv(t('kn_theo'), d.theoretical.v != null ? (d.theoretical.partial ? '≥ ' : '') + q(d.theoretical.v, d.theoretical.unit) : null, d.theoretical) + (d.bought ? kv(t('kn_bought'), d.bought.v != null ? q(d.bought.v, d.bought.unit) : null, d.bought) : '')
+      const invAll = d.invoices || [], invShown = p.m_inv ? invAll : invAll.slice(0, 3)
+      const inv = invShown.map(l => `<div class="row kvr"><span class="main"><div class="name">${H.shortDay(l.date)} · ${esc(l.number || t('kn_no_number'))}</div><div class="meta">${esc([l.vendor, l.description, l.number_src === 'original document' ? 'no. from the original document' : ''].filter(Boolean).join(' · '))}</div>
+        <div class="meta">${esc(`${fmt(l.qty)} ${l.unit || ''} · ${l.pack || '—'}`)}${l.amount ? ' ' + esc(t('kn_amount', { q: q(l.amount.qty, l.amount.unit) })) + ` <span class="muted">(${esc(l.amount.rule)})</span>` : l.amount_why ? ` · <span class="wtx">${esc(l.amount_why)}</span>` : ''}</div></span>
+        <span class="right"><b class="num">${money(l.total)}</b></span></div>`).join('') + (invShown.length < invAll.length ? `<button class="more" data-a="kMore" data-k="m_inv">${t('k_show_all', { n: invAll.length })}</button>` : '')
       return `<div class="page" style="--c:var(--rest)">${H.backBtn()}${H.head(t('k_ing') + (i.category ? ' · ' + esc(H.cat(i.category)) : ''), esc(i.name), sub ? esc(sub) : '')}
-        ${facts ? `<div class="facts">${facts}</div>` : ''}${i.notes ? `<p class="note">${esc(i.notes)}</p>` : ''}
-        ${vend}
-        <section><div class="chap"><h2>${t('k_used_in')}</h2><span>${d.used_in.length || ''}</span></div><div class="list">${d.used_in.map(r => `<button class="row" data-a="openRecipe" data-r="${esc(r.id)}"><span class="main"><div class="name">${esc(r.title)}</div></span><span class="chev">›</span></button>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('k_not_used')}</div></span></div>`}</div></section>
-        ${d.preps.length ? `<section><h2>${t('k_prep')}</h2><div class="list">${d.preps.map(x => `<button class="row" data-a="openPrep" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div></span><span class="chev">›</span></button>`).join('')}</div></section>` : ''}
-        ${roNote('k_ro')}</div>`;
+        ${i.notes ? `<p class="note">${esc(i.notes)}</p>` : ''}
+        ${d.can_price ? sect(t('kn_buy'), (buy || `<div class="row"><span class="main"><div class="meta">${t('k_no_vend')}</div></span></div>`) + pr + pol) : pol ? sect(t('kn_policy'), pol) : ''}
+        ${sect(t('kn_conv'), conv)}
+        ${sect(t('kn_recipes'), recs || `<div class="row"><span class="main"><div class="meta">${t('k_not_used')}</div></span></div>`, d.recipes.length)}
+        ${d.recipes.length ? sect(t('kn_dishes', { n: d.days }), dishes || `<div class="row"><span class="main"><div class="meta">${t('kn_nodish')}</div></span></div>`, d.dishes.length) : ''}
+        ${sect(t('kn_use', { n: d.days }), use)}
+        ${sect(t('kn_stock'), kv(t('kn_stock'), d.stock.v != null ? q(d.stock.v, d.stock.unit) : null, d.stock))}
+        ${d.preps.length ? sect(t('k_prep'), d.preps.map(x => `<button class="row" data-a="openPrep" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div></span><span class="chev">›</span></button>`).join('')) : ''}
+        ${inv ? sect(t('kn_inv'), inv, (d.invoices || []).length) : ''}
+        <p class="note" style="font-size:14px">${t('kn_ro')}</p>${roNote('k_ro')}</div>`;
+    } },
+    kgaps: { title: () => t('kn_gaps'), c: '--office', render(p) {
+      const { esc } = H;
+      if (!H.isChef()) return `<div class="page">${H.backBtn()}<p class="note">${t('chef_only')}</p></div>`;
+      const d = H.need('knowledge_gaps', null, 10 * 60000);
+      if (!d) return `<div class="page">${H.backBtn()}${H.waiting('knowledge_gaps')}</div>`;
+      const sec = (k, l, rowf, sub) => { if (!l.length) return '';
+        return `<section><div class="chap"><h2>${esc(t('kn_g_' + k, { n: d.days }))}</h2><span>${l.length}</span></div>${sub ? `<p class="note" style="margin:0 0 8px">${esc(sub)}</p>` : ''}<div class="list">${p['m_' + k] ? l.map(rowf).join('') : `<button class="more" data-a="kMore" data-k="m_${k}">${t('k_show', { n: l.length })}</button>`}</div></section>`; };
+      const ingRow = x => `<button class="row" data-a="openIng" data-id="${esc(x.id)}"><span class="main"><div class="name" style="font-weight:500;font-size:17px">${esc(x.name)}</div><div class="meta">${esc(x.note)}</div></span><span class="chev">›</span></button>`;
+      const L = d.lists;
+      return `<div class="page" style="--c:var(--office)">${H.backBtn()}${H.head(t('w_office'), t('kn_gaps'), t('kn_gaps_sub'))}
+        ${['unit_mismatch', 'piece_estimate', 'pack_unclear', 'price_missing', 'piece_missing', 'density_missing', 'no_vendor'].map(k => sec(k, L[k], ingRow)).join('')}
+        ${sec('pos', d.pos_unmapped, x => `<div class="row"><span class="main"><div class="name" style="font-weight:500;font-size:17px">${esc(x.name)}</div></span><span class="right"><b class="num">${fmt(x.qty)}</b></span></div>`, t('kn_g_pos_sub', { u: fmt(d.pos_unmapped_qty), t: fmt(d.pos_total) }))}
+        ${sec('inv', d.invoices_unmatched, x => `<div class="row"><span class="main"><div class="name" style="font-weight:500;font-size:17px">${esc(x.raw_description || '—')}</div><div class="meta">${esc([x.vendor, x.vendor_sku ? '#' + x.vendor_sku : '', H.shortDay(x.invoice_date)].filter(Boolean).join(' · '))}</div></span></div>`)}
+        ${d.invoices_no_number ? `<p class="note">${t('kn_g_nonum', { n: d.invoices_no_number })}</p>` : ''}
+        <p class="note" style="font-size:14px">${t('kn_g_ro')}</p></div>`;
     } },
     complete: { title: () => t('k_complete'), c: '--office', render(p) {
       const { esc } = H;
@@ -94,5 +162,6 @@
   /* Ufficio row (Chef) and Recipes row (everyone) */
   const completeRow = d => d && d.total ? `<div class="list"><button class="row" data-a="openComplete"><span class="main"><div class="name">${t('k_complete')}</div><div class="meta">${t('k_complete_row', { n: d.total })}</div></span><span class="chev">›</span></button></div>` : '';
   const ingsRow = d => `<div class="list"><button class="row" data-a="openIngs"><span class="main"><div class="name">${t('k_ings')}</div><div class="meta">${d ? t('k_in_brigade', { n: d.ingredients.length }) : '…'}</div></span><span class="chev">›</span></button></div>`;
-  window.KitchenUI = { init(h) { H = h; }, screens, completeRow, ingsRow, fixBox, FOCUS };
+  const gapsRow = () => `<div class="list"><button class="row" data-a="openGaps"><span class="main"><div class="name">${t('kn_gaps')}</div><div class="meta">${t('kn_gaps_sub')}</div></span><span class="chev">›</span></button></div>`;
+  window.KitchenUI = { init(h) { H = h; }, screens, completeRow, ingsRow, gapsRow, fixBox, FOCUS };
 })();

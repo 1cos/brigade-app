@@ -4,6 +4,7 @@
 import { chromium, webkit } from '/Users/massimilianozubboli/cw-probe/node_modules/playwright-core/index.mjs'
 import fs from 'node:fs'
 import * as K from '../supabase/functions/_shared/kitchen_core.js'
+import { knowledgeCard } from '../supabase/functions/_shared/knowledge_core.js'
 const [SNAP, OUT] = process.argv.slice(2); fs.mkdirSync(OUT, { recursive: true })
 const D = JSON.parse(fs.readFileSync(SNAP))
 const ENGINE = process.env.BROWSER === 'webkit' ? 'webkit' : 'chromium', P = ENGINE === 'webkit' ? 'wk_' : ''
@@ -23,6 +24,8 @@ function api(op, b) {
     case 'completeness': return chef ? K.completeness(D.attention, D.recipes) : [403, 'forbidden']
     case 'ingredients': return { ingredients: K.ingredientList(D.ingredients, D.vendors, chef) }
     case 'ingredient': { const c = K.ingredientCard(b.id, D, chef); return c || [404, 'not_found'] }
+    // R1.8: the card is the Knowledge card (B-51), built on ingredientCard; this snapshot has no POS/invoices → those parts say Missing
+    case 'knowledge': { const c = knowledgeCard(b.id, Object.assign({}, D, { yields: [], sales: [], invoices: [], facts: null, counts: [], days: 28, since: '2026-09-17' }), chef); return c || [404, 'not_found'] }
     case 'recipe': { const r = D.recipes.find(x => x.id === b.id) || REC
       const bom = D.bom.filter(x => x.parent_recipe_id === r.id).map((x, i) => ({ bom_id: i, parent_recipe_id: r.id, quantity: 100, unit: 'g', component_type: x.component_type, item_id: x.item_id, sub_recipe_id: x.sub_recipe_id, ingredients: x.item_id ? { name: (D.ingredients.find(y => y.id === x.item_id) || {}).name } : null, recipes: null }))
       return { recipe: Object.assign({ base_servings: 1 }, r), steps: [], bom, preps: [], used_in: [], can_cost: chef } }
@@ -57,7 +60,7 @@ for (const [dev, w, h] of [['telefono', 390, 844], ['tablet', 820, 1180], ['comp
   ok(hits >= 1 && hits < 80, `${dev} · ricerca "${ING.name.slice(0, 5)}": ${hits} risultati`)
   await pg.locator(`#main button[data-a="openIng"][data-id="${ING.id}"]`).click(); await pg.waitForTimeout(500)
   const card = await pg.locator('#main').innerText()
-  ok((await H1(pg)) === ING.name && /FORNITORI E PREZZI|Fornitori e prezzi/i.test(card) && /\$\d/.test(card), `${dev} · Chef: scheda "${ING.name}" con fornitori e prezzi`)
+  ok((await H1(pg)) === ING.name && /ACQUISTO|Acquisto/i.test(card) && /\$\d/.test(card), `${dev} · Chef: scheda "${ING.name}" con acquisto e prezzi`)
   await pg.screenshot({ path: `${OUT}/${P}${dev}_2_scheda_chef.png`, fullPage: true }); await noH(pg, `${dev} scheda`)
   await pg.locator(`#main button[data-a="openRecipe"][data-r="${REC.id}"]`).click(); await pg.waitForTimeout(600)
   ok((await H1(pg)) === REC.title, `${dev} · "Usato in" apre la ricetta "${REC.title}"`)
@@ -90,7 +93,7 @@ role = 'staff'; asked.length = 0
   await pg.locator(`#main button[data-a="openIng"][data-id="${ING.id}"]`).click().catch(async () => { await pg.fill('#q', ING.name.slice(0, 5)); await pg.waitForTimeout(500); await pg.locator(`#main button[data-a="openIng"][data-id="${ING.id}"]`).click() })
   await pg.waitForTimeout(500)
   const c = await pg.locator('#main').innerText()
-  ok((await H1(pg)) === ING.name && !/\$|fornitori e prezzi/i.test(c) && /usato in/i.test(c), 'cuoco: scheda ingrediente senza prezzi né fornitori, con "Usato in"')
+  ok((await H1(pg)) === ING.name && !/\$|acquisto|fornitor/i.test(c) && /nelle ricette/i.test(c), 'cuoco: scheda ingrediente senza prezzi né fornitori, con "Nelle ricette"')
   ok(await pg.locator('button[data-a="openComplete"]').count() === 0 && !asked.some(x => /completeness|office/.test(x)), 'cuoco: niente Completezza, nessuna richiesta all\'Ufficio')
   await pg.screenshot({ path: `${OUT}/${P}cuoco_scheda.png`, fullPage: true })
   await pg.context().close() }

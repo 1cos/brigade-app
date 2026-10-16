@@ -281,3 +281,11 @@ export async function mreDecide(u: U, b: any) {
     return { ok: true }
   })
 }
+
+/** Knowledge Engine (B-51): live facts (FC05 price, approved conversions, policy) of some ingredients — read only,
+ *  same helper the lab already uses, under role mre_app (no right on any Brigade table). */
+export async function ingredientFacts(ids: string[]) {
+  const ok = ids.filter(isUuid)
+  if (!ok.length) return {}
+  return lab(async (tx: any) => { const [{ f }] = await tx`select mre.ingredient_facts(string_to_array(${ok.join(',')}, ',')::uuid[]) as f`; return f || {} })
+}
