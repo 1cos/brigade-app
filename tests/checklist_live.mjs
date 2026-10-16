@@ -26,6 +26,10 @@ for (const day of [null, '2026-10-09', '2026-10-10']) {
   if (!same && g.status === 200) g.j.items.forEach((c, i) => { if (JSON.stringify(strip(c)) !== JSON.stringify(strip(e.items[i]))) console.log('   diff', c.key, JSON.stringify(strip(c)).slice(0, 300), '\n   exp ', JSON.stringify(strip(e.items[i])).slice(0, 300)) })
   ok(same, `${day ? 'past day ' + day : 'today ' + today}: live = engine on the data just read (${g.ms} ms) · ${g.j.items.map(c => `${c.key} ${c.qty} for ${c.for_day.weekday} +${c.why.margin}%${c.actual != null ? ' (sold ' + c.actual + ')' : ''}`).join(', ')}`)
 }
+for (const st of ['oven', 'tableside']) {
+  const g = await call('chef', 'smart_checklist', { station: st }), e = stationPriorities(Object.assign({}, C, { station: st, today, sales: C.sales.filter(s => s.date < today), openDates: C.openDates.filter(x => x < today) }))
+  ok(g.status === 200 && JSON.stringify(strip(g.j.items)) === JSON.stringify(strip(e.items)), `${st} today: live = engine (${g.j.items.map(c => `${c.key} ${c.qty}`).join(', ')})`)
+}
 // published site, WebKit on an iPhone screen
 const b = await webkit.launch()
 const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1' })
@@ -34,10 +38,10 @@ pg.on('pageerror', e => ok(false, 'errore JS: ' + e.message))
 pg.on('request', q => { if (/brigade-app-api/.test(q.url())) { try { ops.push(JSON.parse(q.postData() || '{}').op) } catch (e) {} } })
 await pg.addInitScript(t => { localStorage.setItem('brigade-app-token', t); localStorage.setItem('brigade-app-lang', 'en') }, TOK.chef)
 await pg.goto('https://1cos.github.io/brigade-app/?v=' + Date.now()); await pg.waitForTimeout(4000)
-const t0 = Date.now(); await pg.click('button[data-a="openSmart"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 }); const tOpen = Date.now() - t0
+const t0 = Date.now(); await pg.click('button[data-a="openSmart"][data-v="pasta"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 }); const tOpen = Date.now() - t0
 const txt = await pg.locator('#main').innerText()
 ok((await pg.locator('#main h1').innerText()) === "Today's Checklist" && await pg.locator('#main .sc').count() === 4, `site: My Shift → Pasta Station → Today's Checklist, 4 questions in ${tOpen} ms`)
-ok(/Do we have \d+ lobsters ready for today\?/.test(txt) && /pulled for/.test(txt) && /Gnocco dough ready/.test(txt) && /Arrabbiata ready/.test(txt) && /not saved/.test(txt) && await pg.locator('#main .sc input').count() === 0, 'site: 4 questions, one tick each, no quantity to type, simulation notice')
+ok(/Do we have \d+ lobsters ready for today\?/.test(txt) && /Do we have [\d.,]+ kg shrimp ready for today\?/.test(txt) && !/tomorrow|pulled/i.test(txt) && /Gnocco dough ready/.test(txt) && /Arrabbiata ready/.test(txt) && /not saved/.test(txt) && await pg.locator('#main .sc input').count() === 0, 'site: 4 questions, one tick each, no quantity to type, simulation notice')
 await pg.screenshot({ path: `${OUT}/1_site_checklist.png` })
 await pg.locator('#main button[data-a="scDone"][data-k="lobster"]').click(); await pg.waitForTimeout(300)
 ok(/✓ Ready/.test(await pg.locator('#main .sc').first().innerText()), 'site: one tap → Ready (on this phone only)')
@@ -54,6 +58,17 @@ ok(/Really sold that day/.test(await pg.locator('#main .sc').first().innerText()
 await pg.screenshot({ path: `${OUT}/4_site_past.png` })
 ok(!ops.some(o => /^(act|mre_save|mre_publish|mre_discard|mre_production|mre_prepare)/.test(o)), `site: no write call (${[...new Set(ops)].join(', ')})`)
 const dims = await pg.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); ok(dims[0] <= dims[1], 'site: no sideways scroll')
+await pg.click('#main button[data-a="toOrigin"]'); await pg.waitForTimeout(500)
+await pg.click('button[data-a="openSmart"][data-v="oven"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 })
+const ov = await pg.locator('#main').innerText()
+ok(/calamari ready for today\?/.test(ov) && /salmon filets ready for today\?/.test(ov) && await pg.locator('#main .sc').count() === 2, 'site: Oven Station — calamari + salmon for today')
+await pg.screenshot({ path: `${OUT}/5_site_oven.png` })
+await pg.click('#main button[data-a="toOrigin"]'); await pg.waitForTimeout(500)
+await pg.click('button[data-a="openSmart"][data-v="tableside"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 })
+const tsd = await pg.locator('#main').innerText()
+ok(/Are the branzino filets ready for today\?/.test(tsd) && /No amount/.test(tsd) && /whole branzino ready for today\?/.test(tsd), 'site: Table Side — branzino filets without a number, whole branzino with a number')
+await pg.screenshot({ path: `${OUT}/6_site_tableside.png` })
+ok(!ops.some(o => /^(act|mre_save|mre_publish|mre_discard|mre_production|mre_prepare)/.test(o)), 'site: still no write call after the 3 stations')
 await b.close()
 console.log(`\nRISULTATO: ${pass} superati, ${fail} falliti`)
 process.exitCode = fail ? 1 : 0
