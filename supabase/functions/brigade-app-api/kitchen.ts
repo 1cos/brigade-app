@@ -61,8 +61,11 @@ async function pageAll(q: () => any, size = 1000) {
   return out
 }
 
-/** POS sold in the window: menu items (Food) + modifiers, summed by name. */
+/** POS sold in the window: menu items (Food) + modifiers, summed by name. Kept 10 minutes in this server instance:
+ *  the POS is imported once a day, so a card opened twice in a row does not re-read ~2.500 rows. */
+const salesCache: Record<string, { at: number; rows: any[] }> = {}
 async function salesWindow(svc: any, since: string) {
+  const c = salesCache[since]; if (c && Date.now() - c.at < 10 * 60000) return c.rows
   const [items, mods] = await Promise.all([
     pageAll(() => svc.from('pos_sales_by_item').select('menu_item,quantity').gte('sale_date', since).not('is_historical', 'is', true).eq('sales_category', 'Food').order('id')),
     pageAll(() => svc.from('pos_modifiers').select('modifier,quantity_sold').gte('sale_date', since).not('is_historical', 'is', true).order('id')),
@@ -70,21 +73,27 @@ async function salesWindow(svc: any, since: string) {
   const m: Record<string, any> = {}
   items.forEach(r => { const k = 'item|' + r.menu_item; (m[k] = m[k] || { kind: 'item', name: r.menu_item, qty: 0 }).qty += Number(r.quantity) || 0 })
   mods.forEach(r => { const k = 'modifier|' + r.modifier; (m[k] = m[k] || { kind: 'modifier', name: r.modifier, qty: 0 }).qty += Number(r.quantity_sold) || 0 })
-  return Object.values(m)
+  const rows = Object.values(m); salesCache[since] = { at: Date.now(), rows }; return rows
 }
 
 export async function knowledge(u: U, id: string, svc: any, opt: { facts?: (ids: string[]) => Promise<any>; now?: Date } = {}) {
   if (!isUuid(id)) throw new KitchenError(400, 'bad_id')
   const chef = u.role === 'chef'
   const today = opt.now || new Date(), since = dayIso(new Date(today.getTime() - KDAYS * 86400000))
-  const ing = must(await svc.from('ingredients').select(ING_COLS).eq('id', id)) as any[]
-  if (!ing.length) throw new KitchenError(404, 'not_found')
-  // recipe chain: direct lines, then the recipes that use those recipes, up to 6 levels
+  // recipe chain: direct lines, then the recipes that use those recipes (up to 6 levels), walked in memory
   const BOMC = 'parent_recipe_id,component_type,item_id,sub_recipe_id,quantity,unit'
-  const bom: any[] = await pageAll(() => svc.from('recipe_bom').select(BOMC).eq('item_id', id).order('bom_id'))
+  const [ing, direct, subLines, salesP] = await Promise.all([
+    svc.from('ingredients').select(ING_COLS).eq('id', id).then(must),
+    pageAll(() => svc.from('recipe_bom').select(BOMC).eq('item_id', id).order('bom_id')),
+    pageAll(() => svc.from('recipe_bom').select(BOMC).eq('component_type', 'RECIPE').order('bom_id')),
+    salesWindow(svc, since),
+  ]) as any[][]
+  if (!ing.length) throw new KitchenError(404, 'not_found')
+  const bom: any[] = direct.slice()
+  const bySub: Record<string, any[]> = {}; subLines.forEach(b => { (bySub[b.sub_recipe_id] = bySub[b.sub_recipe_id] || []).push(b) })
   let frontier = [...new Set(bom.map(b => b.parent_recipe_id))], seen = new Set(frontier)
   for (let d = 0; d < 6 && frontier.length; d++) {
-    const up = await inChunks(c => pageAll(() => svc.from('recipe_bom').select(BOMC).in('sub_recipe_id', c).order('bom_id')), frontier)
+    const up = frontier.flatMap(x => bySub[x] || [])
     bom.push(...up); frontier = [...new Set(up.map((b: any) => b.parent_recipe_id))].filter(x => !seen.has(x)); frontier.forEach(x => seen.add(x))
   }
   const rids = [...seen]
@@ -93,7 +102,7 @@ export async function knowledge(u: U, id: string, svc: any, opt: { facts?: (ids:
     rids.length ? inChunks(c => svc.from('recipe_yield').select('id,portions,yield_qty,yield_dim').in('id', c).then(must), rids) : [],
     svc.from('prep_tasks').select('id,name,ingredient_id').eq('ingredient_id', id).not('archived', 'is', true).then(must),
     svc.from('unit_each_weights').select('ingredient_id,avg_weight_g,source').eq('ingredient_id', id).then(must),
-    salesWindow(svc, since),
+    Promise.resolve(salesP),
     (opt.facts || ingredientFacts)([id]),
     svc.from('ingredient_vendors').select('id,ingredient_id,vendor,vendor_sku,purchase_unit,pack_description,unit_price,conversion_to_base,price_per_100g,price_per_each,last_invoice_date,do_not_order,do_not_order_reason,active').eq('ingredient_id', id).then(must),
     chef ? svc.from('vendor_item_aliases').select('ingredient_id,vendor,vendor_sku,vendor_description,confirmed_by,active').eq('ingredient_id', id).then(must) : Promise.resolve([]),
@@ -104,10 +113,12 @@ export async function knowledge(u: U, id: string, svc: any, opt: { facts?: (ids:
     ]).then(([a, b]: any[][]) => { const m: Record<string, any> = {}; [...a, ...b].forEach(l => { m[l.id] = l }); return Object.values(m).sort((x: any, y: any) => String(y.invoice_date).localeCompare(String(x.invoice_date))) }) : Promise.resolve([]),
   ]) as any[]
   const prepIds = (prep as any[]).map(p => p.id)
-  const counts = prepIds.length ? must(await svc.from('prep_stock_counts').select('prep_task_id,counted_qty,unit,counted_by,counted_at').in('prep_task_id', prepIds).order('counted_at', { ascending: false }).limit(20)) as any[] : []
   // invoice number: from the line, else from the original document (vendor_documents) — never invented
   const docIds = [...new Set((inv as any[]).filter(l => !l.invoice_number && l.import_id).map(l => l.import_id))]
-  const docs = docIds.length ? must(await svc.from('vendor_documents').select('id,document_number').in('id', docIds)) as any[] : []
+  const [counts, docs] = await Promise.all([
+    prepIds.length ? svc.from('prep_stock_counts').select('prep_task_id,counted_qty,unit,counted_by,counted_at').in('prep_task_id', prepIds).order('counted_at', { ascending: false }).limit(20).then(must) : Promise.resolve([]),
+    docIds.length ? svc.from('vendor_documents').select('id,document_number').in('id', docIds).then(must) : Promise.resolve([]),
+  ]) as any[][]
   const dn: Record<string, string> = {}; docs.forEach(d => { dn[d.id] = d.document_number })
   ;(inv as any[]).forEach(l => { l.doc_number = l.import_id ? dn[l.import_id] || null : null })
   return KN.knowledgeCard(id, { ingredients: ing, bom, recipes, yields, prep, vendors: chef ? vend : [], aliases, invoices: inv, facts: (facts as any)[id] || null,
