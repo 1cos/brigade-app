@@ -34,16 +34,20 @@ const svc = { from }
 let pass = 0, fail = 0; const ok = (c: boolean, m: string) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++ }
 const NOW = new Date('2026-10-16T15:00:00Z'), chef = { id: 1, role: 'chef' } as any, staff = { id: 38, role: 'staff' } as any
 const strip = (x: any) => JSON.parse(JSON.stringify(x, (k, v) => typeof v === 'number' ? Math.round(v * 10) / 10 : v))
-const engine = (day: string, past: boolean) => {
+const engine = (day: string, past: boolean, station = 'pasta') => {
   const since = new Date(Date.parse(day + 'T12:00:00Z') - 42 * 86400000).toISOString().slice(0, 10)
   const rows = sales.filter((s: any) => s.date >= since).map((s: any) => ({ date: s.date, kind: s.kind, name: s.name, qty: Number(s.qty) }))
   const open = [...new Set(T.pos_sales_by_item.filter(r => r.sale_date >= since).map(r => r.sale_date))].sort()
-  return CL.stationPriorities({ today: day, bom: T.recipe_bom, recipes: T.recipes, yields: T.recipe_yield, sales: rows.filter((r: any) => r.date < day), openDates: open.filter(d => d < day), salesAll: past ? rows : null, events: [] })
+  return CL.stationPriorities({ station, today: day, bom: T.recipe_bom, recipes: T.recipes, yields: T.recipe_yield, sales: rows.filter((r: any) => r.date < day), openDates: open.filter(d => d < day), salesAll: past ? rows : null, events: [] })
 }
 for (const day of [null, '2026-10-09', '2026-10-10', '2026-10-12']) {
   const g: any = await KIT.smartChecklist(chef, day ? { station: 'pasta', day } : { station: 'pasta' }, svc, { now: NOW })
   const e = engine(day || '2026-10-16', !!day)
   ok(JSON.stringify(strip(g.items)) === JSON.stringify(strip(e.items)), `Chef ${day || 'today 16/10'}: server = engine (${g.items.map((c: any) => `${c.key} ${c.qty}${c.actual != null ? ' sold ' + c.actual : ''}`).join(', ')})`)
+}
+for (const st of ['oven', 'tableside']) {
+  const g: any = await KIT.smartChecklist(chef, { station: st }, svc, { now: NOW }), e = engine('2026-10-16', false, st)
+  ok(JSON.stringify(strip(g.items)) === JSON.stringify(strip(e.items)) && g.station_key === st, `Chef ${st} today: server = engine (${g.items.map((c: any) => `${c.key} ${c.qty}`).join(', ')})`)
 }
 const g: any = await KIT.smartChecklist(chef, { station: 'pasta', level: 3, step: 2, gates: { step2: true } }, svc, { now: NOW })
 ok(g.level === 1 && g.items.every((c: any) => c.level === 1) && g.gates.step2 === false && g.gates.staffVisible === false, 'a request asking for level 2/3 or switches on still gets level 1, switches off')

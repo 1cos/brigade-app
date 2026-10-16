@@ -11,7 +11,7 @@ const API = 'https://ydqmumpytgrlceuinoqt.supabase.co/functions/v1/brigade-app-a
 let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++ }
 async function call(who, op, body = {}) { const t0 = Date.now(); const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(who ? { Authorization: 'Bearer ' + TOK[who] } : {}) }, body: JSON.stringify({ op, ...body }) }); let j = null; try { j = await r.json() } catch (e) {}; return { status: r.status, j, ms: Date.now() - t0 } }
 const C = loadC(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
-let r = await call(null, 'ping'); ok(r.j.build === 'api-r1.11-trust', `ping: ${r.j.build}`)
+let r = await call(null, 'ping'); ok(r.j.build === 'api-r1.11.1-fish', `ping: ${r.j.build}`)
 r = await call(null, 'smart_checklist'); ok(r.status === 401, 'no session → 401')
 r = await call('staff', 'smart_checklist'); ok(r.status === 403, `staff → ${r.status} (not activated for the brigade)`)
 r = await call('chef', 'smart_checklist', { station: 'pasta', level: 3, step: 2, gates: { step2: true, staffVisible: true } }); ok(r.status === 200 && r.j.level === 1 && r.j.items.every(c => c.level === 1) && !r.j.gates.step2 && !r.j.gates.staffVisible && !r.j.gates.step3, 'request asking for level 2/3 or switches on → level 1, switches off')

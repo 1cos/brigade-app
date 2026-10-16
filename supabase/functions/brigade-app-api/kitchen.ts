@@ -168,7 +168,8 @@ async function salesDaily(svc: any, since: string) {
 export async function smartChecklist(u: U, body: any, svc: any, opt: { now?: Date } = {}) {
   const chef = u.role === 'chef'
   if (!chef && !CL.GATES.staffVisible) throw new KitchenError(403, 'forbidden')   // simulation: Chef only until a new GO
-  if (body?.station && body.station !== 'pasta') throw new KitchenError(400, 'bad_station')
+  const station = body?.station == null ? 'pasta' : String(body.station)
+  if (!Object.prototype.hasOwnProperty.call(CL.STATIONS, station)) throw new KitchenError(400, 'bad_station')
   const today = chef && /^\d{4}-\d{2}-\d{2}$/.test(String(body?.day || '')) ? String(body.day) : ctDay(opt.now)   // past days: Chef only
   const since = new Date(Date.parse(today + 'T12:00:00Z') - 42 * 86400000).toISOString().slice(0, 10)
   const until = new Date(Date.parse(today + 'T12:00:00Z') + 7 * 86400000).toISOString().slice(0, 10)
@@ -182,7 +183,7 @@ export async function smartChecklist(u: U, body: any, svc: any, opt: { now?: Dat
   // a past day (simulation of an earlier service): only the history BEFORE that day is used
   const sales = (sd.rows as any[]).filter(r => r.date < today), open = (sd.open as string[]).filter(d => d < today)
   const past = today < ctDay(opt.now)
-  const res = CL.stationPriorities({ today, bom, recipes, yields, sales, openDates: open, salesAll: past && chef ? sd.rows : null,
+  const res = CL.stationPriorities({ station, today, bom, recipes, yields, sales, openDates: open, salesAll: past && chef ? sd.rows : null,
     events: (events as any[]).map(e => ({ name: e.name, date: e.event_date, guests: e.guest_count, status: e.status, menu_linked: false })) })
   // Progressive Trust: the level comes only from here (release switches + Chef grants). No grants are stored yet → step 1.
   const level = CL.levelFor(u, [], CL.GATES)

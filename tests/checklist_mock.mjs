@@ -9,7 +9,7 @@ const [OUT] = process.argv.slice(2); fs.mkdirSync(OUT, { recursive: true })
 const C = loadC(), ENGINE = process.env.BROWSER === 'webkit' ? 'webkit' : 'chromium', P = ENGINE === 'webkit' ? 'wk_' : ''
 let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++ }
 const TODAY = '2026-10-16'
-const run = (day, past) => stationPriorities(Object.assign({}, C, { today: day, sales: C.sales.filter(s => s.date < day), openDates: C.openDates.filter(d => d < day), salesAll: past ? C.sales : null }))
+const run = (day, past, station) => stationPriorities(Object.assign({}, C, { station: station || 'pasta', today: day, sales: C.sales.filter(s => s.date < day), openDates: C.openDates.filter(d => d < day), salesAll: past ? C.sales : null }))
 const R = run(TODAY), by = k => R.items.find(c => c.key === k)
 let role = 'chef', forceLevel = null; const calls = []
 function api(op, b) {
@@ -20,7 +20,7 @@ function api(op, b) {
     case 'shift': return { today: TODAY, plan_date: TODAY, user: u, items: [], messages: [], done_today: [], reports: [], people: [], my_reports: [] }
     case 'office': return chef ? { checked_at: new Date().toISOString(), today: TODAY, decisions: [], stale: [], history: [], completeness: [], invoices: { warnings: 0, invoices: 0, needs: [], queue: [], info: [], excluded: 0, docs: [], tile: { now: 0, review: 0 } } } : [403, 'forbidden']
     case 'mre_list': return { recipes: [], pending: 0 }
-    case 'smart_checklist': if (!chef) return [403, 'forbidden']; { const r = run(b.day || TODAY, !!b.day); return Object.assign(r, { level: forceLevel || 1, steps: STEPS, gates: GATES, margins: MARGINS }) }
+    case 'smart_checklist': if (!chef) return [403, 'forbidden']; { if (b.station && !['pasta', 'oven', 'tableside'].includes(b.station)) return [400, 'bad_station']; const r = run(b.day || TODAY, !!b.day, b.station); return Object.assign(r, { level: forceLevel || 1, steps: STEPS, gates: GATES, margins: MARGINS }) }
   }
   return [400, 'bad_op']
 }
@@ -34,12 +34,12 @@ async function page(init) {
   await pg.goto('http://127.0.0.1:8791/index.html' + (init && init.__q ? init.__q : '')); await pg.waitForTimeout(800)
   return pg
 }
-const open = async pg => { await pg.click('button[data-a="openSmart"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 10000 }) }
+const open = async (pg, st = 'pasta') => { await pg.click(`button[data-a="openSmart"][data-v="${st}"]`); await pg.locator('#main .sc').first().waitFor({ timeout: 10000 }) }
 { const pg = await page(); await open(pg)
   const txt = await pg.locator('#main').innerText()
-  ok((await pg.locator('#main h1').innerText()) === "Today's Checklist" && await pg.locator('#main .sc').count() === 4, "My Shift → Pasta Station → Today's Checklist: 4 questions")
+  ok((await pg.locator('#main h1').innerText()) === "Today's Checklist" && await pg.locator('#main .sc').count() === 4 && /Pasta Station/i.test(txt), "My Shift → Pasta Station → Today's Checklist: 4 questions")
   const L = by('lobster')
-  ok(txt.includes(`Do we have ${L.qty} lobsters ready for today?`) && /Do we have 1 kg Gnocco dough ready for today\?/.test(txt) && /Do we have 11 kg Arrabbiata ready for today\?/.test(txt) && /Is 3[.,]2 kg shrimp pulled for tomorrow\?/.test(txt), `questions: "${L.qty} lobsters ready for today?", gnocco, arrabbiata, shrimp pulled for tomorrow`)
+  ok(txt.includes(`Do we have ${L.qty} lobsters ready for today?`) && /Do we have 1 kg Gnocco dough ready for today\?/.test(txt) && /Do we have 11 kg Arrabbiata ready for today\?/.test(txt) && /Do we have 3[.,]75 kg shrimp ready for today\?/.test(txt) && !/tomorrow|pulled/i.test(txt), `questions: "${L.qty} lobsters ready for today?", shrimp/gnocco/arrabbiata for today (no "for tomorrow")`)
   ok(await pg.locator('#main .sc button[data-a="scDone"]').count() === 4 && await pg.locator('#main .sc input').count() === 0, 'one tick per question, no quantity to type')
   ok(/Thaw this morning \(about 15 min\)/.test(txt) && !/Thaw \d+ Lobsters|tonight/i.test(txt), 'lobster: thaw the same morning (no day-ahead thaw, no "tonight")')
   ok(!/Production|Smart checklist|Estimate|batch/i.test(txt.split('Why?')[0]), 'no technical labels on the cards (type, status, batch)')
@@ -68,6 +68,26 @@ const open = async pg => { await pg.click('button[data-a="openSmart"]'); await p
   ok(/Really sold that day/.test(await pg.locator('#main .sc').first().innerText()), 'past Friday: suggestion compared with what was really sold')
   await pg.screenshot({ path: `${OUT}/${P}4_past.png` })
   const dims = await pg.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); ok(dims[0] <= dims[1], 'no sideways scroll')
+  await pg.context().close() }
+// Oven and Table Side: the fish in the station that owns the prep, no duplicates
+{ const pg = await page()
+  ok(await pg.locator('button[data-a="openSmart"]').count() === 3, 'My Shift (Chef): one checklist row per station (Pasta, Oven, Table Side)')
+  await open(pg, 'oven'); const o = await pg.locator('#main').innerText(), O = run(TODAY, false, 'oven')
+  const cq = O.items.find(c => c.key === 'calamari').qty / 1000, sq = O.items.find(c => c.key === 'salmon').qty
+  ok(/Oven Station/i.test(o) && await pg.locator('#main .sc').count() === 2 && o.includes(`Do we have ${String(cq).replace('.', '.')} kg calamari ready for today?`) && o.includes(`Do we have ${sq} salmon filets ready for today?`) && !/lobster|shrimp/i.test(o.split('Why?')[0]), `Oven: calamari ${cq} kg + ${sq} salmon filets for today, no Pasta items`)
+  ok(!/about 15 min|Thaw/.test(o), 'Oven: no thaw time shown (not given by the Chef for these)')
+  await pg.screenshot({ path: `${OUT}/${P}6_oven.png` })
+  await pg.locator('#main button[data-a="scDone"][data-k="calamari"]').click(); await pg.waitForTimeout(200)
+  const keys = await pg.evaluate(() => Object.entries(localStorage).filter(([k]) => k.startsWith('brigade-app-ui:smart:')).map(([k, v]) => Object.keys(JSON.parse(v))).flat())
+  ok(keys.join() === 'calamari', `Oven tick kept on this phone only (${keys.join()})`)
+  await pg.click('#main button[data-a="toOrigin"]'); await pg.waitForTimeout(400)
+  await open(pg, 'tableside'); const tt = await pg.locator('#main').innerText()
+  ok(/Table Side/i.test(tt) && /Are the branzino filets ready for today\?/.test(tt) && /No amount/.test(tt) && /station to confirm/i.test(tt) && /Do we have \d+ whole branzino ready for today\?/.test(tt), 'Table Side: branzino filets asked WITHOUT a number (data missing, Chef told why); whole branzino with POS number; station to confirm')
+  await pg.screenshot({ path: `${OUT}/${P}7_tableside.png` })
+  await pg.locator('#main button[data-a="scView"][data-v="1"]').click(); await pg.waitForTimeout(200)
+  const tc = await pg.locator('#main').innerText()
+  ok(!/No amount|station to confirm|Why\?/i.test(tc), 'Table Side cook view: no technical notes')
+  const dims = await pg.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); ok(dims[0] <= dims[1], 'no sideways scroll (Table Side)')
   await pg.context().close() }
 // Step 2 cannot be switched on from the phone: local storage / URL tampering keeps step 1
 { const pg = await page({ 'brigade-app-ui:smart:level': '2', 'brigade-app-level': '2', __q: '?level=2&step=2' }); await open(pg)
