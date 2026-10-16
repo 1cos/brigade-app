@@ -443,3 +443,20 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .mr-x:hover,.mr-x:focus-visible{color:var(--red,#dc2626);background:var(--surf2)}
 .mr-eq{display:inline-flex;align-items:center;gap:6px}
 @media (max-width:640px){.mr-kind{display:none}}
+/* Smart Station Checklist (B-51 phase 1, simulation) */
+.sc-list{display:flex;flex-direction:column;gap:12px}
+.sc{background:var(--surf);border:1px solid var(--line);border-radius:18px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.sc.is-done{background:var(--ok-bg);border-color:transparent}
+.sc-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sc .chip{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:8px;padding:3px 8px}
+.sc .chip.a{background:var(--surf2);color:var(--tx2)} .sc .chip.b{background:color-mix(in srgb,var(--today) 14%,transparent);color:var(--today)} .sc .chip.c{background:color-mix(in srgb,var(--plan) 16%,transparent);color:var(--plan)}
+.sc .kn{margin-left:0}
+.sc-title{font-size:22px;font-weight:800;line-height:1.2}
+.sc-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.sc-in{width:96px;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--tx);font-size:18px;padding:0 10px}
+.okline{color:var(--ok);font-weight:700}
+.scw>summary{cursor:pointer;color:var(--today);font-weight:700;padding:4px 0}
+.scw-b{display:flex;flex-direction:column;gap:8px;font-size:15px;margin-top:6px}
+.scw-t{border-collapse:collapse;margin-top:4px;font-variant-numeric:tabular-nums}
+.scw-t td{padding:2px 12px 2px 0;color:var(--tx2)}
+.scw-t td:last-child{color:var(--tx);font-weight:600}

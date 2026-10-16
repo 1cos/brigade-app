@@ -3,6 +3,7 @@
 // server-side ONLY for the Chef (staff never receive them). Selects only: this module has no write path.
 import * as K from '../_shared/kitchen_core.js'
 import * as KN from '../_shared/knowledge_core.js'
+import * as CL from '../_shared/checklist_core.js'
 import { ingredientFacts } from './mre.ts'
 
 type U = { id: number; role: 'chef' | 'staff' }
@@ -146,4 +147,40 @@ export async function knowledgeGaps(u: U, svc: any, opt: { facts?: (ids: string[
   const pos: Record<string, number> = {}; (items as any[]).forEach(r => { pos[r.menu_item] = (pos[r.menu_item] || 0) + (Number(r.quantity) || 0) })
   const g = KN.gaps({ ingredients: ing, bom, vendors: vend, facts, recipes, unmatched, posFood: Object.entries(pos).map(([name, qty]) => ({ name, qty })) })
   return Object.assign(g, { days: KDAYS, invoices_no_number: (nonum as any)?.count ?? null })
+}
+
+/* ---------- Smart Station Checklists, phase 1 (B-51, Chef Max GO 16/10/2026) — SIMULATION, read only, Chef only ----------
+   Pasta Station pilot. Real POS sales × recipes (same walk as the Knowledge Engine), read here, computed in
+   ../_shared/checklist_core.js. Ticks stay on the phone (simulation): nothing is written, nothing moves stock. */
+const ctDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+const dailyCache: Record<string, { at: number; rows: any[]; open: string[] }> = {}
+async function salesDaily(svc: any, since: string) {
+  const c = dailyCache[since]; if (c && Date.now() - c.at < 10 * 60000) return c
+  const [items, mods] = await Promise.all([
+    pageAll(() => svc.from('pos_sales_by_item').select('sale_date,menu_item,quantity,sales_category').gte('sale_date', since).not('is_historical', 'is', true).order('id')),
+    pageAll(() => svc.from('pos_modifiers').select('sale_date,modifier,quantity_sold').gte('sale_date', since).not('is_historical', 'is', true).order('id')),
+  ]) as any[][]
+  const rows: any[] = [], open = new Set<string>()
+  items.forEach(r => { open.add(r.sale_date); if (r.sales_category === 'Food') rows.push({ date: r.sale_date, kind: 'item', name: r.menu_item, qty: Number(r.quantity) || 0 }) })
+  mods.forEach(r => rows.push({ date: r.sale_date, kind: 'modifier', name: r.modifier, qty: Number(r.quantity_sold) || 0 }))
+  const out = { at: Date.now(), rows, open: [...open].sort() }; dailyCache[since] = out; return out
+}
+export async function smartChecklist(u: U, body: any, svc: any, opt: { now?: Date } = {}) {
+  if (u.role !== 'chef') throw new KitchenError(403, 'forbidden')          // phase 1: Chef only
+  if (body?.station && body.station !== 'pasta') throw new KitchenError(400, 'bad_station')
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.day || '')) ? String(body.day) : ctDay(opt.now)
+  const since = new Date(Date.parse(today + 'T12:00:00Z') - 42 * 86400000).toISOString().slice(0, 10)
+  const until = new Date(Date.parse(today + 'T12:00:00Z') + 7 * 86400000).toISOString().slice(0, 10)
+  const [bom, recipes, yields, sd, events] = await Promise.all([
+    pageAll(() => svc.from('recipe_bom').select('parent_recipe_id,component_type,item_id,sub_recipe_id,quantity,unit').order('bom_id')),
+    pageAll(() => svc.from('recipes').select('id,title,category,pos_name,menu_group,serving_qty,serving_unit').order('id')),
+    pageAll(() => svc.from('recipe_yield').select('id,portions,yield_qty,yield_dim').order('id')),
+    salesDaily(svc, since),
+    svc.from('events').select('name,event_date,guest_count,status').gte('event_date', today).lte('event_date', until).then(must),
+  ]) as any[]
+  // a past day (simulation of an earlier service): only the history BEFORE that day is used
+  const sales = (sd.rows as any[]).filter(r => r.date < today), open = (sd.open as string[]).filter(d => d < today)
+  const past = today < ctDay(opt.now)
+  return CL.stationPriorities({ today, bom, recipes, yields, sales, openDates: open, salesAll: past ? sd.rows : null,
+    events: (events as any[]).map(e => ({ name: e.name, date: e.event_date, guests: e.guest_count, status: e.status, menu_linked: false })) })
 }

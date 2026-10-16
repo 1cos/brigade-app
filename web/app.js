@@ -115,6 +115,7 @@ SCREENS.today = { title: () => t('w_today'), c: '--today', render() {
   return `<div class="page" style="--c:var(--today)">
     ${top}<p class="brief">${brief}${next}</p></div>
     ${isChef() ? `<div class="acts"><button class="btn" data-a="compose">${t('msg_team')}</button></div>` : ''}
+    ${isChef() && window.ChecklistUI ? window.ChecklistUI.row() : ''}
     ${isChef() && window.OfficeUI ? (d => d ? window.OfficeUI.alertRows(d) : '')(need('office', null, 5 * 60000)) : ''}
     ${isChef() && (need('mre_list', null, 2 * 60000) || {}).pending ? `<div class="list"><button class="row" data-a="world" data-w="restaurant"><span class="main"><div class="name">${t('m_lab_pending', { n: API.peek('mre_list').pending })}</div><div class="meta">${t('m_lab_title')}</div></span><span class="chev">›</span></button></div>` : ''}
     ${msgs.length ? `<section><div class="chap"><h2>${t(isChef() ? 'your_msgs' : 'from_chef')}</h2><span>${unread.length ? t('new_n', { n: unread.length }) : ''}</span></div><div class="list">${msgHtml}</div></section>` : ''}
@@ -582,6 +583,7 @@ function signedIn(user) {
 function signedOut(msg) { ME = null; wipeLocal(); $('main').innerHTML = ''; $('main')._h = null; $('tabs').innerHTML = ''; $('worlds').innerHTML = ''; $('worlds').dataset.h = ''; $('who').textContent = ''; $('switch').hidden = true; closeSheet(); pinBuf = ''; showLogin(msg || ''); }
 window.addEventListener('app-signed-out', () => { API.clearToken(); if (ME) toast(t('signed_out')); signedOut(); });
 
+if (window.ChecklistUI) { window.ChecklistUI.init({ esc, need, waiting, backBtn, head, isChef, peek: API.peek, entry: () => cur().p, render, toast, openTab }); Object.assign(SCREENS, window.ChecklistUI.screens); Object.assign(A, window.ChecklistUI.actions); }
 if (window.KitchenUI) { window.KitchenUI.init({ esc, need, waiting, backBtn, head, shortDay, isChef, cat, peek: API.peek, save: () => save() });
   Object.assign(SCREENS, window.KitchenUI.screens); SCREENS.ings.after = (p, active) => searchBind(active); }
 if (window.MreUI) window.MreUI.init({ need, peek: API.peek, render, toast, isChef, entry: () => cur().p,

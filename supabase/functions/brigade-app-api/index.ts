@@ -13,7 +13,7 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 
-const BUILD = 'api-r1.9-ui'
+const BUILD = 'api-r1.10-smart'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -327,6 +327,7 @@ Deno.serve(async (req: Request) => {
       case 'ingredient': out = await KITCHEN.ingredient(u, String(body.id || ''), svc); break
       case 'knowledge': out = await KITCHEN.knowledge(u, String(body.id || ''), svc); break
       case 'knowledge_gaps': out = await KITCHEN.knowledgeGaps(u, svc); break
+      case 'smart_checklist': out = await KITCHEN.smartChecklist(u, body, svc); break
       case 'mre_list': out = await MRE.mreList(u, svc); break
       case 'mre_recipe': out = await MRE.mreRecipe(u, String(body.id || ''), svc); break
       case 'mre_ingredients': out = await MRE.mreIngredients(u, String(body.q || '')); break
