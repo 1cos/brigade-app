@@ -61,3 +61,9 @@ A task belongs to a home station (branzino processing → Table Side), but a coo
 - **Trust level.** The cook who takes the task sees it at their own level (step 1 tick). Step 2/3 rules stay per cook and per station: helping elsewhere does not raise a level and does not count as a worked shift at that station.
 - **Record (needs the ticks migration).** One extra field per tick: `assigned_from_station` + `assigned_by`. Without the migration nothing is stored.
 - **Not now.** No screen, no API, no writes. Turning it on = new release with tag and rollback, after the Chef's GO.
+
+## POS add-ons and branzino yield (R1.11.3, Chef 16/10)
+- **Add-ons = POS modifiers.** Each checklist total = main dishes (POS menu items) + add-ons (POS modifiers), each POS name counted once (case and duplicate aliases removed), modifiers only from `pos_modifiers`, dishes only from `pos_sales_by_item`.
+- **Nothing sold is dropped silently.** Every sold POS name that matches the product (lobster, shrimp, calamari, salmon, branzino) and is not counted shows in the Chef's Why? under "Sold but not counted", with its sales: dish without recipe · add-on without quantity · substitution · removal · note only. They enter the forecast only once a quantity is mapped (Chef).
+- **Branzino.** Bought whole by weight (~2.1 lb average: a purchasing figure, never a filet weight). One cleaned whole fish per Branzino Chef Style (Table Side). One fish = 2 filets. Siciliana = 1 filet per portion (`chef_per_portion`, forecast only; the official recipe is not changed). Filets for the Siciliana are asked in Oven; the whole-fish equivalent (filets ÷ 2) is shown only as information; frozen stock is not counted until Step 3.
+- **Margins for filets** (backtest 9/6→15/10): Mon–Thu +25%, Fri/Sat +30%.

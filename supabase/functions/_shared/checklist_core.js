@@ -29,7 +29,7 @@ export const STEPS = Object.freeze({
    lobster: thawed the same morning in ~15 min, more can be thawed during service → prudent. Friday a bit more: the
    leftovers can serve Saturday. Saturday prudent (+5%). shrimp: for today (Chef 16/10, fish prepared in the morning).
    arrabbiata: cannot be made in the middle of service → more cover. gnocco: the 2 kg batch decides, the margin barely matters.
-   calamari / salmon / branzino: R1.11b study (~/brigade-audit-work/b51/r111/fish_eval.mjs). */
+   calamari / salmon / branzino whole: R1.11b study (~/brigade-audit-work/b51/r111/fish_eval.mjs). */
 export const MARGINS = Object.freeze({
   lobster:    { weekday: 0.10, 5: 0.25, 6: 0.05 },
   shrimp:     { weekday: 0.15, 5: 0.25, 6: 0.15 },
@@ -37,7 +37,8 @@ export const MARGINS = Object.freeze({
   arrabbiata: { weekday: 0.25, 5: 0.30, 6: 0.20 },
   calamari:   { weekday: 0.15, 5: 0.15, 6: 0.10 },
   salmon:     { weekday: 0, 5: 0.25, 6: 0 },               // small numbers (2–4 a day): rounding up to whole filets already covers
-  branzino_filet: { weekday: 0, 5: 0, 6: 0 },              // no POS number (Siciliana cartoccio has no yield): the Chef's reference is shown instead
+  branzino_filet: { weekday: 0.25, 5: 0.30, 6: 0.30 },     // R1.11.3: Siciliana × 1 filet (Chef). Backtest 9/6→15/10 (~/brigade-audit-work/b51/r112/filet_margin.mjs):
+                                                            // short Mon–Thu 10/58, Fri 3/14, Sat 1/13; a filet thaws in ~10 min, so a short day is fixed in service
   branzino_whole: { weekday: 0, 5: 0, 6: 0 },              // 0–3 a day: rounding up to a whole fish already covers
 })
 export const DEFAULT_MARGIN = 0.15
@@ -57,23 +58,29 @@ export function marginFor(key, iso) { const m = MARGINS[key]; if (!m) return DEF
    step: rounding of the question amount. */
 export const PASTA = [
   { key: 'lobster', station: 'pasta', ask: 'ready', what: 'lobsters', unit: 'pz', target: { item: '2e9405f8-7ff2-4bf2-a572-5b343c52c9d0' }, name: 'Lobster Tail', step: 1, lead: 0, lead_ok: true,
-    how: 'thaw_morning', thaw_min: 15, leftovers: true },      // Chef 16/10: thawed the same morning, about 15 minutes
-  { key: 'shrimp', station: 'pasta', ask: 'ready', what: 'shrimp', unit: 'g', target: { item: '4edc611c-e281-4c6a-85e9-f57fb27d1b61' }, name: 'Shrimp', step: 150, step_label: 'portions of 150 g', lead: 0, lead_ok: true },
+    how: 'thaw_morning', thaw_min: 15, leftovers: true, review: /lobster/i },      // Chef 16/10: thawed the same morning, about 15 minutes
+  { key: 'shrimp', station: 'pasta', ask: 'ready', what: 'shrimp', unit: 'g', target: { item: '4edc611c-e281-4c6a-85e9-f57fb27d1b61' }, name: 'Shrimp', step: 150, step_label: 'portions of 150 g', lead: 0, lead_ok: true, review: /shrimp|prawn/i,
+    notes: ['Fettuccine Allo Scoglio (POS, ~40 a week): the Brigade recipe has clams and mussels only, no shrimp or calamari — Chef to confirm'] },
   { key: 'gnocco', station: 'pasta', ask: 'ready', what: 'Gnocco dough', unit: 'g', target: { recipe: 'e4804f67-5220-4bc8-abd0-aa925ecfa06f' }, name: 'GNOCCO FRITTO DOUGH', step: 100, lead: 0, lead_ok: true, batch: true },
   { key: 'arrabbiata', station: 'pasta', ask: 'ready', what: 'Arrabbiata', unit: 'g', target: { recipe: '3252e642-e3c5-4c9b-9bba-9603cc086f92' }, name: 'ARRABBIATA', step: 500, lead: 0, lead_ok: true, batch: true },
 ]
 export const OVEN = [
-  { key: 'calamari', station: 'oven', ask: 'ready', what: 'calamari', unit: 'g', target: { item: 'f1224e5b-8bc4-43c2-9d32-02a851a8e363' }, name: 'Calamari', step: 500, lead: 0, lead_ok: true },
+  { key: 'calamari', station: 'oven', ask: 'ready', what: 'calamari', unit: 'g', target: { item: 'f1224e5b-8bc4-43c2-9d32-02a851a8e363' }, name: 'Calamari', step: 500, lead: 0, lead_ok: true, review: /calamar|squid/i },
   { key: 'salmon', station: 'oven', ask: 'ready', what: 'salmon filets (200 g)', unit: 'pz', target: { recipe: 'c2fe373a-e589-4208-82ff-8277578e7343' }, name: 'Thaw Salmon', step: 1, lead: 0, lead_ok: true,
-    thaw_min: 20, as_modifier: ['78d90bc9-574f-4dd7-9493-2b56b9682336'],
+    thaw_min: 20, as_modifier: ['78d90bc9-574f-4dd7-9493-2b56b9682336'], review: /salmon/i, review_skip: /salmon cake|salmon sauce|salmon aioli/i,
     not_counted: ['Salmon Pistachio: off the menu (last POS sale 26/06/2026)'],
     notes: ['1 Amalfi Salmon = 1 filet of 200 g (Chef). Brigade sub-recipe "Salmon Filets" says 190 g: to align in the official recipe (separate OK)'] },
   { key: 'branzino_filet', station: 'oven', ask: 'ready', what: 'branzino filets for the Siciliana', unit: 'pz', target: { recipe: 'f7f46c56-a865-4ea3-9514-869e7a3a1226' }, name: 'Filet Branzino (frozen)', step: 1, lead: 0, lead_ok: true,
-    thaw_min: 10, ref: { weekday: [5, 7], 5: [10, 10], 6: [10, 10] },   // Chef 16/10: about 5–7 on quiet days, about 10 at the weekend
+    thaw_min: 10, ref: { weekday: [5, 7], 5: [10, 10], 6: [10, 10] },   // Chef 16/10: about 5–7 on quiet days, about 10 at the weekend (comparison only now)
+    // Chef 16/10: ONE filet per Siciliana. Brigade's "Siciliana cartoccio" has 1 filet but no yield, so the walk gives no amount;
+    // this fills that one gap for the forecast only (the official recipe is not changed).
+    chef_per_portion: { '445b2309-6da9-4b77-8163-d1c875ec53f0': { qty: 1, why: 'Chef 16/10: 1 filet per Siciliana' } },
+    fillet: { per_fish: 2 },                                              // Chef 16/10: one whole fish gives TWO filets
     notes: ['Filets come from Table Side already cleaned, wrapped and frozen'] },
 ]
 export const TABLESIDE = [
-  { key: 'branzino_whole', station: 'tableside', ask: 'ready', what: 'whole branzino (gutted and cleaned)', unit: 'pz', target: { recipe: '5b06254f-7679-4686-96fc-9fe993c923d2' }, name: 'Branzino Tableside', step: 1, lead: 0, lead_ok: true },
+  { key: 'branzino_whole', station: 'tableside', ask: 'ready', what: 'whole branzino (gutted and cleaned)', unit: 'pz', target: { recipe: '5b06254f-7679-4686-96fc-9fe993c923d2' }, name: 'Branzino Tableside', step: 1, lead: 0, lead_ok: true, review: /branzino|sea ?bass/i,
+    notes: ['Purchased whole by weight, about 2.1 lb per fish on average (Chef): a purchasing figure, not a filet weight'] },
 ]
 export const STATIONS = Object.freeze({
   pasta: { name: 'Pasta Station', items: PASTA },
@@ -81,6 +88,32 @@ export const STATIONS = Object.freeze({
   tableside: { name: 'Table Side', items: TABLESIDE, note: 'Table Side processes the whole branzino. Filleting and freezing for the Siciliana is not a daily card: the filets are asked once, in Oven.' },
 })
 export function refFor(it, iso) { const r = it.ref; if (!r) return null; const w = dow(iso), x = r[w] || r.weekday; return x ? { lo: x[0], hi: x[1], weekend: w === 5 || w === 6 } : null }
+
+/* Sold POS names the forecast does NOT count, for the Chef: nothing sold is dropped silently.
+   kind: adds (adds the product, no quantity mapped yet) · sub (substitution) · removal · note (instruction / allergy, no product). */
+export function modKind(name) {
+  const n = String(name || '').toLowerCase()
+  if (/allerg/.test(n)) return 'note'
+  if (/instead of|^sub (?!no )|\bswitch\b/.test(n)) return 'sub'
+  if (/^(no |sub no )|\bno (shrimp|lobster|salmon|calamari|branzino|mussel|clams)|do not make|^86 /.test(n)) return 'removal'
+  if (/on (the )?side|\bots\b|rare|medium|well done|well\b|firm|de-? ?shell|remove .*shell|tail cut|sauce|crispy|chopped|cooked|sliced|parchment|meant to ring|wouldn|for mike|already in/.test(n)) return 'note'
+  return 'adds'
+}
+export function reviewFor(it, sales, recipes, countedNames) {
+  if (!it.review) return null
+  const owned = new Set(); for (const r of recipes || []) posNames(r).forEach(n => owned.add(n.toLowerCase()))
+  const g = {}
+  for (const s of sales || []) {
+    const n = String(s.name || '').trim(), k = n.toLowerCase()
+    if (!it.review.test(n) || (it.review_skip && it.review_skip.test(n))) continue
+    if (s.kind === 'modifier' ? countedNames.modifier.has(k) : (countedNames.item.has(k) || owned.has(k))) continue
+    const key = s.kind + '|' + k, o = g[key] || (g[key] = { name: n, source: s.kind === 'modifier' ? 'POS modifier' : 'POS menu item', kind: s.kind === 'modifier' ? modKind(n) : 'no_recipe', qty: 0, days: new Set(), last: '' })
+    o.qty += num(s.qty) || 0; o.days.add(s.date); if (s.date > o.last) o.last = s.date
+  }
+  const rank = { no_recipe: 0, adds: 1, sub: 2, removal: 3, note: 4 }
+  return Object.values(g).map(o => ({ name: o.name, source: o.source, kind: o.kind, qty: o.qty, days: o.days.size, last: o.last }))
+    .sort((a, b) => rank[a.kind] - rank[b.kind] || b.qty - a.qty)
+}
 
 /** Amount per portion of each dish that uses a target (ingredient or sub-recipe), via the Knowledge walk. */
 export function dishesFor(target, bom, recipes, yields) {
@@ -140,6 +173,7 @@ export function stationPriorities(data) {
   for (const it of items) {
     const dishes = dishesFor(it.target, data.bom || [], data.recipes || [], data.yields || [])
       .map(d => (it.as_modifier || []).includes(d.recipe_id) ? Object.assign({}, d, { addon: true }) : d)
+      .map(d => { const c = (it.chef_per_portion || {})[d.recipe_id]; return c && d.per_portion == null ? Object.assign({}, d, { per_portion: c.qty, chef: c.why }) : d })
     const rows = dailyByDish(dishes, data.sales || [])
     const rowsAll = data.salesAll ? dailyByDish(dishes, data.salesAll) : null   // past-day simulation: what was really sold, to compare
     const missing = dishes.filter(d => d.per_portion == null)
@@ -159,11 +193,15 @@ export function stationPriorities(data) {
       why: { method: `mean of the last ${SAMPLES} same weekdays (POS) × recipe amount per portion, + ${Math.round((f ? f.margin : DEFAULT_MARGIN) * 100)}% margin (${f ? f.weekday : '—'})`,
         margin: f ? Math.round(f.margin * 100) : null,
         day: f ? { day: f.day, weekday: f.weekday, mean: f.mean == null ? null : r1(f.mean), forecast: f.forecast == null ? null : r1(f.forecast), trend: f.trend == null ? null : Math.round(f.trend * 100), samples: f.samples.map(s => ({ date: s.date, amount: r1(s.amount), portions: s.portions })) } : null,
-        dishes: counted.map(r => ({ title: r.d.title, per_portion: r1(r.d.per_portion), unit: r.d.unit, path: r.d.paths[0], source: r.d.addon ? 'POS modifiers' : 'POS menu items' })),
+        dishes: counted.map(r => ({ title: r.d.title, per_portion: r1(r.d.per_portion), unit: r.d.unit, path: r.d.paths[0], source: (r.d.addon ? 'POS modifiers' : 'POS menu items') + (r.d.chef ? ' · ' + r.d.chef : '') })),
+        chef_ref: day && it.ref ? refFor(it, day) : null,
         not_counted: missing.map(d => `${d.title}: ${d.why[0] || 'amount per portion missing'}`).concat(it.not_counted || []),
         notes: (it.notes || []).concat(it.thaw_min ? [`thaw ~${it.thaw_min} min: the Chef's current practice, not an HACCP validation of the method`] : []),
         round: it.step > 1 ? `rounded up to ${it.step_label || (it.unit === 'g' ? it.step + ' g' : it.step)}` : null,
         lead_note: it.lead_ok === false ? `timing to confirm by the Chef: shown as ${it.lead === 1 ? 'one day ahead' : it.lead ? it.lead + ' days ahead' : 'the same day'}` : null } }
+    if (it.fillet && qty != null) card.why.notes.unshift(`${qty} filets = ${Math.ceil(qty / it.fillet.per_fish)} whole fish if filleted today (${it.fillet.per_fish} filets per fish, Chef). Frozen filets already in stock are not counted.`)
+    const cn = { item: new Set(), modifier: new Set() }; dishes.forEach(d => d.pos_names.forEach(n => cn[d.addon ? 'modifier' : 'item'].add(n.trim().toLowerCase())))
+    card.why.review = reviewFor(it, data.sales, data.recipes, cn)
     if (it.batch) {
       const y = Y[it.target.recipe], g = y && y.yield_dim === 'mass' ? num(y.yield_qty) : null
       card.why.batch = g ? `recipe yield (${it.name}): ${g} g per batch` : 'batch size missing in the recipe yield'

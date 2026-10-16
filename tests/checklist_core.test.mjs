@@ -35,11 +35,13 @@ ok(!sa.why.dishes.some(d => /Pistachio/.test(d.title)) && sa.why.not_counted.som
 { const x = sa.why.day, mean = x.samples.reduce((a, s) => a + s.amount, 0) / x.samples.length, exp = Math.max(1, Math.ceil(mean * 1.25))
   ok(x.samples.length === 4 && x.samples.every(s => s.amount === s.portions) && sa.qty === exp, `salmon calc: last 4 Fridays ${x.samples.map(s => s.portions).join('+')} → mean ${mean} +25% → ${sa.qty} (expected ${exp})`) }
 const bf = by(O, 'branzino_filet'), bw = by(T, 'branzino_whole')
-ok(bf.qty === null && bf.need === null && bf.status === 'missing' && bf.why.not_counted.some(x => /Siciliana/.test(x)), 'branzino filets: Siciliana has no amount per portion → no POS number (not invented)')
-ok(bf.ref && bf.ref.lo === 10 && bf.ref.hi === 10 && bf.ref.weekend, 'branzino filets Friday: Chef reference about 10 (weekend)')
-{ const W = run('2026-10-15', { station: 'oven' }), S = run('2026-10-17', { station: 'oven' }), M = run('2026-10-19', { station: 'oven' }), r = R => by(R, 'branzino_filet').ref
-  ok(r(W).lo === 5 && r(W).hi === 7 && r(M).lo === 5 && r(M).hi === 7 && r(S).lo === 10 && !r(W).weekend, 'branzino filets: about 5–7 Monday–Thursday, about 10 Friday–Saturday (reference, not a fixed amount)') }
-ok(by(O, 'calamari').ref === null && sa.ref === null, 'the Chef reference appears only where the POS gives no number')
+{ const x = bf.why.day, mean = x.samples.reduce((a, s) => a + s.portions, 0) / 4, exp = Math.ceil(mean * 1.30)
+  ok(bf.qty === exp && x.samples.every(s => s.amount === s.portions) && bf.why.dishes.length === 1 && bf.why.dishes[0].title === 'Siciliana' && /Chef 16\/10: 1 filet per Siciliana/.test(bf.why.dishes[0].source), `branzino filets: Siciliana sold last 4 Fridays ${x.samples.map(s => s.portions).join('+')} × 1 filet (Chef) → mean ${mean} +30% → ${bf.qty}`) }
+ok(bf.ref === null && bf.why.chef_ref.lo === 10 && bf.why.not_counted.length === 0, 'branzino filets: POS number now; Chef reference (about 10) kept in Why? for comparison only')
+ok(bf.why.notes[0] === `${bf.qty} filets = ${Math.ceil(bf.qty / 2)} whole fish if filleted today (2 filets per fish, Chef). Frozen filets already in stock are not counted.`, `filets → whole fish kept separate: ${bf.why.notes[0]}`)
+{ const W = run('2026-10-15', { station: 'oven' }), S = run('2026-10-17', { station: 'oven' }), r = R => by(R, 'branzino_filet')
+  ok(r(W).why.margin === 25 && r(S).why.margin === 30 && r(W).why.chef_ref.hi === 7 && r(S).why.chef_ref.lo === 10, `filet margins: Mon–Thu +25%, Fri/Sat +30% (Thu ${r(W).qty}, Sat ${r(S).qty})`) }
+ok(by(O, 'calamari').ref === null && sa.ref === null, 'no item shows the Chef reference as the question')
 ok(T.items.length === 1 && bw.what === 'whole branzino (gutted and cleaned)' && bw.qty >= 1 && bw.why.dishes.length === 1 && bw.why.dishes[0].title === 'Branzino Chef Style', `Table Side: ${bw.qty} whole branzino gutted and cleaned for today (Branzino Chef Style), nothing else`)
 { const all = Object.values(CL.STATIONS).flatMap(s => s.items), tg = all.map(i => JSON.stringify(i.target))
   ok(new Set(tg).size === tg.length && all.filter(i => /branzino/.test(i.key)).map(i => i.station + ':' + i.key).join() === 'oven:branzino_filet,tableside:branzino_whole', 'no need asked twice: filets only in Oven, whole fish only in Table Side') }
@@ -47,6 +49,23 @@ ok(T.items.length === 1 && bw.what === 'whole branzino (gutted and cleaned)' && 
   ok(JSON.stringify(th) === '{"lobster":15,"salmon":20,"branzino_filet":10}', `thaw times only where the Chef gave them: ${JSON.stringify(th)} (none for shrimp, calamari, whole branzino)`) }
 ok([...F.items, ...O.items].filter(c => c.thaw_min).every(c => c.why.notes.some(n => /not an HACCP validation/.test(n))), 'thaw time labelled as current practice, not an HACCP validation (Chef view)')
 ok(CL.GATES.reassign === false, 'dynamic reassignment: design only, switched off')
+// ---------- POS add-ons: counted once, nothing sold dropped silently ----------
+{ const all = [...F.items, ...O.items, ...T.items], rv = k => all.find(c => c.key === k).why.review || []
+  const names = k => rv(k).map(x => x.name.toLowerCase())
+  ok(rv('shrimp').some(x => x.name === 'Shrimp' && x.kind === 'adds' && x.qty > 0) && !names('shrimp').includes('add shrimp') && !names('shrimp').includes('extra shrimp'), `shrimp: "Add shrimp"/"Extra shrimp" counted (150 g); unmapped ones flagged with volume (${rv('shrimp').filter(x => x.kind === 'adds').map(x => x.name + ' ' + x.qty).join(', ')})`)
+  ok(rv('salmon').some(x => x.name === 'Salmon whole' && x.kind === 'adds') && !names('salmon').some(n => ['add salmon whole', 'add salmon'].includes(n)) && !names('salmon').some(n => /salmon cake/.test(n)), 'salmon: "Add salmon whole"/"Add salmon" counted; "Salmon whole" flagged; Salmon Cakes (cured salmon) not mixed in')
+  ok(rv('lobster').some(x => x.kind === 'no_recipe' && /Risotto/.test(x.name)) && rv('branzino_whole').some(x => x.name === 'Porchini Mushroom Branzino'), 'seafood dishes sold without a recipe are listed for the Chef (lobster risottos, branzino specials)')
+  ok(CL.modKind('Shrimp on side') === 'note' && CL.modKind('No shrimp') === 'removal' && CL.modKind('Salmon instead of shrimp') === 'sub' && CL.modKind('Side of shrimp') === 'adds' && CL.modKind('Shellfish allergy') === 'note', 'add-on kinds: adds / substitution / removal / note')
+  // no double counting: inside one item a POS name feeds ONE dish, and a counted name never appears in the review list
+  const dup = []; for (const [k, st] of [['lobster', 'pasta'], ['shrimp', 'pasta'], ['calamari', 'oven'], ['salmon', 'oven'], ['branzino_filet', 'oven'], ['branzino_whole', 'tableside']]) {
+    const it = CL.STATIONS[st].items.find(i => i.key === k), ds = CL.dishesFor(it.target, C.bom, C.recipes, C.yields).map(d => (it.as_modifier || []).includes(d.recipe_id) ? { ...d, addon: true } : d), seen = {}
+    for (const d of ds) for (const n of new Set(d.pos_names.map(x => x.toLowerCase()))) { const key = (d.addon ? 'm|' : 'i|') + n; if (seen[key] && seen[key] !== d.title) dup.push(k + ': ' + n); seen[key] = d.title }
+    for (const x of rv(k)) if (seen[(x.source === 'POS modifier' ? 'm|' : 'i|') + x.name.toLowerCase()]) dup.push(k + ' review: ' + x.name) }
+  ok(dup.length === 0, `no POS name counted twice, none both counted and flagged (${dup.join(', ') || 'clean'})`)
+  // salmon total on the last Friday = Amalfi Salmon + the two salmon add-on names, straight from raw POS rows
+  const day = sa.why.day.samples.at(-1), raw = C.sales.filter(s => s.date === day.date && ((s.kind === 'item' && s.name === 'Amalfi Salmon') || (s.kind === 'modifier' && /^add salmon( whole)?$/i.test(s.name.trim())))).reduce((a, s) => a + s.qty, 0)
+  ok(day.amount === raw, `salmon ${day.date}: engine ${day.amount} = raw POS ${raw} (Amalfi Salmon + Add salmon whole + Add salmon, each once)`)
+  ok(!JSON.stringify(CL.forCook(O)).includes('review'), 'cook view: no review list') }
 ok([...F.items, ...O.items, ...T.items].every(c => c.for_day.today), 'all fish (and every other item) for TODAY\'s service')
 // ---------- cook view: nothing technical ----------
 const ck = CL.forCook(F), s = JSON.stringify(ck)

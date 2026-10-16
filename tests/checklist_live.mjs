@@ -11,7 +11,7 @@ const API = 'https://ydqmumpytgrlceuinoqt.supabase.co/functions/v1/brigade-app-a
 let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++ }
 async function call(who, op, body = {}) { const t0 = Date.now(); const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(who ? { Authorization: 'Bearer ' + TOK[who] } : {}) }, body: JSON.stringify({ op, ...body }) }); let j = null; try { j = await r.json() } catch (e) {}; return { status: r.status, j, ms: Date.now() - t0 } }
 const C = loadC(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
-let r = await call(null, 'ping'); ok(r.j.build === 'api-r1.11.2-fish', `ping: ${r.j.build}`)
+let r = await call(null, 'ping'); ok(r.j.build === 'api-r1.11.3-addons', `ping: ${r.j.build}`)
 r = await call(null, 'smart_checklist'); ok(r.status === 401, 'no session → 401')
 r = await call('staff', 'smart_checklist'); ok(r.status === 403, `staff → ${r.status} (not activated for the brigade)`)
 r = await call('chef', 'smart_checklist', { station: 'pasta', level: 3, step: 2, gates: { step2: true, staffVisible: true } }); ok(r.status === 200 && r.j.level === 1 && r.j.items.every(c => c.level === 1) && !r.j.gates.step2 && !r.j.gates.staffVisible && !r.j.gates.step3, 'request asking for level 2/3 or switches on → level 1, switches off')
@@ -61,7 +61,7 @@ const dims = await pg.evaluate(() => [document.documentElement.scrollWidth, inne
 await pg.click('#main button[data-a="toOrigin"]'); await pg.waitForTimeout(500)
 await pg.click('button[data-a="openSmart"][data-v="oven"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 })
 const ov = await pg.locator('#main').innerText()
-ok(/calamari ready for today\?/.test(ov) && /salmon filets \(200 g\) ready for today\?/.test(ov) && /branzino filets for the Siciliana ready for today\?/.test(ov) && /Chef's reference: about/.test(ov) && await pg.locator('#main .sc').count() === 3, 'site: Oven Station — calamari, salmon filets (200 g), branzino filets for the Siciliana with the Chef reference')
+ok(/calamari ready for today\?/.test(ov) && /salmon filets \(200 g\) ready for today\?/.test(ov) && /Do we have \d+ branzino filets for the Siciliana ready for today\?/.test(ov) && await pg.locator('#main .sc').count() === 3, 'site: Oven Station — calamari, salmon filets (200 g), branzino filets for the Siciliana with a POS number (1 filet per Siciliana)')
 await pg.screenshot({ path: `${OUT}/5_site_oven.png` })
 await pg.click('#main button[data-a="toOrigin"]'); await pg.waitForTimeout(500)
 await pg.click('button[data-a="openSmart"][data-v="tableside"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 })
