@@ -23,6 +23,7 @@
     sc_thaw: ['Thaw this morning (about {m} min). Need more during service? Thaw them then.', 'Scongela stamattina (circa {m} min). Ne servono altre in servizio? Scongelale al momento.', 'Descongela esta mañana (unos {m} min). ¿Faltan en servicio? Descongélalas en el momento.'],
     sc_thaw_min: ['Thaw time: about {m} min.', 'Tempo di scongelamento: circa {m} min.', 'Tiempo de descongelación: unos {m} min.'],
     sc_ref: ['Chef\'s reference: about {r}', 'Riferimento dello Chef: circa {r}', 'Referencia del Chef: unos {r}'],
+    sc_refwhy: ['Chef\'s reference (not a forecast). Below: portions sold on the last 4 same weekdays, for comparison only.', 'Riferimento dello Chef (non una previsione). Sotto: porzioni vendute negli ultimi 4 giorni uguali, solo per confronto.', 'Referencia del Chef (no es una previsión). Abajo: porciones vendidas los últimos 4 días iguales, solo para comparar.'],
     sc_refnote: ['No POS number (a dish that sells has no reliable amount per portion): the Chef\'s reference is shown, not a fixed amount.', 'Nessun numero dal POS (un piatto venduto non ha una quantità per porzione affidabile): si mostra il riferimento dello Chef, non una quantità fissa.', 'Sin número del POS (un plato vendido no tiene cantidad por porción fiable): se muestra la referencia del Chef, no una cantidad fija.'],
     sc_left: ['Leftovers from {d}: use them only if checked and still good.', 'Avanzi di {d}: usali solo se controllati e ancora buoni.', 'Sobras del {d}: úsalas solo si están revisadas y en buen estado.'],
     sc_why: ['Why?', 'Perché?', '¿Por qué?'], sc_events: ['Events', 'Eventi', 'Eventos'],
@@ -56,8 +57,8 @@
     const day = x ? `<div class="scw-day"><b>${esc(x.weekday)} ${esc(shortD(x.day))}</b>: ${x.forecast == null || c.qty == null ? (c.ref ? esc(t('sc_ref', { r: refTxt(c.ref) })) : '—') : `${qty(x.mean, c.unit)} avg + ${c.why.margin}% → <b>${qty(x.forecast, c.unit)}</b> → ${qty(c.qty, c.unit)}`}${x.trend != null ? ` <span class="muted">(last 2 weeks ${x.trend > 0 ? '+' : ''}${x.trend}%)</span>` : ''}
       <table class="scw-t">${x.samples.map(s => `<tr><td>${esc(shortD(s.date))}</td><td>${s.portions} sold</td>${c.qty == null ? '' : `<td>${qty(s.amount, c.unit)}</td>`}</tr>`).join('')}</table></div>` : ''
     return `<details class="scw"><summary>${t('sc_why')}</summary><div class="scw-b">
-      <div class="muted">${esc(c.why.method)}</div>${day}
-      <div><b>Dishes</b>: ${c.why.dishes.map(dd => `${esc(dd.title)} ${qty(dd.per_portion, dd.unit)}/portion <span class="muted">(${esc(dd.source)}${dd.path && dd.path !== dd.title ? ' · ' + esc(dd.path) : ''})</span>`).join(' · ') || '—'}</div>
+      <div class="muted">${c.ref ? t('sc_refwhy') : esc(c.why.method)}</div>${day}
+      ${c.ref && !c.why.dishes.length ? '' : `<div><b>Dishes</b>: ${c.why.dishes.map(dd => `${esc(dd.title)} ${qty(dd.per_portion, dd.unit)}/portion <span class="muted">(${esc(dd.source)}${dd.path && dd.path !== dd.title ? ' · ' + esc(dd.path) : ''})</span>`).join(' · ') || '—'}</div>`}
       ${(c.why.notes || []).map(n => `<div class="muted">${esc(n)}</div>`).join('')}
       ${c.why.round ? `<div class="muted">${esc(c.why.round)}</div>` : ''}${c.why.batch ? `<div class="muted">${esc(c.why.batch)}</div>` : ''}
       ${c.why.not_counted.length ? `<div class="wtx">${t('sc_not_counted')}: ${esc(c.why.not_counted.join(' · '))}</div>` : ''}
