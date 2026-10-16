@@ -1,4 +1,4 @@
-// B-51 Smart Checklist phase 1 — LIVE: real API (read only op) vs the same engine on dumps read just before,
+// B-51 Smart Checklist R1.11 Progressive Trust — LIVE: real API (read only op) vs the same engine on dumps read just before,
 // then the PUBLISHED site in WebKit on an iPhone screen. Ticks stay on the test browser; nothing is written.
 // Usage: node tests/checklist_live.mjs <chefTokenFile> <staffTokenFile> <outDir>
 import { webkit } from '/Users/massimilianozubboli/cw-probe/node_modules/playwright-core/index.mjs'
@@ -13,7 +13,8 @@ async function call(who, op, body = {}) { const t0 = Date.now(); const r = await
 const C = loadC(), today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date())
 let r = await call(null, 'ping'); ok(r.j.build === 'api-r1.11-trust', `ping: ${r.j.build}`)
 r = await call(null, 'smart_checklist'); ok(r.status === 401, 'no session → 401')
-r = await call('staff', 'smart_checklist'); ok(r.status === 403, `staff → ${r.status} (Chef only in phase 1)`)
+r = await call('staff', 'smart_checklist'); ok(r.status === 403, `staff → ${r.status} (not activated for the brigade)`)
+r = await call('chef', 'smart_checklist', { station: 'pasta', level: 3, step: 2, gates: { step2: true, staffVisible: true } }); ok(r.status === 200 && r.j.level === 1 && r.j.items.every(c => c.level === 1) && !r.j.gates.step2 && !r.j.gates.staffVisible && !r.j.gates.step3, 'request asking for level 2/3 or switches on → level 1, switches off')
 r = await call('chef', 'smart_checklist', { station: 'grill' }); ok(r.status === 400, `other station → ${r.status}`)
 const strip = x => JSON.parse(JSON.stringify(x, (k, v) => typeof v === 'number' ? Math.round(v * 10) / 10 : v))
 for (const day of [null, '2026-10-09', '2026-10-10']) {
@@ -23,7 +24,7 @@ for (const day of [null, '2026-10-09', '2026-10-10']) {
   // events come from the live table for the next 7 days of THAT day: compare items only when the dump covers it
   const same = g.status === 200 && JSON.stringify(strip(g.j.items)) === JSON.stringify(strip(e.items))
   if (!same && g.status === 200) g.j.items.forEach((c, i) => { if (JSON.stringify(strip(c)) !== JSON.stringify(strip(e.items[i]))) console.log('   diff', c.key, JSON.stringify(strip(c)).slice(0, 300), '\n   exp ', JSON.stringify(strip(e.items[i])).slice(0, 300)) })
-  ok(same, `${day ? 'past day ' + day : 'today ' + today}: live = engine on the data just read (${g.ms} ms) · ${g.j.items.map(c => `${c.key} ${c.qty ?? Math.round(c.need)}${c.actual ? ' (sold ' + c.actual.map(a => a.amount).join('+') + ')' : ''}`).join(', ')}`)
+  ok(same, `${day ? 'past day ' + day : 'today ' + today}: live = engine on the data just read (${g.ms} ms) · ${g.j.items.map(c => `${c.key} ${c.qty} for ${c.for_day.weekday} +${c.why.margin}%${c.actual != null ? ' (sold ' + c.actual + ')' : ''}`).join(', ')}`)
 }
 // published site, WebKit on an iPhone screen
 const b = await webkit.launch()
@@ -35,18 +36,22 @@ await pg.addInitScript(t => { localStorage.setItem('brigade-app-token', t); loca
 await pg.goto('https://1cos.github.io/brigade-app/?v=' + Date.now()); await pg.waitForTimeout(4000)
 const t0 = Date.now(); await pg.click('button[data-a="openSmart"]'); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 }); const tOpen = Date.now() - t0
 const txt = await pg.locator('#main').innerText()
-ok((await pg.locator('#main h1').innerText()) === "Today's Priorities" && await pg.locator('#main .sc').count() === 4, `site: My Shift → Pasta Station → Today's Priorities, 4 cards in ${tOpen} ms`)
-ok(/Thaw \d+ Lobsters/.test(txt) && /Pull [\d.,]+ kg Shrimp/.test(txt) && /Check Gnocco dough/.test(txt) && /Make Arrabbiata/.test(txt) && /Simulation/.test(txt), 'site: the 4 priorities and the simulation notice')
-await pg.screenshot({ path: `${OUT}/1_site_priorities.png` })
+ok((await pg.locator('#main h1').innerText()) === "Today's Checklist" && await pg.locator('#main .sc').count() === 4, `site: My Shift → Pasta Station → Today's Checklist, 4 questions in ${tOpen} ms`)
+ok(/Do we have \d+ lobsters ready for today\?/.test(txt) && /pulled for/.test(txt) && /Gnocco dough ready/.test(txt) && /Arrabbiata ready/.test(txt) && /not saved/.test(txt) && await pg.locator('#main .sc input').count() === 0, 'site: 4 questions, one tick each, no quantity to type, simulation notice')
+await pg.screenshot({ path: `${OUT}/1_site_checklist.png` })
 await pg.locator('#main button[data-a="scDone"][data-k="lobster"]').click(); await pg.waitForTimeout(300)
-ok(/Done/.test(await pg.locator('#main .sc').first().innerText()), 'site: one tap done (on this phone only)')
+ok(/✓ Ready/.test(await pg.locator('#main .sc').first().innerText()), 'site: one tap → Ready (on this phone only)')
 await pg.locator('#main .sc').first().locator('details.scw > summary').click(); await pg.waitForTimeout(200)
-ok(/mean of the last 4 same weekdays/.test(await pg.locator('#main .sc').first().innerText()), 'site: Why? opens')
-await pg.screenshot({ path: `${OUT}/2_site_done_why.png` })
+ok(/mean of the last 4 same weekdays/.test(await pg.locator('#main .sc').first().innerText()), 'site: Chef Why? opens')
+await pg.screenshot({ path: `${OUT}/2_site_why.png` })
+await pg.locator('#main button[data-a="scView"][data-v="1"]').click(); await pg.waitForTimeout(300)
+ok(await pg.locator('#main details.scw').count() === 0, 'site: Cook view without Why?')
+await pg.screenshot({ path: `${OUT}/3_site_cook.png` })
+await pg.locator('#main button[data-a="scView"][data-v=""]').click(); await pg.waitForTimeout(300)
 await pg.locator('#main button[data-a="scDay"]').nth(1).click(); await pg.locator('#main .sc').first().waitFor({ timeout: 20000 }); await pg.waitForTimeout(500)
 await pg.locator('#main .sc').first().locator('details.scw > summary').click(); await pg.waitForTimeout(200)
 ok(/Really sold that day/.test(await pg.locator('#main .sc').first().innerText()), 'site: past Friday compared with what was really sold')
-await pg.screenshot({ path: `${OUT}/3_site_past.png` })
+await pg.screenshot({ path: `${OUT}/4_site_past.png` })
 ok(!ops.some(o => /^(act|mre_save|mre_publish|mre_discard|mre_production|mre_prepare)/.test(o)), `site: no write call (${[...new Set(ops)].join(', ')})`)
 const dims = await pg.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); ok(dims[0] <= dims[1], 'site: no sideways scroll')
 await b.close()
