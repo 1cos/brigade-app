@@ -100,7 +100,7 @@ role = 'chef'
   ok(LAB[ART].draft && LAB[ART].draft.lines[0].qty === 3, 'draft saved in the test lab while away (Artichokes 3)')
   await back(pg)
   const q2 = (await pg.locator('#main .mr-ings li').first().locator('b.mq').innerText()).trim()
-  ok((await H1(pg)) === 'Artichoke' && /editing|Stai modificando|Editing/i.test(await pg.locator('#main .mr-editbar').innerText()) && q2.startsWith('3'), `back → still editing, quantity kept (${q2})`)
+  ok((await H1(pg)) === 'Artichoke' && /editing|Stai modificando|Editing|Bozza v[0-9]+ nel laboratorio|Draft v[0-9]+ in the lab/i.test(await pg.locator('#main .mr-editbar').innerText()) && q2.startsWith('3'), `back → still editing, quantity kept (${q2})`)
   // publish in the test lab
   await pg.locator('#main button[data-m="publish"]').click(); await pg.waitForTimeout(800)
   ok(LAB[ART].cur === 2 && LAB[ART].versions[1].doc.lines[0].qty === 3 && calls.includes('mre_publish'), 'save v2 in the test lab: version 2 with the new quantity')

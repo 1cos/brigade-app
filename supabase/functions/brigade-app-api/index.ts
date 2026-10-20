@@ -13,7 +13,7 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 
-const BUILD = 'api-r1.11.5-shrimp'
+const BUILD = 'api-r1.12-stepA'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -330,9 +330,9 @@ Deno.serve(async (req: Request) => {
       case 'smart_checklist': out = await KITCHEN.smartChecklist(u, body, svc); break
       case 'mre_list': out = await MRE.mreList(u, svc); break
       case 'mre_recipe': out = await MRE.mreRecipe(u, String(body.id || ''), svc); break
-      case 'mre_ingredients': out = await MRE.mreIngredients(u, String(body.q || '')); break
+      case 'mre_ingredients': out = await MRE.mreIngredients(u, String(body.q || ''), svc); break
       case 'mre_prepare_edit': out = await MRE.mrePrepareEdit(u, body, svc); break
-      case 'mre_save_draft': out = await MRE.mreSaveDraft(u, body); break
+      case 'mre_save_draft': out = await MRE.mreSaveDraft(u, body, svc); break
       case 'mre_discard': out = await MRE.mreDiscard(u, body); break
       case 'mre_publish': out = await MRE.mrePublish(u, body); break
       case 'mre_restore': out = await MRE.mreRestore(u, body); break

@@ -271,8 +271,8 @@ function mreSection(p) {
   const L = need('mre_list', null, 2 * 60000);
   if (!L || !L.recipes) return '';
   const q = (p.q || '').trim().toLowerCase();
-  const row = r => `<button class="row" data-a="openMre" data-r="${r.id}"><span class="main"><div class="name">${esc(I.dn(r.title))}</div>${isChef() ? `<div class="meta">${r.draft ? t('m_lab_draft') + ' · ' : ''}${r.state === 'importata' ? t('m_lab_imported') : t('m_lab_published', { v: r.current_version })}${r.pending ? ' · ' + t('m_n_new', { n: r.pending }) : ''}</div>` : ''}</span><span class="chev">›</span></button>`;
-  const pil = L.recipes.filter(r => r.pilot && (!q || r.title.toLowerCase().includes(q))), ex = L.recipes.filter(r => r.is_test && !q);
+  const row = r => `<button class="row" data-a="openMre" data-r="${r.id}"><span class="main"><div class="name">${esc(I.dn(r.title))}</div>${isChef() ? `<div class="meta">${r.draft ? t('m_lab_draft') + ' · ' : ''}${r.state === 'ufficiale' ? t('m_lab_official') : r.lab_only ? t('m_lab_proposal') : r.state === 'importata' ? t('m_lab_imported') : t('m_lab_published', { v: r.current_version })}${r.pending ? ' · ' + t('m_n_new', { n: r.pending }) : ''}</div>` : ''}</span><span class="chev">›</span></button>`;
+  const pil = L.recipes.filter(r => (r.pilot || r.draft || r.lab_only) && !r.is_test && (!q || String(r.title || '').toLowerCase().includes(q))), ex = L.recipes.filter(r => r.is_test && !q);
   return `<section><div class="chap"><h2>${t('m_lab_title')}</h2><span>${pil.length}</span></div><p class="note" style="font-size:14px;margin:0 0 8px">${t('m_lab_sub')}</p>
     <div class="list">${pil.map(row).join('')}</div>${ex.length ? `<div class="chap" style="margin-top:12px"><h2>${t('m_lab_example')}</h2></div><div class="list">${ex.map(row).join('')}</div>` : ''}</section>`;
 }

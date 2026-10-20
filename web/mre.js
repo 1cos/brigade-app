@@ -17,11 +17,14 @@ const ui = id => UI[id] || (UI[id] = {});
 let H = null;                    // helpers from app.js: { need, peek, render, toast, openRecipe, isChef, me }
 
 function data(id) { return H.need('mre_recipe', { id }, 5 * 60000); }
-function ctxFor(d, id, rootDoc) {
-  return { doc: x => x === id && rootDoc ? rootDoc : d.docs[x], facts: x => d.facts[x], measures: d.measures };
+function ctxFor(d, id, rootDoc, withDrafts) {
+  // official numbers by default; the Chef's drafts of sub-recipes only in Preview (editing, or a lab-only proposal)
+  const dd = withDrafts && d.draft_docs ? d.draft_docs : {};
+  return { doc: x => x === id && rootDoc ? rootDoc : (dd[x] || d.docs[x]), facts: x => d.facts[x], measures: d.measures };
 }
+let PREVIEW = false;              // true while the Chef edits or looks at a lab proposal: sub-recipe drafts are shown
 function lineName(d, ln) {
-  if (ln.kind === 'recipe') { const s = d.docs[ln.ref]; return s ? I.dn(s.title) : '?'; }   // display name (Grated Parmesan); ids unchanged
+  if (ln.kind === 'recipe') { const s = (PREVIEW && d.draft_docs && d.draft_docs[ln.ref]) || d.docs[ln.ref]; return s ? I.dn(s.title) : '?'; }   // display name (Grated Parmesan); ids unchanged
   const f = d.facts[ln.ref] || {};
   return (I.lang === 'it' && f.name_it) || (I.lang === 'es' && f.name_es) || f.name || '?';
 }
@@ -45,15 +48,17 @@ function render(p) {
   // opened with "Edit" from any recipe card (B-25): start the editor on the lab copy (open draft first, if any)
   if (p.startEdit && H.isChef()) { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.panel = null; p.saved = !!d.draft; delete p.startEdit; }
   const chef = H.isChef(), edit = chef && p.edit && WORK[p.id];
-  const doc = edit ? WORK[p.id] : d.doc;
+  const doc = edit ? WORK[p.id] : (d.source === 'lab' && d.draft ? d.draft : d.doc);
   const f = edit ? 1 : (p.f > 0 ? p.f : 1);
-  const ctx = ctxFor(d, p.id, doc), pref = p.imp ? 'imperial' : 'metric';
+  PREVIEW = !!(edit || d.source === 'lab');
+  const ctx = ctxFor(d, p.id, doc, PREVIEW), pref = p.imp ? 'imperial' : 'metric';
   const y = doc.yield || {};
   let h = `<div class="mr${edit ? ' mr-edit' : ''}">`;
 
   // head
   h += `<div class="mr-head"><div class="mr-row1"><span class="mr-cat">${esc(cat(doc.category))}</span>${chef && !edit ? `<button class="mr-link" data-m="edit">${T('edit')}</button>` : ''}</div>`;
-  if (edit) h += `<div class="mr-editbar">${T('editing', { v: d.recipe.current_version + 1 })}${p.saved ? ' · ' + T('draft_saved') : ''}</div><div class="mr-muted mr-isol">${T('isolated')}</div>` + approvedReminder(d);
+  if (edit) h += `<div class="mr-editbar">${T('editing', { v: (d.draft && d.draft._version) || (Math.max(0, ...(d.versions || []).map(v => v.version)) + 1) })}${p.saved ? ' · ' + T('draft_saved') : ''}</div><div class="mr-muted mr-isol">${T(d.publish_locked ? 'locked_note' : 'isolated')}</div>` + approvedReminder(d);
+  else if (chef) h += `<div class="mr-muted mr-src">${d.source === 'lab' ? T('src_lab') : T('src_official', { t: dt(d.read_at) })}${d.draft && d.source !== 'lab' ? ' · <button class="mr-link acc" data-m="edit">' + T('draft_open') + '</button>' : ''}</div>`;
   h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(I.dn(doc.title))}</h1>`;
   const parts = [];
   if (Number(y.g) > 0) { const s = E().showMass(y.g * f, pref, loc()); parts.push(`${T('yield')} ${Q('y:g', s.n, s.u)}`); }
@@ -213,7 +218,8 @@ function panelHtml(p, d, doc, ctx) {
   if (p.panel === 'hist') {
     let h = `<div class="mr-panel">`;
     for (const v of d.versions || []) h += kv(`<b>v${v.version}</b> · ${esc(T('state_' + v.state))} · ${esc(dt(v.at))}${v.by ? ' · ' + esc(v.by) : ''}<br><span class="mr-muted">${esc(v.reason || '')}</span>`,
-      v.version === d.recipe.current_version ? `<span class="mr-muted">${T('in_use')}</span>` : (H.isChef() && v.state !== 'bozza' ? `<button class="mr-link acc" data-m="restore:${v.version}">${T('restore')}</button>` : ''));
+      !d.publish_locked && v.version === d.recipe.current_version ? `<span class="mr-muted">${T('in_use')}</span>` : (H.isChef() && v.state !== 'bozza' ? `<button class="mr-link acc" data-m="restore:${v.version}">${T(d.publish_locked ? 'restore_draft' : 'restore')}</button>` : ''));
+    if (d.publish_locked && d.source === 'official') h = h.replace('<div class="mr-panel">', `<div class="mr-panel"><p class="mr-muted">${T('hist_official')}</p>`);
     if ((d.productions || []).length) { h += `<p class="mr-sim">${T('productions')}</p>`; for (const r of d.productions) h += kv(`${esc(dt(r.created_at))} · v${r.version} · ${esc(r.by || '')}<br><span class="mr-muted">${esc(r.reference || '')}</span>`, `${r.yield_real_g != null ? nf(r.yield_real_g, 0) + ' g' : ''}${r.changed && r.changed.length ? '<br><span class="mr-muted">' + r.changed.map(c => esc(c.name) + ' ' + nf(c.real, 2) + ' ' + esc(c.unit) + ' (' + T('planned') + ' ' + nf(c.planned, 2) + ')').join(', ') + '</span>' : ''}`); }
     return h + `<p class="mr-muted">${T('hist_note')}</p></div>`;
   }
@@ -235,13 +241,13 @@ function panelHtml(p, d, doc, ctx) {
 function simList(d, rows) {
   if (!rows.length) return `<p class="mr-muted">—</p>`;
   return rows.map(x => {
-    if (x.kind === 'prep') { const s = d.docs[x.ref]; return `<div class="mr-kv"><span>${esc(s ? s.title : '?')} <span class="mr-muted">(${T('prep')})</span></span><span>${x.portions != null ? nf(x.portions, 2) + ' ' + (Math.abs(x.portions - 1) < 1e-9 ? T('portion') : T('portions')) : x.g != null ? nf(x.g, 1) + ' g' : nf(x.fraction, 3) + ' ' + T('batches')}</span></div>`; }
+    if (x.kind === 'prep') { const s = (PREVIEW && d.draft_docs && d.draft_docs[x.ref]) || d.docs[x.ref]; return `<div class="mr-kv"><span>${esc(s ? s.title : '?')} <span class="mr-muted">(${T('prep')})</span></span><span>${x.portions != null ? nf(x.portions, 2) + ' ' + (Math.abs(x.portions - 1) < 1e-9 ? T('portion') : T('portions')) : x.g != null ? nf(x.g, 1) + ' g' : nf(x.fraction, 3) + ' ' + T('batches')}</span></div>`; }
     if (x.kind === 'ingredient') { const f = d.facts[x.ref] || {}; const v = x.g != null ? nf(x.g, x.g < 1 ? 2 : 1) + ' g' : x.ml != null ? nf(x.ml, 1) + ' ml' : x.count != null ? nf(x.count, 2) + ' pz' : '—'; const st = x.status === 'peso_pezzo_mancante' && x.count != null ? 'ok' : x.status; return `<div class="mr-kv"><span>${esc((I.lang === 'it' && f.name_it) || f.name || '?')}</span><span>${v}${st !== 'ok' ? ` <span class="mr-bad">${esc(T('s_' + st))}</span>` : ''}</span></div>`; }
     return `<div class="mr-kv"><span class="mr-bad">${esc(T('s_' + x.status))}</span><span>${esc((d.docs[x.ref] || {}).title || '')}</span></div>`;
   }).join('');
 }
 function footHtml(p, d, doc) {
-  const ctxNew = ctxFor(d, p.id, doc), ctxOld = ctxFor(d, p.id, d.doc);
+  const ctxNew = ctxFor(d, p.id, doc, true), ctxOld = ctxFor(d, p.id, d.doc, d.source === 'lab');
   const a = E().cost(p.id, 1, ctxOld), b = E().cost(p.id, 1, ctxNew);
   const pa = d.doc.yield && d.doc.yield.portions, pb = doc.yield && doc.yield.portions;
   const errs = E().validate(doc, ctxNew, true);
@@ -249,7 +255,7 @@ function footHtml(p, d, doc) {
     ${conseqHtml(d, p.id, ctxOld, ctxNew)}
     ${errs.length ? `<div class="mr-bad">${esc(errs.map(e => T('v_' + e.split(':')[0])).join(' · '))}</div>` : ''}
     <input id="mrReason" class="mr-input" data-mred="1" placeholder="${esc(T('reason'))}" value="${esc(ui(p.id).reason || '')}">
-    <div class="mr-acts mr-between"><button class="mr-link" data-m="cancel">${T('discard')}</button><button class="mr-pub" data-m="publish" ${errs.length ? 'disabled' : ''}>${T('publish', { v: d.recipe.current_version + 1 })}</button></div></div>`;
+    <div class="mr-acts mr-between"><button class="mr-link" data-m="cancel">${T('discard')}</button>${d.publish_locked ? `<button class="mr-pub" data-m="publish" disabled aria-disabled="true" title="${esc(T('locked_note'))}">${T('publish_locked')}</button>` : `<button class="mr-pub" data-m="publish" ${errs.length ? 'disabled' : ''}>${T('publish', { v: d.recipe.current_version + 1 })}</button>`}</div></div>`;
 }
 // B-49 one number: what the change does to every module BEFORE publishing (same engine as the deductions)
 function conseqHtml(d, id, ctxOld, ctxNew) {
@@ -309,7 +315,7 @@ function onClick(ev) {
   else if (k === 'addstep') { work().steps.push({ it: '', en: '', es: '' }); scheduleSave(p); }
   else if (k === 'addi' || k === 'addr') { const nid = 'n' + Date.now().toString(36); work().lines.push({ id: nid, kind: k === 'addr' ? 'recipe' : 'ingredient', ref: a1, qty: null, unit: 'g', role: 'produzione', note: null, group: null }); w.q = ''; w.search = null;
       (async () => { await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); p.saved = true; forget(); H.render(true); })(); return; }
-  else if (k === 'restore') { (async () => { const r = await call('mre_restore', { id: p.id, version: +a1 }); if (r) { H.toast(T('restored', { v: a1, n: r.version })); forget(); H.render(true); } })(); return; }
+  else if (k === 'restore') { (async () => { const r = await call('mre_restore', { id: p.id, version: +a1 }); if (r) { H.toast(r.draft ? T('restored_draft', { v: a1 }) : T('restored', { v: a1, n: r.version })); forget(); H.render(true); } })(); return; }
   else if (k === 'checkdiffs') { (async () => { const r = await call('mre_check_diffs', { id: p.id }, T('checked')); if (r) { forget(); H.render(true); } })(); return; }
   else if (k === 'dec') { (async () => { const r = await call('mre_decide', { suggestion_id: a1, status: a2 }, T('st_' + a2.replace(' ', '_'))); if (r) { forget(); H.render(true); } })(); return; }
   else if (k === 'prod') { w.prod = { real: null, diff: false, used: {} }; w.prodMsg = null; w.sugOpen = false; }
