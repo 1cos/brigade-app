@@ -203,6 +203,8 @@ function panelHtml(p, d, doc, ctx) {
     if (por) {
       const sale = E().explode(p.id, 1 / por, 'vendita', ctx);
       h += `<p class="mr-sim">${T('sim_sale')}</p>` + simList(d, sale);
+      // CD-066 rule 5: full theoretical consumption, with or without a registered production
+      h += `<p class="mr-sim">${T('sim_theo')}</p>` + simList(d, E().explode(p.id, 1 / por, 'costo', ctx).filter(x => x.kind !== 'prep'));
     }
     if (doc.has_stock) { h += `<p class="mr-sim">${T('sim_prod')}</p>` + simList(d, E().explode(p.id, 1, 'produzione', ctx)); }
     h += `<p class="mr-muted">${T('sim_note')}</p></div>`;
@@ -234,7 +236,7 @@ function simList(d, rows) {
   if (!rows.length) return `<p class="mr-muted">—</p>`;
   return rows.map(x => {
     if (x.kind === 'prep') { const s = d.docs[x.ref]; return `<div class="mr-kv"><span>${esc(s ? s.title : '?')} <span class="mr-muted">(${T('prep')})</span></span><span>${x.portions != null ? nf(x.portions, 2) + ' ' + (Math.abs(x.portions - 1) < 1e-9 ? T('portion') : T('portions')) : x.g != null ? nf(x.g, 1) + ' g' : nf(x.fraction, 3) + ' ' + T('batches')}</span></div>`; }
-    if (x.kind === 'ingredient') { const f = d.facts[x.ref] || {}; const v = x.g != null ? nf(x.g, 1) + ' g' : x.ml != null ? nf(x.ml, 1) + ' ml' : x.count != null ? nf(x.count, 2) + ' pz' : '—'; return `<div class="mr-kv"><span>${esc((I.lang === 'it' && f.name_it) || f.name || '?')}</span><span>${v}${x.status !== 'ok' ? ` <span class="mr-bad">${esc(T('s_' + x.status))}</span>` : ''}</span></div>`; }
+    if (x.kind === 'ingredient') { const f = d.facts[x.ref] || {}; const v = x.g != null ? nf(x.g, x.g < 1 ? 2 : 1) + ' g' : x.ml != null ? nf(x.ml, 1) + ' ml' : x.count != null ? nf(x.count, 2) + ' pz' : '—'; const st = x.status === 'peso_pezzo_mancante' && x.count != null ? 'ok' : x.status; return `<div class="mr-kv"><span>${esc((I.lang === 'it' && f.name_it) || f.name || '?')}</span><span>${v}${st !== 'ok' ? ` <span class="mr-bad">${esc(T('s_' + st))}</span>` : ''}</span></div>`; }
     return `<div class="mr-kv"><span class="mr-bad">${esc(T('s_' + x.status))}</span><span>${esc((d.docs[x.ref] || {}).title || '')}</span></div>`;
   }).join('');
 }
@@ -254,10 +256,13 @@ function conseqHtml(d, id, ctxOld, ctxNew) {
   if (!E().consequences) return '';
   const c = E().consequences(id, ctxOld, ctxNew);
   const name = x => x.target === 'prep' ? ((d.docs[x.ref] || {}).title || '?') + ` (${T('prep')})` : (((I.lang === 'it' && (d.facts[x.ref] || {}).name_it) || (d.facts[x.ref] || {}).name) || '?');
-  const val = o => { const v = []; if (o.portions) v.push(nf(-o.portions, 2) + ' ' + T('portions')); if (o.g) v.push(nf(-o.g, 1) + ' g'); if (o.count) v.push(nf(-o.count, 2) + ' pz'); if (o.ml) v.push(nf(-o.ml, 1) + ' ml'); return v.join(' · ') || '0'; };
+  // consumption is shown as a plain number, what a production makes with '+'
+  const n1 = (x, u) => (x > 0 ? '+' : '') + nf(Math.abs(x), Math.abs(x) < 1 ? 2 : 1) + u;
+  const val = o => { const v = []; if (o.portions) v.push(n1(o.portions, '') + ' ' + (Math.abs(Math.abs(o.portions) - 1) < 1e-9 ? T('portion') : T('portions'))); if (o.g) v.push((o.g > 0 ? '+' : '') + nf(Math.abs(o.g), Math.abs(o.g) < 1 ? 2 : 1) + ' g'); if (o.count) v.push((o.count > 0 ? '+' : '') + nf(Math.abs(o.count), 2) + ' pz'); if (o.ml) v.push((o.ml > 0 ? '+' : '') + nf(Math.abs(o.ml), 1) + ' ml'); return v.join(' · ') || '0'; };
   const rows = l => l.map(x => `<div class="mr-kv"><span>${esc(name(x))}</span><span>${esc(val(x.before))} → <b>${esc(val(x.after))}</b></span></div>`).join('');
-  if (!c.sale.length && !c.production.length) return `<div class="mr-muted">${T('conseq_none')}</div>`;
-  return `<div class="mr-conseq"><div class="mr-muted">${T('conseq_title')}</div>${c.sale.length ? `<p class="mr-sim">${T('conseq_sale')}</p>` + rows(c.sale) : ''}${c.production.length ? `<p class="mr-sim">${T('conseq_prod')}</p>` + rows(c.production) : ''}</div>`;
+  const th = c.theoretical || [];
+  if (!c.sale.length && !c.production.length && !th.length) return `<div class="mr-muted">${T('conseq_none')}</div>`;
+  return `<div class="mr-conseq"><div class="mr-muted">${T('conseq_title')}</div>${c.sale.length ? `<p class="mr-sim">${T('conseq_sale')}</p>` + rows(c.sale) : ''}${c.production.length ? `<p class="mr-sim">${T('conseq_prod')}</p>` + rows(c.production) : ''}${th.length ? `<p class="mr-sim">${T('conseq_theo')}</p>` + rows(th) : ''}</div>`;
 }
 const dt = iso => iso ? new Intl.DateTimeFormat(loc(), { timeZone: 'America/Chicago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '';
 

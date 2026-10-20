@@ -239,7 +239,7 @@ export function lotsFromPortions(doc, portions) {
 }
 const mvRow = (x, sign) => ({ target: x.kind === 'prep' ? 'prep' : x.kind === 'ingredient' ? 'ingrediente' : 'errore', ref: x.ref, line: x.line || null, from: x.from || null, role: x.role || null,
   g: x.g != null ? sign * x.g : null, ml: x.ml != null ? sign * x.ml : null, count: x.count != null ? sign * x.count : null, ckey: x.ckey || null,
-  portions: x.portions != null ? sign * x.portions : null, status: x.status })
+  portions: x.portions != null ? sign * x.portions : null, lots: x.kind === 'prep' && x.fraction != null ? sign * x.fraction : null, status: x.status })
 /** Inventory movements of one event. ev: { kind:'vendita'|'produzione', recipe, version, portions | lots, ref }.
  *  Consumption is negative; a production also adds the made lot to the recipe's own stock (positive).
  *  The rows are computed once and stored with the version: a later recipe change never alters them. */
@@ -253,7 +253,7 @@ export function movements(ev, ctx) {
   if (ev.kind === 'produzione') {
     if (!doc.has_stock) errors.push('ricetta_senza_scorta');
     rows.push({ target: 'prep', ref: ev.recipe, line: null, from: null, role: 'prodotto', g: Number(doc.yield.g) > 0 ? lots * doc.yield.g : null, ml: null, count: null, ckey: null,
-      portions: Number(doc.yield.portions) > 0 ? lots * doc.yield.portions : null, status: 'ok' });
+      portions: Number(doc.yield.portions) > 0 ? lots * doc.yield.portions : null, lots, status: 'ok' });
   }
   for (const x of explode(ev.recipe, lots, ev.kind === 'produzione' ? 'produzione' : 'vendita', ctx)) {
     const r = mvRow(x, -1); rows.push(r); if (r.target === 'errore') errors.push(x.status);
@@ -263,19 +263,91 @@ export function movements(ev, ctx) {
 /** Cancellation: the same stored rows with the opposite sign (never recomputed from today's recipe). */
 export function reverseMovements(m, reason) {
   return { event: Object.assign({}, m.event, { kind: 'annullamento', reverses: m.event, reason: reason || null }), version: m.version, engine: m.engine, lots: m.lots,
-    rows: m.rows.map(r => Object.assign({}, r, { g: r.g != null ? -r.g : null, ml: r.ml != null ? -r.ml : null, count: r.count != null ? -r.count : null, portions: r.portions != null ? -r.portions : null })), errors: m.errors };
+    rows: m.rows.map(r => Object.assign({}, r, { g: r.g != null ? -r.g : null, ml: r.ml != null ? -r.ml : null, count: r.count != null ? -r.count : null, portions: r.portions != null ? -r.portions : null, lots: r.lots != null ? -r.lots : null })), errors: m.errors };
 }
 /** Net total per stock item ('prep:<recipe id>' / 'ingrediente:<id>'). */
 export function sumMovements(list) {
   const t = {};
   for (const m of list) for (const r of m.rows) {
     if (r.target === 'errore') continue;
-    const k = r.target + ':' + r.ref, o = t[k] || (t[k] = { target: r.target, ref: r.ref, g: 0, ml: 0, count: 0, portions: 0 });
-    for (const f of ['g', 'ml', 'count', 'portions']) if (r[f] != null) o[f] += r[f];
+    const k = r.target + ':' + r.ref, o = t[k] || (t[k] = { target: r.target, ref: r.ref, g: 0, ml: 0, count: 0, portions: 0, lots: 0 });
+    for (const f of ['g', 'ml', 'count', 'portions', 'lots']) if (r[f] != null) o[f] += r[f];
   }
-  for (const o of Object.values(t)) for (const f of ['g', 'ml', 'count', 'portions']) o[f] = Math.round(o[f] * 1e6) / 1e6;
+  for (const o of Object.values(t)) for (const f of ['g', 'ml', 'count', 'portions', 'lots']) o[f] = Math.round(o[f] * 1e6) / 1e6;
   return t;
 }
+/* ---- CD-066 (Chef 20/10): PREP and POS ITEM linked, three separate ledgers ----
+ * physical stock (only from counts — never invented) · registered production · theoretical consumption (always). */
+/** Theoretical consumption of selling `portions` of a recipe: every sub-recipe opened down to raw ingredients (rule 5),
+ *  whether or not anyone registered the production. Same walk as the food cost (rule 4). */
+export function theoretical(rootId, portions, ctx, lotsIn, onlyPrep) {
+  let lots = lotsIn;
+  if (lots == null) { const r = lotsFromPortions(ctx.doc(rootId), portions); if (r.lots == null) return { rows: [], errors: [r.status] }; lots = r.lots }
+  const rows = [], errors = [], root = ctx.doc(rootId), leaves = [];
+  // onlyPrep: what MAKING the prep uses (its 'al_piatto' lines are added at service and counted at the sale, never twice)
+  if (!root) leaves.push({ kind: 'error', ref: rootId, status: 'ricetta_mancante' });
+  else walk(root, rootId, lots, [rootId], onlyPrep ? (l => l.role !== 'al_piatto') : (() => true), leaves, 'costo', ctx);
+  for (const x of leaves) { const m = mvRow(x, -1); if (m.target === 'errore') errors.push(x.status); else rows.push(m); }
+  return { lots, rows, errors: [...new Set(errors)] };
+}
+/** A quantity of a prep ({portions} or {g}) as lots of its recipe; null when the recipe cannot say. */
+export function prepLots(doc, q) {
+  if (!doc || !q) return null;
+  if (q.lots != null) return Number(q.lots);
+  if (q.portions != null && Number(doc.yield && doc.yield.portions) > 0) return Number(q.portions) / doc.yield.portions;
+  if (q.g != null && Number(doc.yield && doc.yield.g) > 0) return Number(q.g) / doc.yield.g;
+  return null;
+}
+/** Period reconciliation (rule 6). sales: [{recipe, portions}], productions: [{recipe, lots, version}],
+ *  counts: {<prep recipe id>: {portions|g}} counted at the start (optional — without a count the stock is unknown, never invented).
+ *  Raw materials are taken ONCE: from registered productions for what they cover; what was sold without a registered production
+ *  is reported as theoretical-only (not a stock movement): moving raw stock for it is a separate Chef decision (B-56 A1/A2). */
+export function reconcile({ sales = [], productions = [], counts = {} }, ctx) {
+  const saleMv = sales.map(s => movements({ kind: 'vendita', recipe: s.recipe, portions: s.portions, version: s.version }, ctx));
+  const prodMv = productions.map(p => movements({ kind: 'produzione', recipe: p.recipe, lots: p.lots, version: p.version }, ctx));
+  const preps = {}, y = id => (ctx.doc(id) || {}).yield || {};
+  const P = id => preps[id] || (preps[id] = { prep: id, sold_lots: 0, produced_lots: 0, start_lots: counts[id] ? prepLots(ctx.doc(id), counts[id]) : null });
+  for (const m of saleMv) for (const r of m.rows) if (r.target === 'prep' && r.lots != null) P(r.ref).sold_lots += -r.lots;
+  for (const m of prodMv) for (const r of m.rows) if (r.target === 'prep' && r.role === 'prodotto') P(r.ref).produced_lots += r.lots;
+  const uncoveredMv = [];
+  for (const p of Object.values(preps)) {
+    const avail = p.produced_lots + (p.start_lots || 0), Y = y(p.prep);
+    p.covered_lots = Math.min(p.sold_lots, avail);
+    p.uncovered_lots = Math.max(0, p.sold_lots - avail);
+    p.stock_known = p.start_lots != null;
+    p.end_lots = p.stock_known ? p.start_lots + p.produced_lots - p.sold_lots : null;          // only when counted
+    for (const k of ['sold', 'produced', 'covered', 'uncovered', 'start', 'end']) {
+      const v = p[k + '_lots'];
+      p[k + '_portions'] = v == null || !(Number(Y.portions) > 0) ? null : Math.round(v * Y.portions * 1e6) / 1e6;
+      p[k + '_g'] = v == null || !(Number(Y.g) > 0) ? null : Math.round(v * Y.g * 1e6) / 1e6;
+    }
+    if (p.uncovered_lots > 1e-9) { const t = theoretical(p.prep, null, ctx, p.uncovered_lots, true); uncoveredMv.push({ rows: t.rows }); if (t.errors.length) p.uncovered_errors = t.errors }
+  }
+  const theo = sales.map(s => theoretical(s.recipe, s.portions, ctx));
+  return {
+    preps: Object.values(preps),
+    registered: sumMovements(prodMv),                      // raw consumed by registered productions (+ preps made)
+    at_sale: sumMovements(saleMv),                         // prep used + ingredients added at service
+    uncovered_theoretical: sumMovements(uncoveredMv),      // raw for what was sold without a registered production (theoretical only)
+    theoretical: sumMovements(theo),                       // full theoretical consumption of the sales (always)
+    errors: [...new Set([...saleMv, ...prodMv].flatMap(m => m.errors).concat(theo.flatMap(t => t.errors)))],
+  };
+}
+/** Structure check against CD-066 for one recipe (no judgement on culinary values): copies, mixed prep/POS item, missing links. */
+export function modelCheck(rootId, ctx, opt = {}) {
+  const doc = ctx.doc(rootId), out = [];
+  if (!doc) return [{ code: 'ricetta_mancante' }];
+  const direct = new Set((doc.lines || []).filter(l => l.kind === 'ingredient').map(l => l.ref));
+  for (const l of doc.lines || []) {
+    if (l.kind !== 'recipe') continue;
+    const inner = new Set(explode(l.ref, 1, 'costo', ctx).filter(x => x.kind === 'ingredient').map(x => x.ref));
+    for (const i of direct) if (inner.has(i)) out.push({ code: 'ingrediente_anche_nella_sotto_ricetta', ingredient: i, sub: l.ref, line: (doc.lines.find(x => x.ref === i) || {}).id });
+  }
+  if (opt.sold && doc.has_stock && (doc.lines || []).length) out.push({ code: 'prep_e_piatto_nella_stessa_ricetta', note: 'venduta al POS e prodotta in anticipo con la stessa distinta: da separare in PREP + POS ITEM solo se sono operazioni diverse (revisione Chef)' });
+  for (const x of explode(rootId, 1, 'costo', ctx)) if (x.kind === 'error') out.push({ code: x.status, ref: x.ref, line: x.line });
+  return out;
+}
+
 /** What a change does BEFORE it is published: 1 portion sold, 1 lot produced, food cost. Only items that change are listed. */
 export function consequences(id, ctxOld, ctxNew) {
   const one = (ctx, kind) => { const d = ctx.doc(id); if (!d) return null; return kind === 'vendita' ? movements({ kind, recipe: id, portions: 1 }, ctx) : (d.has_stock ? movements({ kind, recipe: id, lots: 1 }, ctx) : null) };
@@ -290,7 +362,8 @@ export function consequences(id, ctxOld, ctxNew) {
   };
   const so = one(ctxOld, 'vendita'), sn = one(ctxNew, 'vendita'), po = one(ctxOld, 'produzione'), pn = one(ctxNew, 'produzione');
   const co = cost(id, 1, ctxOld), cn = cost(id, 1, ctxNew);
-  return { sale: diff(so, sn), sale_errors: sn ? sn.errors : ['ricetta_mancante'], production: diff(po, pn), production_errors: pn ? pn.errors : [],
+  const tOf = ctx => { const d = ctx.doc(id); if (!d) return null; const t = Number(d.yield && d.yield.portions) > 0 ? theoretical(id, 1, ctx) : theoretical(id, null, ctx, 1); return { rows: t.rows } };
+  return { theoretical: diff(tOf(ctxOld), tOf(ctxNew)), sale: diff(so, sn), sale_errors: sn ? sn.errors : ['ricetta_mancante'], production: diff(po, pn), production_errors: pn ? pn.errors : [],
     cost: { lot_before: co.food, lot_after: cn.food, portion_before: co.per_portion, portion_after: cn.per_portion, missing_after: cn.missing } };
 }
 

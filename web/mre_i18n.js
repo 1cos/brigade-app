@@ -67,6 +67,8 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   s_unita_sconosciuta: ['unknown unit', 'unità sconosciuta', 'unidad desconocida'], s_da_definire: ['to define', 'da definire', 'por definir'], s_quantita_mancante: ['quantity missing', 'quantità mancante', 'falta cantidad'],
   s_stima: ['estimate', 'stima', 'estimación'], s_ricetta_mancante: ['recipe missing', 'ricetta mancante', 'falta receta'],
   conseq_title: ['Before publishing — what changes in deductions (same engine as the nightly run)', 'Prima di pubblicare — cosa cambia negli scarichi (stesso motore del giro notturno)', 'Antes de publicar — qué cambia en los descuentos (mismo motor)'],
+  conseq_theo: ['Full theoretical use of 1 portion (raw ingredients)', 'Consumo teorico completo di 1 porzione (materie prime)', 'Consumo teórico completo de 1 porción'],
+  sim_theo: ['Full theoretical use for 1 portion (raw ingredients, with or without a registered production)', 'Consumo teorico completo per 1 porzione (materie prime, con o senza produzione registrata)', 'Consumo teórico completo por 1 porción'],
   conseq_sale: ['1 portion sold', '1 porzione venduta', '1 porción vendida'], conseq_prod: ['1 batch produced', '1 lotto prodotto', '1 lote producido'],
   conseq_none: ['Deductions unchanged by this edit.', 'Questa modifica non cambia gli scarichi.', 'Esta modificación no cambia los descuentos.'],
   fc_lot: ['Batch food cost', 'Food cost lotto', 'Food cost lote'], fc_portion: ['per portion', 'a porzione', 'por porción'], missing_n: ['{n} without cost', '{n} senza costo', '{n} sin costo'],
