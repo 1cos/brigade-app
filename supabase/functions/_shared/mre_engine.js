@@ -227,6 +227,73 @@ export function cost(rootId, factor, ctx) {
   return { food, pack, missing, estimated, complete: missing === 0, per_portion: portions ? food / portions : null, portions, byLine };
 }
 
+/* ---------------- one number for every module (B-49, Chef 20/10) ----------------
+ * Sale, production, cancellation and partial lots all come from explode() on ONE version of the recipe.
+ * The lot/portion rule lives only here: n portions = n / yield.portions lots. No caller divides on its own. */
+/** Lots for a number of portions. null + status when the recipe has no portions. */
+export function lotsFromPortions(doc, portions) {
+  const p = Number(doc && doc.yield && doc.yield.portions), n = Number(portions);
+  if (!(p > 0)) return { lots: null, status: 'porzioni_mancanti' };
+  if (!isFinite(n)) return { lots: null, status: 'quantita_mancante' };
+  return { lots: n / p, status: 'ok' };
+}
+const mvRow = (x, sign) => ({ target: x.kind === 'prep' ? 'prep' : x.kind === 'ingredient' ? 'ingrediente' : 'errore', ref: x.ref, line: x.line || null, from: x.from || null, role: x.role || null,
+  g: x.g != null ? sign * x.g : null, ml: x.ml != null ? sign * x.ml : null, count: x.count != null ? sign * x.count : null, ckey: x.ckey || null,
+  portions: x.portions != null ? sign * x.portions : null, status: x.status })
+/** Inventory movements of one event. ev: { kind:'vendita'|'produzione', recipe, version, portions | lots, ref }.
+ *  Consumption is negative; a production also adds the made lot to the recipe's own stock (positive).
+ *  The rows are computed once and stored with the version: a later recipe change never alters them. */
+export function movements(ev, ctx) {
+  const doc = ctx.doc(ev.recipe);
+  if (!doc) return { event: ev, lots: null, rows: [], errors: ['ricetta_mancante'] };
+  let lots = ev.lots != null ? Number(ev.lots) : null, errors = [];
+  if (lots == null) { const r = lotsFromPortions(doc, ev.portions); lots = r.lots; if (r.status !== 'ok') errors.push(r.status) }
+  if (!(lots > 0)) return { event: ev, lots: null, rows: [], errors: errors.length ? errors : ['quantita_mancante'] };
+  const rows = []
+  if (ev.kind === 'produzione') {
+    if (!doc.has_stock) errors.push('ricetta_senza_scorta');
+    rows.push({ target: 'prep', ref: ev.recipe, line: null, from: null, role: 'prodotto', g: Number(doc.yield.g) > 0 ? lots * doc.yield.g : null, ml: null, count: null, ckey: null,
+      portions: Number(doc.yield.portions) > 0 ? lots * doc.yield.portions : null, status: 'ok' });
+  }
+  for (const x of explode(ev.recipe, lots, ev.kind === 'produzione' ? 'produzione' : 'vendita', ctx)) {
+    const r = mvRow(x, -1); rows.push(r); if (r.target === 'errore') errors.push(x.status);
+  }
+  return { event: Object.assign({}, ev), version: ev.version != null ? ev.version : null, engine: MRE_ENGINE_VERSION, lots, rows, errors: [...new Set(errors)] };
+}
+/** Cancellation: the same stored rows with the opposite sign (never recomputed from today's recipe). */
+export function reverseMovements(m, reason) {
+  return { event: Object.assign({}, m.event, { kind: 'annullamento', reverses: m.event, reason: reason || null }), version: m.version, engine: m.engine, lots: m.lots,
+    rows: m.rows.map(r => Object.assign({}, r, { g: r.g != null ? -r.g : null, ml: r.ml != null ? -r.ml : null, count: r.count != null ? -r.count : null, portions: r.portions != null ? -r.portions : null })), errors: m.errors };
+}
+/** Net total per stock item ('prep:<recipe id>' / 'ingrediente:<id>'). */
+export function sumMovements(list) {
+  const t = {};
+  for (const m of list) for (const r of m.rows) {
+    if (r.target === 'errore') continue;
+    const k = r.target + ':' + r.ref, o = t[k] || (t[k] = { target: r.target, ref: r.ref, g: 0, ml: 0, count: 0, portions: 0 });
+    for (const f of ['g', 'ml', 'count', 'portions']) if (r[f] != null) o[f] += r[f];
+  }
+  for (const o of Object.values(t)) for (const f of ['g', 'ml', 'count', 'portions']) o[f] = Math.round(o[f] * 1e6) / 1e6;
+  return t;
+}
+/** What a change does BEFORE it is published: 1 portion sold, 1 lot produced, food cost. Only items that change are listed. */
+export function consequences(id, ctxOld, ctxNew) {
+  const one = (ctx, kind) => { const d = ctx.doc(id); if (!d) return null; return kind === 'vendita' ? movements({ kind, recipe: id, portions: 1 }, ctx) : (d.has_stock ? movements({ kind, recipe: id, lots: 1 }, ctx) : null) };
+  const diff = (a, b) => {
+    const A = a ? sumMovements([a]) : {}, B = b ? sumMovements([b]) : {}, out = [];
+    for (const k of new Set([...Object.keys(A), ...Object.keys(B)])) {
+      const x = A[k] || { g: 0, ml: 0, count: 0, portions: 0 }, y = B[k] || { g: 0, ml: 0, count: 0, portions: 0 };
+      const ch = ['g', 'ml', 'count', 'portions'].filter(f => Math.abs((x[f] || 0) - (y[f] || 0)) > 1e-6);
+      if (ch.length) out.push({ key: k, target: (A[k] || B[k]).target, ref: (A[k] || B[k]).ref, before: x, after: y, fields: ch });
+    }
+    return out;
+  };
+  const so = one(ctxOld, 'vendita'), sn = one(ctxNew, 'vendita'), po = one(ctxOld, 'produzione'), pn = one(ctxNew, 'produzione');
+  const co = cost(id, 1, ctxOld), cn = cost(id, 1, ctxNew);
+  return { sale: diff(so, sn), sale_errors: sn ? sn.errors : ['ricetta_mancante'], production: diff(po, pn), production_errors: pn ? pn.errors : [],
+    cost: { lot_before: co.food, lot_after: cn.food, portion_before: co.per_portion, portion_after: cn.per_portion, missing_after: cn.missing } };
+}
+
 /* ---------------- validation (editor / publish) ---------------- */
 export function validate(doc, ctx, strict) {
   const err = [];

@@ -244,9 +244,20 @@ function footHtml(p, d, doc) {
   const pa = d.doc.yield && d.doc.yield.portions, pb = doc.yield && doc.yield.portions;
   const errs = E().validate(doc, ctxNew, true);
   return `<div class="mr-foot"><div class="mr-muted">${T('fc_lot')} ${usd(a.food)} → ${usd(b.food)}${pa && pb ? ` · ${T('fc_portion')} ${usd(a.food / pa)} → ${usd(b.food / pb)}` : ''}${b.missing ? ' · ' + T('missing_n', { n: b.missing }) : ''}</div>
+    ${conseqHtml(d, p.id, ctxOld, ctxNew)}
     ${errs.length ? `<div class="mr-bad">${esc(errs.map(e => T('v_' + e.split(':')[0])).join(' · '))}</div>` : ''}
     <input id="mrReason" class="mr-input" data-mred="1" placeholder="${esc(T('reason'))}" value="${esc(ui(p.id).reason || '')}">
     <div class="mr-acts mr-between"><button class="mr-link" data-m="cancel">${T('discard')}</button><button class="mr-pub" data-m="publish" ${errs.length ? 'disabled' : ''}>${T('publish', { v: d.recipe.current_version + 1 })}</button></div></div>`;
+}
+// B-49 one number: what the change does to every module BEFORE publishing (same engine as the deductions)
+function conseqHtml(d, id, ctxOld, ctxNew) {
+  if (!E().consequences) return '';
+  const c = E().consequences(id, ctxOld, ctxNew);
+  const name = x => x.target === 'prep' ? ((d.docs[x.ref] || {}).title || '?') + ` (${T('prep')})` : (((I.lang === 'it' && (d.facts[x.ref] || {}).name_it) || (d.facts[x.ref] || {}).name) || '?');
+  const val = o => { const v = []; if (o.portions) v.push(nf(-o.portions, 2) + ' ' + T('portions')); if (o.g) v.push(nf(-o.g, 1) + ' g'); if (o.count) v.push(nf(-o.count, 2) + ' pz'); if (o.ml) v.push(nf(-o.ml, 1) + ' ml'); return v.join(' · ') || '0'; };
+  const rows = l => l.map(x => `<div class="mr-kv"><span>${esc(name(x))}</span><span>${esc(val(x.before))} → <b>${esc(val(x.after))}</b></span></div>`).join('');
+  if (!c.sale.length && !c.production.length) return `<div class="mr-muted">${T('conseq_none')}</div>`;
+  return `<div class="mr-conseq"><div class="mr-muted">${T('conseq_title')}</div>${c.sale.length ? `<p class="mr-sim">${T('conseq_sale')}</p>` + rows(c.sale) : ''}${c.production.length ? `<p class="mr-sim">${T('conseq_prod')}</p>` + rows(c.production) : ''}</div>`;
 }
 const dt = iso => iso ? new Intl.DateTimeFormat(loc(), { timeZone: 'America/Chicago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '';
 
