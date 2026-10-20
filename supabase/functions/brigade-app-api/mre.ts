@@ -150,6 +150,11 @@ export async function mreRecipe(u: U, id: string, svc: any) {
     if (isChef) {
       const [dr] = r ? await tx`select version, doc, created_at from mre.versions where recipe_id = ${id} and state = 'bozza'` : []
       out.draft = dr ? Object.assign({}, dr.doc, { id, _version: dr.version, _state: 'bozza' }) : null
+      if (out.draft && source === 'official') {            // what the draft links to (new ingredients, other sub-recipes) must be readable too
+        const td = await tree(tx, svc, out.draft, true)
+        for (const [k, v] of Object.entries(td.docs)) if (k !== id && !out.docs[k]) out.docs[k] = v
+        Object.assign(out.draft_docs, td.draftDocs); Object.assign(out.facts, td.facts)
+      }
       out.diffs = source === 'official' ? off.diffs[id] || [] : []                               // text vs BOM, read fresh
       out.diffs_checked = r && r.diffs_checked_at ? { at: r.diffs_checked_at, by: nm(r.diffs_checked_by) } : null
       out.cost = E.cost(id, 1, ctxOf(t, source === 'lab'))                     // computed on the SERVER with the shared engine (official numbers; a lab proposal with its drafts)

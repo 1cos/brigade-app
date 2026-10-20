@@ -111,6 +111,18 @@ Deno.test('A8 Ripristina dallo storico = nuova BOZZA (mai una ricetta in uso)', 
   await M.mreDiscard(CHEF, { id: WHEEL })
 })
 
+Deno.test('A8b bozza che collega un ingrediente nuovo: il suo prezzo arriva con la ricetta', async () => {
+  const FLAKES = 'bb3717e0-3d2c-43ef-aac4-dc5df13f5d8a'
+  await db`insert into bench.facts values (${FLAKES}, ${db.json({ id: FLAKES, name: 'Parmesan Flakes', base_unit: 'g', price: { basis_dim: 'mass', cost_per_base: 0.02987266089349019 } })}) on conflict do nothing`
+  const off = (await M.mreRecipe(CHEF, WHEEL, svc)).doc
+  await M.mreSaveDraft(CHEF, { id: WHEEL, doc: Object.assign({}, off, { lines: off.lines.map((l: any) => l.id === 'b2176' ? Object.assign({}, l, { ref: FLAKES }) : l) }), base: 1 }, svc)
+  const o = await M.mreRecipe(CHEF, WHEEL, svc)
+  assert(o.facts[FLAKES] && o.facts[FLAKES].price, 'prezzo del nuovo ingrediente presente')
+  const c = E.cost(WHEEL, 1, { doc: (x: string) => x === WHEEL ? o.draft : o.docs[x], facts: (x: string) => o.facts[x], measures: o.measures })
+  assert(Math.abs(c.food - 3.376) < 0.01, `costo bozza ${c.food}`)
+  await M.mreDiscard(CHEF, { id: WHEEL })
+})
+
 Deno.test('A9 cuoco: niente prezzi, niente bozze, niente proposte', async () => {
   const o = await M.mreRecipe(STAFF, SPIN, svc)
   assert(!Object.values(o.facts).some((f: any) => 'price' in f)); assertEquals(o.draft, undefined); assertEquals(Object.keys(o.draft_docs).length, 0)
