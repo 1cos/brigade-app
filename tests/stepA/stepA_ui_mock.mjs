@@ -83,7 +83,7 @@ await pg.locator('h1.mr-title').evaluate(e => { e.focus(); e.textContent = 'Spin
 await shot(pg, '.mr-editbar', 'a2_bozza')
 await shot(pg, '.mr-foot', 'a3_anteprima')
 const ft = await txt(pg, '.mr-foot')
-ok(/Parmesan Grated \(prep\) 75 g → 0/.test(ft) && /\+15 porzioni · \+1200 g → \+22 porzioni/.test(ft), 'Anteprima: lotto 15 → 22 porzioni, parmigiano 75 g → 0')
+ok(/(Parmesan Grated|Grated Parmesan) \(prep\) 75 g → 0/.test(ft) && /\+15 porzioni · \+1200 g → \+22 porzioni/.test(ft), 'Anteprima: lotto 15 → 22 porzioni, parmigiano 75 g → 0')
 ok(/Fresh Spinach 121 g → 82,5 g/.test(ft) && /Butter 29,3 g → 20 g/.test(ft), 'Anteprima: consumo teorico a porzione spinaci 121 → 82,5 g, burro 29,3 → 20 g')
 ok(/Food cost lotto \$17\.02 → \$16\.29/.test(ft), 'Anteprima: food cost lotto $17,02 → $16,29')
 const pub = pg.locator('[data-m="publish"]')

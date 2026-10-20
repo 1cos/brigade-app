@@ -261,7 +261,7 @@ function footHtml(p, d, doc) {
 function conseqHtml(d, id, ctxOld, ctxNew) {
   if (!E().consequences) return '';
   const c = E().consequences(id, ctxOld, ctxNew);
-  const name = x => x.target === 'prep' ? ((d.docs[x.ref] || {}).title || '?') + ` (${T('prep')})` : (((I.lang === 'it' && (d.facts[x.ref] || {}).name_it) || (d.facts[x.ref] || {}).name) || '?');
+  const name = x => x.target === 'prep' ? I.dn(((ctxNew.doc(x.ref) || d.docs[x.ref] || {}).title) || '?') + ` (${T('prep')})` : (((I.lang === 'it' && (d.facts[x.ref] || {}).name_it) || (d.facts[x.ref] || {}).name) || '?');
   // consumption is shown as a plain number, what a production makes with '+'
   const n1 = (x, u) => (x > 0 ? '+' : '') + nf(Math.abs(x), Math.abs(x) < 1 ? 2 : 1) + u;
   const val = o => { const v = []; if (o.portions) v.push(n1(o.portions, '') + ' ' + (Math.abs(Math.abs(o.portions) - 1) < 1e-9 ? T('portion') : T('portions'))); if (o.g) v.push((o.g > 0 ? '+' : '') + nf(Math.abs(o.g), Math.abs(o.g) < 1 ? 2 : 1) + ' g'); if (o.count) v.push((o.count > 0 ? '+' : '') + nf(Math.abs(o.count), 2) + ' pz'); if (o.ml) v.push((o.ml > 0 ? '+' : '') + nf(Math.abs(o.ml), 1) + ' ml'); return v.join(' · ') || '0'; };

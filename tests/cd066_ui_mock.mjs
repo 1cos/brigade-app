@@ -67,7 +67,7 @@ await pg.click('b.mq[data-mq="y:p"]'); await pg.keyboard.press('Meta+A'); await 
 await pg.locator('[data-m="del:b1757"]').evaluate(e => e.click()); await pg.waitForTimeout(1400)
 await shotAt(pg, '.mr-foot', 'c1_prep_anteprima')
 const ft = (await txt(pg, '.mr-foot')).replace(/\s+/g, ' ')
-ok(/1 lotto prodotto/i.test(ft) && /Parmesan Grated/.test(ft) && /75 g → 0\b/.test(ft), 'anteprima prep: parmigiano 75 g → 0 nel lotto')
+ok(/1 lotto prodotto/i.test(ft) && /Parmesan Grated|Grated Parmesan/.test(ft) && /75 g → 0\b/.test(ft), 'anteprima prep: parmigiano 75 g → 0 nel lotto')
 ok(/\+15 porzioni · \+1200 g → \+22 porzioni/.test(ft), 'anteprima prep: il lotto fa 22 porzioni invece di 15')
 ok(/1 porzione venduta/i.test(ft) && /80 g → 1 porzione · 54,5 g/.test(ft), 'anteprima prep: 1 porzione = 54,5 g di lotto (resa 1200 g / 22)')
 ok(/consumo teorico completo/i.test(ft), 'anteprima prep: consumo teorico completo mostrato')
