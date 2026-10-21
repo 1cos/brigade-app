@@ -182,7 +182,7 @@ ok(/DRAFT v\d.*Not published/i.test(await txt(pg, '#main .mr-flash')), 'stato: '
 const Ld = LAB[SPIN].draft
 ok(Ld.yield.portions === 15 && Ld.yield.portion_g === 80 && Ld.yield.g == null && Ld.lines.find(l => l.id === 'b1756').qty === 1 && Ld.lines.find(l => l.id === 'b1756').per === 'portion', 'bozza salvata: 15 cups, 80 g, contenitori "1 per cup" — un numero, un posto')
 // 7 — the same recipe in the three languages
-const read = async (lang) => { LANG = lang; await pg.close(); pg = await page(); await open(pg, 'spinach', 'Spinach Cup'); await shot(pg, '4_spinach_cup_' + lang, true); return txt(pg, '#main .mr-steps') }
+const read = async (lang) => { LANG = lang; await pg.close(); pg = await page(); await open(pg, 'spinach', 'Spinach Cup'); await shot(pg, '4_spinach_cup_' + lang, true); await pg.locator('#main .mr-steps').scrollIntoViewIfNeeded(); await pg.evaluate(() => { const m = document.getElementById('main'), o = document.querySelector('#main .mr-steps'); m.scrollTop += o.getBoundingClientRect().top - 260 }); await pg.waitForTimeout(200); await shot(pg, '4b_procedimento_' + lang); return txt(pg, '#main .mr-steps') }
 const en = await read('en'), it = await read('it'), es = await read('es')
 ok(/Cook all the spinach/.test(en) && /put 80 g of cooked spinach/.test(en) && /automatic translation/.test(en) && !/Cuocere/.test(en), 'EN: istruzioni in inglese, 80 g, "automatic translation" — ' + en.slice(0, 160))
 ok(/Cuocere tutti gli spinaci/.test(it) && /mettere 80 g/.test(it) && !/traduzione automatica/.test(it), 'IT: l\'originale dello Chef, senza segni — ' + it.slice(0, 120))
@@ -207,7 +207,7 @@ const B = last()
 ok(B.id === POS && B.steps[0].src === 'it' && B.steps[0].it.startsWith('Scaldare due Cup') && B.steps[1].it.includes('pinch') && B.steps.every(s => s.tr.en === 'auto' && s.tr.es === 'auto'), 'step recuperati: testo originale identico spostato in "italiano", inglese e spagnolo prodotti')
 await shot(pg, '5_butter_spinach_modifica', true)
 await pg.click('.mr-ebar [data-m="savedraft"]'); await pg.waitForSelector('.mr-editbtn', { timeout: 15000 })
-const bsEn = await txt(pg, '#main .mr-steps'); await shot(pg, '6_butter_spinach_en', true)
+const bsEn = await txt(pg, '#main .mr-steps'); await shot(pg, '6_butter_spinach_en', true); await pg.evaluate(() => { const m = document.getElementById('main'), o = document.querySelector('#main .mr-steps'); m.scrollTop += o.getBoundingClientRect().top - 200 }); await pg.waitForTimeout(200); await shot(pg, '6b_butter_spinach_procedimento_en')
 ok(/Spinach Cup › 2 cups/.test(await txt(pg, '#main .mr-ings')), 'Butter Spinach: "Spinach Cup 2 cups" (porzioni della PREP, non tazze) — ' + (await txt(pg, '#main .mr-ings')).slice(0, 80))
 ok(/Heat two spinach Cups/.test(bsEn) && /automatic translation/.test(bsEn), 'Butter Spinach in inglese: istruzioni in inglese, segnate automatiche — ' + bsEn.slice(0, 140))
 // 11 — a step the translation service cannot translate (today: ai-translate gives back the original) is NOT stored as a translation

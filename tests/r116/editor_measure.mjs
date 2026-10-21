@@ -88,6 +88,9 @@ const st = await pg.evaluate(([a, b]) => { const q = i => document.querySelector
   return { s1: q(a) && q(a).textContent, s2: q(b) && q(b).textContent, focus_on_step2: !!(ae && ae === q(b)), active: ae && (ae.dataset.mt || ae.id || ae.tagName) } }, [si, si + 1])
 R.scen.D_write_steps = { ...st, ...(await window_(t0)), typed_until_ms: Math.round(typedAt - t0) }
 
+await pg.waitForTimeout(6000)
+R.final = await pg.evaluate(() => ({ status: (document.querySelector('#main [data-sst]') || {}).innerText || '', lines: document.querySelectorAll('#main [data-m^="del:"]').length,
+  steps: [...document.querySelectorAll('#main [data-mt^="step:"]')].map(e => e.textContent.trim()), gaps: window.__M.gaps.length }))
 R.blocked_n = R.blocked.length
 fs.writeFileSync(OUT, JSON.stringify(R, null, 1)); await pg.screenshot({ path: OUT.replace(/\.json$/, '.png'), fullPage: true })
 await br.close(); console.log(JSON.stringify(R, null, 1))
