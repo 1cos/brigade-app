@@ -8,10 +8,11 @@ import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js'
 const S = JSON.parse(Deno.readTextFileSync(Deno.env.get('SNAP')!))
 const db = postgres(Deno.env.get('SUPABASE_DB_URL')!, { prepare: false, max: 1 })
 const writes: string[] = []
-const TABLES: Record<string, any[]> = {
+const FX = Deno.env.get('MATCHFX') ? JSON.parse(Deno.readTextFileSync(Deno.env.get('MATCHFX')!)) : {}
+const TABLES: Record<string, any[]> = Object.assign({
   recipes: S.recipes, recipe_bom: S.bom, recipe_steps: S.steps, prep_tasks: S.prep, recipe_yield: S.yield,
   users: [{ id: 1, name: 'Max' }, { id: 38, name: 'Pablo' }],
-}
+}, FX)
 const ingName = Object.fromEntries(Object.values(S.facts).map((f: any) => [f.id, { name: f.name, base_unit: f.base_unit }]))
 function from(t: string) {
   let rows = (TABLES[t] || []).slice(), join = false
@@ -23,6 +24,7 @@ function from(t: string) {
     ilike(c: string, pat: string) { const re = new RegExp('^' + pat.replace(/%/g, '.*') + '$', 'i'); rows = rows.filter(r => re.test(String(r[c] || ''))); return q },
     order(c: string) { rows.sort((a, b) => (a[c] ?? 0) > (b[c] ?? 0) ? 1 : -1); return q },
     limit(n: number) { rows = rows.slice(0, n); return q },
+    range(a: number, b: number) { rows = rows.slice(a, b + 1); return q },
     then(res: any, rej: any) { const data = join ? rows.map(r => Object.assign({}, r, { ingredients: r.item_id ? ingName[r.item_id] || null : null })) : rows; return Promise.resolve({ data: structuredClone(data), error: null }).then(res, rej) },
   }
   for (const w of ['insert', 'update', 'upsert', 'delete']) q[w] = () => { writes.push(t + '.' + w); throw new Error('WRITE ON OFFICIAL TABLE ' + t) }
@@ -126,6 +128,38 @@ Deno.test('B3 "verificata dallo Chef": segno di revisione, non pubblicazione', a
   const ok = await M.mreReview(CHEF, { id: SPIN, verified: true }, svc); assert(ok.ok)
   assertEquals(await err(M.mreReview(STAFF as any, { id: SPIN }, svc)), 'forbidden')
   assert(!('review' in (await M.mreList(STAFF, svc)).recipes.find((x: any) => x.id === SPIN)), 'il cuoco non vede la revisione')
+})
+
+Deno.test('C1 acquisto suggerito: Alluminium Cups → Cont Alum 4 Oz Utility (Ben E. Keith), con il perché; niente collegato da solo', async () => {
+  const CUPS = 'f61ccfe4-2512-4f67-9402-4a00c37efea1', CONT = 'bb09009b-adba-4f20-a4a7-fe5ba4cd4ce7'
+  const r = await M.mrePurchaseMatch(CHEF, { id: CUPS }, svc)
+  assert(r.need, 'serve: nessun prezzo'); const c = r.candidates[0]
+  assertEquals(c.level, 'forte'); assertEquals(c.target.id, CONT); assertEquals(c.vendor, 'Ben E. Keith'); assert(Math.abs(c.price.each - 0.13591) < 1e-9)
+  assert(c.why.some((w: any) => w.k === 'unit_ok') && c.why.some((w: any) => w.k === 'invoices'))
+  assert(!r.candidates.some((x: any) => /Scoop/.test(x.description)), 'la paletta gelato in alluminio non è proposta')
+  const [{ n }] = await db`select count(*)::int n from mre.match_decisions`; assertEquals(n, 0, 'nessuna decisione presa da sola')
+  assertEquals(await err(M.mrePurchaseMatch(STAFF as any, { id: CUPS }, svc)), 'forbidden')
+})
+Deno.test('C2 "Non corrisponde" resta: il candidato non torna', async () => {
+  const CUPS = 'f61ccfe4-2512-4f67-9402-4a00c37efea1'
+  const more = await M.mrePurchaseMatch(CHEF, { id: CUPS, more: true }, svc), weak = more.candidates.find((x: any) => x.level === 'debole')
+  assert(weak, 'c\'è un candidato debole su "Cerca altri"')
+  await M.mreMatchDecide(CHEF, { id: CUPS, key: weak.key, decision: 'non_corrisponde' }, svc)
+  const again = await M.mrePurchaseMatch(CHEF, { id: CUPS, more: true }, svc)
+  assert(!again.candidates.some((x: any) => x.key === weak.key) && again.rejected === 1, 'non riproposto, conteggiato come scartato')
+  assertEquals(await err(M.mreMatchDecide(CHEF, { id: CUPS, key: more.candidates[0].key, decision: 'collega' }, svc)), 'serve_ricetta')
+})
+Deno.test('C3 "Collega alla bozza": solo la bozza Spinach Cup cambia (contenitore = imballo, $0,13591 a pezzo)', async () => {
+  const CUPS = 'f61ccfe4-2512-4f67-9402-4a00c37efea1', CONT = 'bb09009b-adba-4f20-a4a7-fe5ba4cd4ce7'
+  const c = (await M.mrePurchaseMatch(CHEF, { id: CUPS }, svc)).candidates[0]
+  const r = await M.mreMatchDecide(CHEF, { id: CUPS, key: c.key, decision: 'collega', recipe_id: SPIN, line_id: 'b1756' }, svc)
+  assertEquals(r.target.id, CONT)
+  const o = await M.mreRecipe(CHEF, SPIN, svc), l = o.draft.lines.find((x: any) => x.id === 'b1756')
+  assertEquals(l.ref, CONT); assertEquals(l.role, 'imballo'); assertEquals(l.qty, 22)
+  assertEquals(o.doc.lines.find((x: any) => x.id === 'b1756').ref, CUPS, 'ufficiale invariata')
+  const ctx = { doc: (x: string) => x === SPIN ? o.draft : o.docs[x], facts: (x: string) => o.facts[x], measures: o.measures }, k = E.cost(SPIN, 1, ctx)
+  assert(Math.abs(k.pack - 22 * 0.13591) < 1e-9, 'imballo del lotto = 22 × $0,13591')
+  const r2 = await M.mrePurchaseMatch(CHEF, { id: CUPS }, svc); assertEquals(r2.candidates[0].level, 'collegato')
 })
 
 Deno.test('A6 Publish BLOCCATO sulle ricette ufficiali e sulle proposte; il tentativo resta nel registro', async () => {

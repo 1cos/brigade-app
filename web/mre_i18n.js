@@ -120,6 +120,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   s_prezzo_mancante: ['no price', 'manca il prezzo', 'falta el precio'], s_escluso_non_alimentare: ['packaging', 'imballo', 'empaque'], s_ingrediente_mancante: ['product not linked', 'prodotto non collegato', 'producto no vinculado'],
   stock_title: ['Physical stock', 'Giacenza fisica', 'Stock físico'], stock_note: ['Only from a count: without a count it is unknown (never computed from sales).', 'Solo da un conteggio: senza conteggio non è nota (mai calcolata dalle vendite).', 'Solo de un conteo: sin conteo es desconocido.'],
   u_portion: ['portion', 'porz.', 'porc.'], u_nest: ['nests', 'nidi', 'nidos'], u_pz: ['pcs', 'pz', 'pz'], u_case: ['cases', 'case', 'cajas'],
+  pack_plus: ['+ packaging {v}', '+ imballo {v}', '+ empaque {v}'], pack_portion: ['Packaging per portion', 'Imballo a porzione', 'Empaque por porción'],
   saving: ['Saving…', 'Salvo…', 'Guardando…'],
   saved_word: ['saved', 'salvata', 'guardado'],
   tab_edit: ['Edit', 'Modifica', 'Editar'], tab_preview: ['Preview', 'Anteprima', 'Vista previa'], save_draft: ['Save draft', 'Salva bozza', 'Guardar borrador'],

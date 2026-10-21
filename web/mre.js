@@ -32,9 +32,9 @@ const stepText = (s) => (s && (s[I.lang] || s.it || s.en || s.es)) || '';
 const stepTitle = (s) => s && (s['title_' + I.lang] || s.title_it || s.title_en || '');
 
 /* ---------- names you can tap: ingredient → its card, sub-recipe → its recipe ---------- */
-function navName(l, name) {
+function navName(l, name, rid) {
   if (l.kind === 'recipe') return `<button class="mr-sub" data-m="sub:${esc(l.id)}">${esc(name)} ›</button>`;
-  return `<button class="mr-sub mr-ingl" data-a="openIng" data-id="${esc(l.ref)}">${esc(name)}</button>`;
+  return `<button class="mr-sub mr-ingl" data-a="openIng" data-id="${esc(l.ref)}" data-from="${esc(rid || '')}" data-line="${esc(l.id)}">${esc(name)}</button>`;   // R1.15: the card knows which recipe line it came from
 }
 
 /* ---------- bold, tappable quantity ---------- */
@@ -93,7 +93,7 @@ function render(p) {
     h += `<div class="mr-scaled">${fromParent ? esc(p.ref[0].toUpperCase() + p.ref.slice(1)) : T('scaled_from', { ref: esc(p.ref || '') })}${rounded.map(x => ' · ' + T('rounded', { name: esc(lineName(d, x.l).toLowerCase()), v: x.s.theo })).join('')} · <button class="mr-link acc" data-m="reset">${T('reset')}</button></div>`;
   }
   if (chef && m === 'view') { const c = !PREVIEW && d.cost ? d.cost : E().cost(p.id, 1, ctx); const pp = c.per_portion;
-    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + T('portion')}</b> <span class="${c.complete ? 'mr-okc' : 'mr-bad'}">· ${c.complete ? T('fc_complete') : T('fc_partial')}</span></div>`;
+    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + T('portion')}</b> <span class="${c.complete ? 'mr-okc' : 'mr-bad'}">· ${c.complete ? T('fc_complete') : T('fc_partial')}</span>${c.pack ? ` <span class="mr-muted">· ${T('pack_plus', { v: usd(c.portions ? c.pack / c.portions : c.pack) })}</span>` : ''}</div>`;
     const rv = d.recipe && d.recipe.review;
     if (rv) h += `<div class="mr-ok">✓ ${T('verified_by', { by: esc(rv.by || ''), at: esc(dt(rv.at)) })}</div>`;
     h += issuesHtml(d, p.id, ctx, p.iss); }
@@ -105,7 +105,7 @@ function render(p) {
   h += `<div class="mr-cols"><div class="mr-left"><div class="mr-sec"><span>${T('ingredients')}</span>${edit ? `<button class="mr-link ${p.adv ? 'acc' : ''}" data-m="adv">${T('advanced')}${p.adv ? ' ✓' : ''}</button>` : m === 'view' ? `<button class="mr-link" data-m="units">${p.imp ? 'oz · <b>g</b>' : 'g · <b>oz</b>'}</button>` : ''}</div>${edit && p.adv ? `<p class="mr-muted mr-advnote">${T('adv_note')}</p>` : ''}<ul class="mr-ings">`;
   for (const l of doc.lines || []) {
     const s = E().showLine(l, f, ctx, pref, loc()), name = lineName(d, l);
-    const nameHtml = navName(l, name);
+    const nameHtml = navName(l, name, p.id);
     const qty = s.status === 'da_definire' ? `<span class="mr-muted">${T('to_define')}</span>` : pv ? `<b class="mq-ro">${esc(s.n)}${s.u ? ' ' + esc(uLabel(s.u)) : ''}</b>` : Q('l:' + l.id, s.n, uLabel(s.u), '', unitOf(l, s));
     const ie = ui(p.id).err && ui(p.id).err.key === 'l:' + l.id ? `<li class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</li>` : '';   // the message stays next to its line, never over the buttons
     if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${l.note ? `<span class="mr-note">${esc(l.note)}</span>` : ''}</span>${qty}</li>${ie}`; continue; }
@@ -314,11 +314,13 @@ function editFoot(p, d, doc) {
     <div class="mr-acts mr-between">${discardBtn(p)}<button class="mr-link acc" data-m="pv:1">${T('tab_preview')} ›</button></div></div>`;
 }
 /* Preview: the recipe exactly as it will read, then what changes (food cost, deductions) — same engine as the nightly run */
+const pb = (c, dc) => { const n = Number(dc && dc.yield && dc.yield.portions); return c.pack ? (n > 0 ? c.pack / n : c.pack) : 0; };
 function changeBox(p, d, doc) {
   const c = costPair(d, p, doc), errs = E().validate(doc, c.ctxNew, true);
   const row = (k, a, b) => `<div class="mr-kv"><span>${k}</span><span>${a === b ? `<b>${b}</b>` : `${a} → <b>${b}</b>`}</span></div>`;
   return `<div class="mr-change"><h3>${T('what_changes')}</h3>
       ${c.pb != null || c.pa != null ? row(T('fc_portion_c'), usd(c.pa), usd(c.pb)) : ''}${Number(doc.yield && doc.yield.portions) === 1 && Number(d.doc.yield && d.doc.yield.portions) === 1 ? '' : row(T('fc_lot'), usd(c.a.food), usd(c.b.food))}
+      ${(c.a.pack || c.b.pack) ? row(T('pack_portion'), usd(pb(c.a, d.doc)), usd(pb(c.b, doc))) : ''}
       ${c.b.missing ? `<div class="mr-muted">${T('missing_prices', { n: c.b.missing })}</div>` : ''}
       ${conseqHtml(d, p.id, c.ctxOld, c.ctxNew)}
       ${errs.length ? `<div class="mr-bad">${esc(errs.map(e => T('v_' + e.split(':')[0])).join(' · '))}</div>` : ''}

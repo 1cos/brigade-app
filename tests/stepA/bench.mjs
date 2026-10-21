@@ -14,13 +14,15 @@ let code = 1
 try {
   await a.query(`create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls; set check_function_bodies = off;`)
   await a.query(fs.readFileSync(`${ROOT}/supabase/migrations/20261015_mre01_master_recipe_engine_lab.sql`, 'utf8'))
+  await a.query(fs.readFileSync(`${ROOT}/supabase/migrations/20261021_mre02_match_decisions.sql`, 'utf8'))      // R1.15
   // read-only helpers: same signatures, answers from the snapshot (production reads public.ingredients / FC05)
   await a.query(`create schema bench; create table bench.facts (id uuid primary key, f jsonb not null); create table bench.measures (m jsonb);
     create or replace function mre.ingredient_facts(p_ids uuid[]) returns jsonb language sql stable security definer as $$ select coalesce(jsonb_object_agg(id, f), '{}'::jsonb) from bench.facts where id = any(p_ids) $$;
     create or replace function mre.kitchen_measures() returns jsonb language sql stable security definer as $$ select m from bench.measures limit 1 $$;
     create or replace function mre.ingredient_search(p_q text) returns jsonb language sql stable security definer as $$ select coalesce(jsonb_agg(jsonb_build_object('id', id, 'name', f->>'name')), '[]'::jsonb) from bench.facts where f->>'name' ilike '%' || p_q || '%' $$;
     grant execute on function mre.ingredient_facts(uuid[]), mre.kitchen_measures(), mre.ingredient_search(text) to mre_app;`)
-  for (const [id, f] of Object.entries(S.facts)) await a.query('insert into bench.facts values ($1, $2)', [id, f])
+  const CWF = process.env.CW ? JSON.parse(fs.readFileSync(process.env.CW, 'utf8')) : {}
+  for (const [id, f] of Object.entries(Object.assign({}, S.facts, CWF))) if (f) await a.query('insert into bench.facts values ($1, $2) on conflict do nothing', [id, f])
   await a.query('insert into bench.measures values ($1)', [S.measures])
   // lab content like production: one pilot with its 15/10 copy (Wheel Pasta) + the Chef's test example
   const WHEEL = '5479387e-e4ad-4401-92ce-9cb785ef4a0d', TEST = '00000000-b490-4000-8000-000000000001'

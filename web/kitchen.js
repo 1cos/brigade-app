@@ -34,6 +34,22 @@
     k_fix_portions: ['To complete: portions per batch not set', 'Da completare: porzioni per lotto non impostate', 'Por completar: porciones por lote sin definir'],
     k_fix_edit: ['Edit (test copy)', 'Modifica (copia di prova)', 'Editar (copia de prueba)'], k_fix_photo_where: ['Photos are added in Brigade.', 'Le foto si aggiungono in Brigade.', 'Las fotos se añaden en Brigade.'],
     // Knowledge Engine (B-51 phase 1)
+    // R1.15 suggested purchase match
+    pm_title: ['Suggested purchase match', 'Acquisto suggerito', 'Compra sugerida'], pm_strong: ['Strong match', 'Corrispondenza forte', 'Coincidencia fuerte'], pm_possible: ['Possible', 'Possibile', 'Posible'], pm_weak: ['Weak — check', 'Debole — da controllare', 'Débil — revisar'], pm_done: ['Linked', 'Collegato', 'Vinculado'],
+    pm_ambiguous: ['ambiguous, choose', 'ambiguo, scegli tu', 'ambiguo, elige'], pm_last: ['last invoice {d}', 'ultima fattura {d}', 'última factura {d}'], pm_each: ['each', 'al pezzo', 'c/u'],
+    pm_link: ['Link to the draft', 'Collega alla bozza', 'Vincular al borrador'], pm_no: ['Not a match', 'Non corrisponde', 'No corresponde'], pm_more: ['Search more', 'Cerca altri', 'Buscar más'], pm_less: ['Fewer', 'Meno', 'Menos'],
+    pm_none: ['No compatible purchase found in the invoices (all history).', 'Nessun acquisto compatibile nelle fatture (tutto lo storico).', 'Ninguna compra compatible en las facturas (todo el historial).'],
+    pm_rejected_n: ['{n} rejected', '{n} scartati', '{n} descartados'], pm_open_from_recipe: ['Open the ingredient from a recipe to link it there.', 'Apri l\'ingrediente da una ricetta per collegarlo lì.', 'Abre el ingrediente desde una receta para vincularlo.'],
+    pm_not_in_brigade: ['Purchase not yet an ingredient in Brigade (creating it needs a GO).', 'Acquisto non ancora ingrediente in Brigade (crearlo richiede un GO).', 'Compra aún no es ingrediente en Brigade (crearlo requiere un GO).'],
+    pm_w_name: ['similar name ({v})', 'nome simile ({v})', 'nombre parecido ({v})'], pm_w_inv1: ['1 invoice ({a})', '1 fattura ({a})', '1 factura ({a})'], pm_w_unit_c: ['by the piece, as in the recipe', 'a pezzi, come nella ricetta', 'por pieza, como en la receta'], pm_w_unit_m: ['by weight, as in the recipe', 'a peso, come nella ricetta', 'por peso, como en la receta'], pm_w_unit_v: ['by volume, as in the recipe', 'a volume, come nella ricetta', 'por volumen, como en la receta'],
+    pm_w_unit_diff: ['bought in another unit (needs a conversion)', 'comprato in un\'altra unità (serve una conversione)', 'comprado en otra unidad (requiere conversión)'], pm_w_inv: ['{n} invoice(s) {a} → {b}', '{n} fatture {a} → {b}', '{n} facturas {a} → {b}'],
+    pm_w_canon: ['in Brigade as “{v}”', 'in Brigade come «{v}»', 'en Brigade como «{v}»'], pm_w_sku: ['same product code {v}', 'stesso codice prodotto {v}', 'mismo código {v}'], pm_w_alias: ['confirmed vendor alias', 'alias del fornitore confermato', 'alias confirmado'], pm_w_kind: ['different kind of product ({v})', 'altro tipo di prodotto ({v})', 'otro tipo de producto ({v})'],
+    pm_linked: ['Linked in the draft (v{v}): {n}. The recipe in use has not changed.', 'Collegato nella bozza (v{v}): {n}. La ricetta in uso non è cambiata.', 'Vinculado en el borrador (v{v}): {n}. La receta en uso no cambió.'],
+    pm_rejected: ['Noted: not proposed again.', 'Registrato: non verrà più proposto.', 'Anotado: no se propondrá de nuevo.'],
+    pm_err_serve_ricetta: ['Open it from a recipe to link it.', 'Aprilo da una ricetta per collegarlo.', 'Ábrelo desde una receta.'], pm_err_riga_non_trovata: ['The recipe line has changed: reopen the recipe.', 'La riga della ricetta è cambiata: riapri la ricetta.', 'La línea cambió: vuelve a abrir la receta.'],
+    pm_in_recipe: ['In {r}', 'In {r}', 'En {r}'], pm_draft: ['Draft v{v}', 'Bozza v{v}', 'Borrador v{v}'], pm_in_use: ['In use · {r}', 'In uso · {r}', 'En uso · {r}'], pm_now_uses: ['this line now uses “{n}”', 'questa riga ora usa «{n}»', 'esta línea ahora usa «{n}»'],
+    pm_buy_none_but: ['No vendor linked yet — {n} compatible purchase(s) found above.', 'Nessun fornitore collegato — {n} acquisto/i compatibile/i qui sopra.', 'Sin proveedor vinculado — {n} compra(s) compatible(s) arriba.'], pm_buy_count: ['0 · {n} suggested', '0 · {n} suggerito', '0 · {n} sugerido'],
+    kn_incomplete: ['Incomplete forecast (a conversion is missing): do not use it as a quantity to order.', 'Previsione incompleta (manca una conversione): non usarla come quantità da ordinare.', 'Previsión incompleta (falta una conversión): no usarla para pedir.'],
     kn_v: ['Verified', 'Verificato', 'Verificado'], kn_e: ['Estimated', 'Stima', 'Estimado'], kn_m: ['Missing', 'Manca', 'Falta'], kn_c: ['Calculated', 'Calcolato', 'Calculado'],
     kn_vendor: ['Vendor', 'Fornitore', 'Proveedor'], kn_unit_cost: ['Unit cost', 'Costo unitario', 'Costo unitario'],
     kn_vpurchase: ['Verified purchase · {n} days', 'Acquisto verificato · {n} giorni', 'Compra verificada · {n} días'],
@@ -113,8 +129,37 @@
         if (d.bought) sum.push(`<div class="ksum-row"><span class="k">${t('kn_vpurchase', { n: d.days })}</span><span class="v"><b>${esc(d.bought.v != null ? q(d.bought.v, d.bought.unit) : '—')}</b>${st(d.bought)}${d.bought.v == null && d.bought.why ? `<div class="meta">${esc(d.bought.why)}</div>` : ''}</span></div>`)
       }
       const th = d.theoretical
-      sum.push(`<div class="ksum-row"><span class="k">${t('kn_cusage', { n: d.days })}</span><span class="v"><b>${esc(th.v != null ? (th.partial ? '≥ ' : '') + q(th.v, th.unit) : '—')}</b>${st(th)}<div class="meta">${t('kn_cusage_note')}${th.why ? ' ' + esc(th.why) : ''}</div></span></div>`)
+      sum.push(`<div class="ksum-row"><span class="k">${t('kn_cusage', { n: d.days })}</span><span class="v"><b>${esc(th.v != null ? (th.partial ? '≥ ' : '') + q(th.v, th.unit) : '—')}</b>${st(th)}<div class="meta">${t('kn_cusage_note')}${th.why ? ' ' + esc(th.why) : ''}</div>${th.partial || (th.s === 'missing' && th.why) ? `<div class="meta knw">${t('kn_incomplete')}</div>` : ''}</span></div>`)
       sum.push(`<div class="ksum-row"><span class="k">${t('kn_cstock')}</span><span class="v"><b>${esc(d.stock.v != null ? q(d.stock.v, d.stock.unit) : '—')}</b>${st(d.stock)}<div class="meta">${esc([d.stock.src, d.stock.why].filter(Boolean).join(' · '))}</div></span></div>`)
+      // ---- R1.15: opened from a recipe line → that recipe's own numbers, draft and in use kept apart (never mixed) ----
+      let ctxBox = ''
+      if (p.from && p.line) { const R = H.peek('mre_recipe', { id: p.from })
+        if (R) { const dr = chef && R.draft ? R.draft : null, off = R.source === 'official' ? R.doc : null
+          const per = (doc, l) => { const n = Number(doc && doc.yield && doc.yield.portions); return l && l.qty != null && n > 0 ? Math.round(l.qty / n * 1000) / 1000 : null }
+          const line = (doc, lab) => { const l = (doc.lines || []).find(x => x.id === p.line); if (!l) return ''
+            const other = l.ref !== p.id ? `<div class="meta">${esc(t('pm_now_uses', { n: (R.facts[l.ref] || {}).name || '?' }))}</div>` : ''
+            const u = ['each', 'ea', 'pz', 'pc', 'pcs'].includes(String(l.unit || '').toLowerCase()) ? 'pz' : l.unit
+            return `<div class="ksum-row"><span class="k">${esc(lab)}</span><span class="v"><b>${esc(q(l.qty, u) || '—')}</b> <span class="muted">${t('kn_lot')}</span>${per(doc, l) != null ? ` · <b>${esc(q(per(doc, l), u))}</b> <span class="muted">${t('kn_portion')} (${fmt(doc.yield.portions)} ${t('m_portions')})</span>` : ''}${other}</span></div>` }
+          ctxBox = `<div class="ksum pm-ctx"><div class="pm-h">${esc(t('pm_in_recipe', { r: I.dn((dr || R.doc).title) }))}</div>${dr ? line(dr, t('pm_draft', { v: dr._version })) : ''}${off ? line(off, t('pm_in_use', { r: I.dn(off.title) })) : ''}</div>` } }
+      // ---- R1.15: Suggested purchase match (Chef): what the invoices already know ----
+      let pmBox = '', pmCount = 0
+      if (chef) { const M = H.need('mre_purchase_match', { id: p.id, more: !!p.pmMore }, 10 * 60000)
+        if (M && (M.need || (M.candidates || []).some(c => c.level === 'collegato'))) {
+          const cs = M.candidates || []; pmCount = cs.filter(c => c.level !== 'debole').length
+          const LV = { forte: 'pm_strong', possibile: 'pm_possible', debole: 'pm_weak', collegato: 'pm_done' }
+          const why = c => c.why.map(w => w.k === 'name' ? t('pm_w_name', { v: String(w.v).replace(/≈/g, ' ≈ ') }) : w.k === 'unit_ok' ? t('pm_w_unit_' + w.v) : w.k === 'unit_diff' ? t('pm_w_unit_diff') : w.k === 'invoices' ? (w.v === 1 ? t('pm_w_inv1', { a: H.shortDay(w.to) }) : t('pm_w_inv', { n: w.v, a: H.shortDay(w.from), b: H.shortDay(w.to) })) : w.k === 'canonical' ? t('pm_w_canon', { v: w.v }) : w.k === 'sku' ? t('pm_w_sku', { v: w.v }) : w.k === 'alias' ? t('pm_w_alias') : w.k === 'other_kind' ? t('pm_w_kind', { v: w.v }) : '').filter(Boolean).join(' · ')
+          const pmoney = v => '$' + (v < 1 ? Number(v.toFixed(5)).toString() : Number(v).toFixed(2))   // a container at $0.13591 is not "$0.14"
+          const price = c => c.price ? (c.price.each != null ? `${pmoney(c.price.each)} ${t('pm_each')}` : `${pmoney(c.price.per100g)} / 100 g`) : ''
+          const canLink = c => !!(p.from && p.line && c.target)
+          const card = c => `<div class="pm-c${c.ambiguous ? ' amb' : ''}"><div class="pm-top"><b>${esc(c.description)}</b><span class="kn ${c.level === 'forte' || c.level === 'collegato' ? 'v' : 'e'}">${t(LV[c.level])}${c.ambiguous ? ' · ' + t('pm_ambiguous') : ''}</span></div>
+            <div class="meta">${esc(c.vendor)}${c.sku ? ' #' + esc(c.sku) : ''} · ${t('pm_last', { d: H.shortDay(c.last.date) })}${c.last.number ? ' · n. ' + esc(c.last.number) : ''}</div>
+            <div class="pm-num">${esc(c.last.pack || '—')} · <b>${money(c.last.unit_price)}</b>${price(c) ? ' → <b>' + price(c) + '</b>' : ''}</div>
+            <div class="meta">${esc(why(c))}</div>
+            ${c.level === 'collegato' ? '' : `<div class="pm-acts">${canLink(c) ? `<button class="btn ok pm-b" data-a="pmDecide" data-d="collega" data-key="${esc(c.key)}">${t('pm_link')}</button>` : `<span class="meta">${esc(c.target ? t('pm_open_from_recipe') : t('pm_not_in_brigade'))}</span>`}<button class="btn ghost pm-b" data-a="pmDecide" data-d="non_corrisponde" data-key="${esc(c.key)}">${t('pm_no')}</button></div>`}</div>`
+          pmBox = `<section class="pm"><div class="chap"><h2>${t('pm_title')}</h2>${M.rejected ? `<span>${t('pm_rejected_n', { n: M.rejected })}</span>` : ''}</div>
+            ${p.pmMsg ? `<div class="mr-flash${p.pmMsg.ok ? '' : ' bad'}">${esc(p.pmMsg.t)}</div>` : ''}
+            ${cs.length ? cs.map(card).join('') : `<p class="note" style="margin:0">${t('pm_none')}</p>`}
+            <button class="lnk pm-more" data-a="pmMore">${p.pmMore ? t('pm_less') : t('pm_more')}</button></section>` } }
       // ---- details, collapsible ----
       const buy = vs.map(v => `<div class="row kvr kvstack"><span class="main"><div class="name">${esc(v.vendor)}${v.sku ? ` <span class="muted" style="font-size:14px">#${esc(v.sku)}</span>` : ''}</div>
           ${v.vendor_ref ? `<div class="meta">${t('kn_tech')}: ${esc(v.vendor_ref)}</div>` : ''}
@@ -140,10 +185,10 @@
         <span class="right"><b class="num">${money(l.total)}</b></span></div>`).join('') + (invShown.length < invAll.length ? `<button class="more" data-a="kMore" data-k="m_inv">${t('k_show_all', { n: invAll.length })}</button>` : '')
       return `<div class="page" style="--c:var(--rest)">${H.backBtn()}${H.head(t('k_ing') + (i.category ? ' · ' + esc(H.cat(i.category)) : ''), esc(i.name), sub ? esc(sub) : '')}
         ${i.notes ? `<p class="note">${esc(i.notes)}</p>` : ''}
-        <div class="ksum">${sum.join('')}</div>
+        ${ctxBox}${pmBox}<div class="ksum">${sum.join('')}</div>
         ${fold('recipes', t('kn_recipes'), recs || `<div class="row"><span class="main"><div class="meta">${t('k_not_used')}</div></span></div>`, d.recipes.length, true)}
         ${d.recipes.length ? fold('dishes', t('kn_dishes', { n: d.days }), dishes || `<div class="row"><span class="main"><div class="meta">${t('kn_nodish')}</div></span></div>`, d.dishes.filter(x => x.sold).length + ' / ' + d.dishes.length, false) : ''}
-        ${chef ? fold('buy', t('kn_buy_details'), (buy || `<div class="row"><span class="main"><div class="meta">${t('k_no_vend')}</div></span></div>`) + pr + pol, vs.length, false) : pol ? fold('buy', t('kn_policy'), pol, '', false) : ''}
+        ${chef ? fold('buy', t('kn_buy_details'), (buy || `<div class="row"><span class="main"><div class="meta">${pmCount ? t('pm_buy_none_but', { n: pmCount }) : t('k_no_vend')}</div></span></div>`) + pr + pol, vs.length || (pmCount ? t('pm_buy_count', { n: pmCount }) : 0), false) : pol ? fold('buy', t('kn_policy'), pol, '', false) : ''}
         ${fold('conv', t('kn_conv'), conv, (cv.needed.piece && cv.piece_g.s !== 'verified') || (cv.needed.volume && cv.density.s !== 'verified') ? '!' : '', false)}
         ${inv ? fold('inv', t('kn_inv'), inv, invAll.length, false) : ''}
         ${d.preps.length ? fold('prep', t('k_prep'), d.preps.map(x => `<button class="row" data-a="openPrep" data-id="${x.id}"><span class="main"><div class="name">${esc(x.name)}</div></span><span class="chev">›</span></button>`).join(''), d.preps.length, false) : ''}

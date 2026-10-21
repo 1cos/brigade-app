@@ -473,7 +473,15 @@ const A = {
   openMre(el) { openMre(el.dataset.r); },
   rmFilter(el) { const e = cur(); e.p = Object.assign({}, e.p, { [el.dataset.f]: el.dataset.v }); e.y = 0; render(true); $('main').scrollTop = 0; },
   openOffice(el) { const k = el.dataset.k, scope = el.dataset.scope || 'all'; openTab('office', k + ':' + scope, { s: k, p: { scope } }); },
-  openIng(el) { openTab('ing', el.dataset.id, { s: 'ing', p: { id: el.dataset.id } }); },
+  openIng(el) { openTab('ing', el.dataset.id, { s: 'ing', p: { id: el.dataset.id, from: el.dataset.from || '', line: el.dataset.line || '' } }); },
+  /* R1.15 suggested purchase match: the Chef decides, nothing is linked by itself */
+  async pmDecide(el) { const p = cur().p || {}; if (!isChef() || el.disabled) return; el.disabled = true; p.pmMsg = null
+    try { const r = await API.call('mre_match_decide', { id: p.id, key: el.dataset.key, decision: el.dataset.d, recipe_id: p.from || null, line_id: p.line || null })
+      p.pmMsg = { ok: true, t: el.dataset.d === 'collega' ? t('pm_linked', { n: (r.target || {}).name || '', v: r.draft_version }) : t('pm_rejected') }
+      ;['mre_purchase_match', 'mre_recipe', 'mre_list'].forEach(k => API.forget(k)) }
+    catch (e) { p.pmMsg = { ok: false, t: t('pm_err_' + String(e.code || '').split(':')[0]) !== 'pm_err_' + String(e.code || '').split(':')[0] ? t('pm_err_' + String(e.code || '').split(':')[0]) : errText(e) } }
+    render(true) },
+  pmMore() { const p = cur().p || {}; p.pmMore = !p.pmMore; render(true) },
   openIngs() { openTab('ings', 'all', { s: 'ings', p: {} }); },
   openComplete() { openTab('complete', 'all', { s: 'complete', p: {} }); },
   openGaps() { openTab('kgaps', 'all', { s: 'kgaps', p: {} }); },

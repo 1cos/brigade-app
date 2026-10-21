@@ -9,6 +9,7 @@
 import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js'
 import * as E from '../_shared/mre_engine.js'
 import { buildLabDoc } from '../_shared/mre_import.js'
+import * as PM from '../_shared/purchase_match.js'
 
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL') ?? '', { prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10 })
 type U = { id: number; name: string; role: 'chef' | 'staff' }
@@ -388,4 +389,76 @@ export async function ingredientFacts(ids: string[]) {
   const ok = ids.filter(isUuid)
   if (!ok.length) return {}
   return lab(async (tx: any) => { const [{ f }] = await tx`select mre.ingredient_facts(string_to_array(${ok.join(',')}, ',')::uuid[]) as f`; return f || {} })
+}
+
+/* ---------------- R1.15 (Chef GO 21/10): suggested purchase match ----------------
+   Read only on Brigade (every invoice line, vendor sheets, aliases, ingredient names); the Chef's decisions are kept in the lab
+   (mre.match_decisions). "Link to the draft" changes ONLY the lab draft of the recipe it was opened from. */
+let PMC: { at: number; data: any } | null = null
+async function pageAllRows(q: () => any, size = 1000) { const out: any[] = []; for (let from = 0; ; from += size) { const r = must(await q().range(from, from + size - 1)); out.push(...r); if (r.length < size) break } return out }
+async function matchData(svc: any) {
+  if (PMC && Date.now() - PMC.at < 10 * 60000) return PMC.data
+  const [inv, ing, vend, alias, bom] = await Promise.all([
+    pageAllRows(() => svc.from('invoice_lines').select('id,invoice_date,vendor,raw_description,vendor_sku,ingredient_id,qty,purchase_unit,pack_description,unit_price,line_total,invoice_number').order('id')),
+    pageAllRows(() => svc.from('ingredients').select('id,name,name_it,base_unit,category,active').order('id')),
+    pageAllRows(() => svc.from('ingredient_vendors').select('ingredient_id,vendor,vendor_sku,pack_description,purchase_unit,unit_price,last_invoice_date,active').order('id')),
+    pageAllRows(() => svc.from('vendor_item_aliases').select('ingredient_id,vendor,vendor_sku,vendor_description,confirmed_by,active').order('ingredient_id')),
+    pageAllRows(() => svc.from('recipe_bom').select('item_id,unit,parent_recipe_id').not('item_id', 'is', null).order('bom_id')),
+  ]) as any[][]
+  const data = {
+    inv: inv.map(l => ({ id: l.id, d: l.invoice_date, v: l.vendor, desc: l.raw_description, sku: l.vendor_sku, ing: l.ingredient_id, qty: l.qty, pu: l.purchase_unit, pack: l.pack_description, up: l.unit_price, tot: l.line_total, num: l.invoice_number })),
+    ing: ing.map(i => ({ id: i.id, name: i.name, name_it: i.name_it, base: i.base_unit, cat: i.category, active: i.active })),
+    vend: vend.filter(v => v.active !== false).map(v => ({ ing: v.ingredient_id, v: v.vendor, sku: v.vendor_sku, pack: v.pack_description, pu: v.purchase_unit, up: v.unit_price, last: v.last_invoice_date })),
+    alias: alias.filter(a => a.active !== false).map(a => ({ ing: a.ingredient_id, v: a.vendor, sku: a.vendor_sku, desc: a.vendor_description, by: a.confirmed_by })),
+    bomu: bom.map(b => ({ ing: b.item_id, u: b.unit, r: b.parent_recipe_id })),
+  }
+  PMC = { at: Date.now(), data }; return data
+}
+async function decisionsOf(tx: any, id: string) {
+  return await tx`select candidate_key as key, decision, target_ingredient_id as target, candidate, recipe_id, line_id, source, decided_by, decided_at from mre.match_decisions where ingredient_id = ${id}`
+}
+export async function mrePurchaseMatch(u: U, b: any, svc: any) {
+  chef(u)
+  const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
+  const data = await matchData(svc)
+  return await lab(async tx => {
+    const [{ f }] = await tx`select mre.ingredient_facts(array[${id}]::uuid[]) as f`
+    const need = PM.needsMatch(id, data, (f || {})[id], new Date().toISOString())
+    const dec = await decisionsOf(tx, id)
+    const r = PM.matchCandidates(id, data, dec, { more: !!b?.more })
+    return { need: need.need, why: need.why, candidates: r.candidates, rejected: r.rejected, use: r.use, decisions: dec.map((x: any) => ({ key: x.key, decision: x.decision, target: x.target, source: x.source, at: x.decided_at, recipe_id: x.recipe_id })) }
+  })
+}
+export async function mreMatchDecide(u: U, b: any, svc: any) {
+  chef(u)
+  const id = String(b?.id || ''), key = String(b?.key || '').slice(0, 400), decision = String(b?.decision || '')
+  if (!isUuid(id) || !key) throw bad('bad_args')
+  if (!['collega', 'non_corrisponde'].includes(decision)) throw bad('bad_decision')
+  const data = await matchData(svc)
+  const r = PM.matchCandidates(id, data, [], { more: true }), c = r.candidates.find((x: any) => x.key === key)
+  if (!c) throw new MreError(404, 'candidato_sconosciuto')
+  let saved: any = null
+  if (decision === 'collega') {
+    // only into the lab draft of the recipe it was opened from, on the line that uses this ingredient
+    const rid = String(b?.recipe_id || ''), lid = String(b?.line_id || '')
+    if (!isUuid(rid) || !lid) throw bad('serve_ricetta')
+    if (!c.target) throw bad('articolo_senza_ingrediente')              // a purchase not yet in Brigade: creating the article needs a GO
+    const o = await mreRecipe(u, rid, svc)
+    const base = JSON.parse(JSON.stringify(o.draft || o.doc)), ln = (base.lines || []).find((l: any) => l.id === lid)
+    if (!ln || ln.kind !== 'ingredient' || ln.ref !== id) throw bad('riga_non_trovata')
+    // the same cost rule as before: what Brigade treats as packaging (non-food) stays packaging, outside the food cost
+    const pol = await lab<any>(async tx => { const [{ f }] = await tx`select mre.ingredient_facts(array[${id}]::uuid[]) as f`; return ((f || {})[id] || {}).policy || null })
+    if (pol === 'non_food') ln.role = 'imballo'
+    ln.ref = c.target.id
+    ln.note = [ln.note && !/·\s*(Ben E\. Keith|Chef's Warehouse)/.test(ln.note) ? ln.note : null, `${c.vendor}${c.sku ? ' ' + c.sku : ''} · ${c.description}`].filter(Boolean).join(' · ').slice(0, 300)
+    saved = await mreSaveDraft(u, { id: rid, doc: base, base: o.recipe.current_version }, svc)
+  }
+  await lab(async tx => {
+    await tx`insert into mre.match_decisions (ingredient_id, candidate_key, decision, target_ingredient_id, candidate, recipe_id, line_id, source, decided_by)
+      values (${id}, ${key}, ${decision}, ${c.target ? c.target.id : null}, ${sql.json(c as any)}, ${decision === 'collega' ? b.recipe_id : null}, ${decision === 'collega' ? b.line_id : null}, 'chef_app', ${u.id})
+      on conflict (ingredient_id, candidate_key) do update set decision = excluded.decision, target_ingredient_id = excluded.target_ingredient_id, candidate = excluded.candidate,
+        recipe_id = excluded.recipe_id, line_id = excluded.line_id, source = excluded.source, decided_by = excluded.decided_by, decided_at = now()`
+    await audit(tx, u, 'match_' + decision, decision === 'collega' ? b.recipe_id : null, { ingredient: id, key, target: c.target ? c.target.id : null })
+  })
+  return { ok: true, decision, draft_version: saved ? saved.draft_version : null, target: c.target }
 }

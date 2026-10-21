@@ -517,3 +517,14 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .rm-open{font-size:13px;font-weight:700;color:var(--warn)}
 .mr-flash{padding:10px 14px;border-radius:12px;background:var(--ok-bg);color:var(--ok);font-weight:650;font-size:15px}
 .mr-flash.bad{background:var(--warn-bg);color:var(--warn)}
+/* R1.15 suggested purchase match + recipe context in the ingredient card */
+.pm-ctx .pm-h{font:700 13px var(--fd);letter-spacing:.08em;text-transform:uppercase;color:var(--txm);padding:10px 0 2px}
+.pm{display:grid;gap:10px}
+.pm-c{background:var(--surf);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:grid;gap:4px}
+.pm-c.amb{border-color:var(--warn)}
+.pm-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.pm-top b{font-size:17px}
+.pm-num{font-size:16px}
+.pm-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.pm-b{min-height:44px;padding:0 14px;font-size:15px}
+.pm-more{justify-self:start}
