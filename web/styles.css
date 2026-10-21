@@ -549,3 +549,7 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .mr-edit .mr-steps li.mr-estep > .mr-link[data-m^="delstep"]{justify-self:start}
 .mr-steps li.mr-trerr{counter-increment:none}.mr-steps li.mr-trerr::before{content:none}
 .mr-steps li > .mr-trmark{grid-column:2}
+/* R1.18: one language on screen — untranslated name mark, original notes behind one link */
+.mr-langtag{display:inline-block;margin-left:6px;padding:0 4px;border:1px solid var(--line,#ccc);border-radius:4px;font-size:10px;font-weight:700;color:var(--txm);vertical-align:2px}
+.mr-noteo .mr-lang{font-size:10px;margin-right:4px}
+.mr-notesbtn{display:block;margin:6px 0 2px;font-size:13px}

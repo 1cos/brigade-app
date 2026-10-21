@@ -31,7 +31,7 @@ console.log('motore browser:', ENGINE)
 const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true }, ENGINE === 'webkit' ? { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1' } : {}))
 const pg = await ctx.newPage()
 pg.on('pageerror', e => ok(false, 'errore JS: ' + e.message))
-await pg.route('**/functions/v1/brigade-app-api', async r => {
+await pg.route('**/functions/v1/brigade-app-api*', async r => {
   const b = JSON.parse(r.request().postData() || '{}'), h = r.request().headers()['authorization'] || '', tok = h.startsWith('Bearer ') ? h.slice(7) : null
   if (b.op === 'office' && slowOffice) await new Promise(x => setTimeout(x, slowOffice))
   const out = api(b, tok)

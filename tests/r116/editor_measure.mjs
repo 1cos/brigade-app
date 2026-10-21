@@ -18,7 +18,7 @@ if (process.env.LOCAL_WEB) {   // the NEW build, served under the published addr
     if (!fs.existsSync(fp)) return r.fulfill({ status: 404, body: '' }); r.fulfill({ status: 200, contentType: types[f.split('.').pop()] || 'application/octet-stream', body: fs.readFileSync(fp) }) })
 }
 await pg.route('**/fonts.googleapis.com/**', r => r.fulfill({ status: 200, contentType: 'text/css', body: '' }))
-await pg.route('**/functions/v1/brigade-app-api', async r => {
+await pg.route('**/functions/v1/brigade-app-api*', async r => {
   const b = JSON.parse(r.request().postData() || '{}')
   if (mock) return mock.handle(r, b)
   if (b.op === 'mre_save_draft' && b.id === POS) { b.id = TEST; b.base = 3; b.doc = Object.assign({}, b.doc, { id: TEST }); return r.continue({ postData: JSON.stringify(b) }) }

@@ -129,7 +129,8 @@ export async function mreList(u: U, svc: any) {
   for (const r of recs) {
     const l = L[r.id], archived = /archiv/i.test(r.category || '')
     const menu = !!String(r.pos_name || '').trim(), prep = prepSet.has(r.id) || subSet.has(r.id)
-    const row: any = { id: r.id, title: r.title, category: r.category, menu, prep, archived,
+    const pos = [...new Set(String(r.pos_name || '').split('|').map((x: string) => x.trim()).filter(Boolean))]   // R1.18: searchable by every POS name
+    const row: any = { id: r.id, title: r.title, category: r.category, menu, prep, archived, ...(pos.length ? { pos_names: pos } : {}),
       mre: !!(l && !l.is_test && !l.lab_only && (chefU || !l.on_demand)) }       // staff: the recipes they already open in this card
     if (chefU) {
       if (l && l.draft_version != null) { row.draft = true; row.draft_version = l.draft_version; if (l.draft_title && l.draft_title !== r.title) row.draft_title = l.draft_title }

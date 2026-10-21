@@ -232,6 +232,14 @@ Deno.test('D2 R1.17: traduzione in background — lingua riconosciuta, numeri co
   assertEquals(await err(M.mreTranslate(STAFF as any, { items: [] })), 'forbidden')
 })
 
+Deno.test('D3 R1.18: elenco ricercabile per nome POS (cuoco e Chef), nomi POS senza doppioni', async () => {
+  for (const u of [CHEF, STAFF]) {
+    const L = await M.mreList(u, svc), r = L.recipes.find((x: any) => x.id === SPIN)
+    assert(r && Array.isArray(r.pos_names) && r.pos_names.includes('Sauteed Spinach') && r.pos_names.includes('Sautéed Spinach'), 'nomi POS nella riga: ' + JSON.stringify(r && r.pos_names))
+    assertEquals(new Set(r.pos_names).size, r.pos_names.length)
+    assert(L.recipes.filter((x: any) => !x.pos_names).every((x: any) => !String((S.recipes.find((y: any) => y.id === x.id) || {}).pos_name || '').trim()), 'ricette senza nome POS: nessun campo vuoto inventato')
+  }
+})
 Deno.test('A11 nessuna scrittura sulle tabelle ufficiali', () => {
   assertEquals(writes, []); assertEquals(JSON.stringify(TABLES), official0)
 })

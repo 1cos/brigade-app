@@ -28,6 +28,23 @@ function lineName(d, ln) {
   const f = d.facts[ln.ref] || {};
   return (I.lang === 'it' && f.name_it) || (I.lang === 'es' && f.name_es) || f.name || '?';
 }
+/* R1.18 (Chef 21/10 "una sola lingua visibile"): an ingredient name in the language of the screen; when that translation is
+   missing, the name the ingredient has (English) with a small mark — never another language passed off as this one */
+function nameFb(d, ln) {
+  if (ln.kind === 'recipe' || I.lang === 'en') return '';
+  const f = d.facts[ln.ref] || {}; return f.name && !f['name_' + I.lang] ? `<span class="mr-langtag" title="${esc(T('name_fb'))}">EN</span>` : '';
+}
+/* a line note is free text written once, in one language: it is shown only when it is in the language of the screen.
+   Notes in another language (or only the ingredient name translated) are kept, unchanged, behind "Notes in the original" */
+const plain = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function noteOf(d, ln) {
+  const t = String(ln.note || '').trim(); if (!t) return null;
+  const f = ln.kind === 'ingredient' ? d.facts[ln.ref] || {} : {}, sub = ln.kind === 'recipe' ? (d.docs[ln.ref] || {}).title : null;
+  if ([f.name, f.name_it, f.name_es, sub].some(x => x && plain(x) === plain(t))) return { text: t, same: false, dup: true };
+  const g = E().langOf(t), o = E().LANGS.filter(k => k !== g.lang), alone = g.score[g.lang] > 0 && o.every(k => !g.score[k]);
+  return { text: t, lang: g.sure || alone ? g.lang : null, same: (g.sure || alone) && g.lang === I.lang };
+}
+const noteHtml = (n, open) => !n ? '' : n.same ? `<span class="mr-note">${esc(n.text)}</span>` : open ? `<span class="mr-note mr-noteo"><span class="mr-lang">${esc(n.lang ? LNAME[n.lang] : T('lang_unknown'))} · ${T('original')}</span> ${esc(n.text)}</span>` : '';
 const stepText = (s) => (s && (s[I.lang] || s.it || s.en || s.es)) || '';
 /* R1.17: the step in the language of the screen; when that translation is missing or old, the original, marked (never another language silently) */
 const stepView = s => E().stepIn(s, I.lang);
@@ -65,6 +82,7 @@ function shownDoc(d, p) { const m = mode(d, p); if (m !== 'view') return WORK[p.
 function render(p) {
   const d = data(p.id);
   if (!d) return null;                                   // app shows the loading state
+  if (H.isChef() && H.next && H.ahead) { const n1 = H.next(p.id), n2 = n1 && H.next(n1); [n1, n2].forEach(x => x && H.ahead('mre_recipe', { id: x }, 5 * 60000)); }   // R1.18: the next recipes of the review are read ahead
   if (!E()) return `<div class="mr"><p class="mr-muted">${T('loading_engine')}</p></div>`;
   // opened with "Edit" from any recipe card (B-25): start the editor on the open draft, or on the recipe in use
   if (p.startEdit && H.isChef()) { startWork(d, p); queueTr(p.id, 400); p.edit = true; p.pv = false; p.adv = false; p.panel = null; p.saved = !!d.draft; delete p.startEdit; }
@@ -125,24 +143,27 @@ function render(p) {
 
   // ingredients + steps
   h += `<div class="mr-cols"><div class="mr-left"><div class="mr-sec"><span>${T('ingredients')}</span>${edit ? `<button class="mr-link ${p.adv ? 'acc' : ''}" data-m="adv">${T('advanced')}${p.adv ? ' ✓' : ''}</button>` : m === 'view' ? `<button class="mr-link" data-m="units">${p.imp ? 'oz · <b>g</b>' : 'g · <b>oz</b>'}</button>` : ''}</div>${edit && p.adv ? `<p class="mr-muted mr-advnote">${T('adv_note')}</p>` : ''}<ul class="mr-ings">`;
+  let nOther = 0;
   for (const l of doc.lines || []) {
     const s = E().showLine(l, f, ctx, pref, loc()), name = lineName(d, l);
     const nameHtml = navName(l, name, p.id);
     const qty = s.status === 'da_definire' ? `<span class="mr-muted">${T('to_define')}</span>` : pv ? `<b class="mq-ro">${esc(s.n)}${s.u ? ' ' + esc(lineUnit(l, s, d)) : ''}</b>` : Q('l:' + l.id, s.n, lineUnit(l, s, d), '', unitOf(l, s));
     const ie = ui(p.id).err && ui(p.id).err.key === 'l:' + l.id ? `<li class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</li>` : '';   // the message stays next to its line, never over the buttons
-    if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${l.note ? `<span class="mr-note">${esc(l.note)}</span>` : ''}</span>${qty}</li>${ie}`; continue; }
+    const nt = noteOf(d, l); if (nt && !nt.same) nOther++;
+    if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${nameFb(d, l)}${noteHtml(nt, p.notesO)}</span>${qty}</li>${ie}`; continue; }
     const units = ['g', 'kg', 'ml', 'l', 'pz', 'oz', 'lb', 'nests'], ucur = l.unit || '';
     // editor line: name, quantity and unit first; role and technical note only under Advanced (logic unchanged)
     const stx = statusOf(d, l), bad = /mr-bad/.test(stx), adv = p.adv;
-    h += `<li class="mr-eline"><span class="mr-nm">${nameHtml}${l.kind === 'recipe' ? ` <span class="mr-muted mr-kind">${T('sub_recipe')}</span>` : ''}
+    h += `<li class="mr-eline"><span class="mr-nm">${nameHtml}${nameFb(d, l)}${l.kind === 'recipe' ? ` <span class="mr-muted mr-kind">${T('sub_recipe')}</span>` : ''}
         ${bad || adv ? `<span class="mr-note">${stx}</span>` : ''}
         ${adv && !doc.has_stock ? `<span class="mr-note mr-adv">${T('role_sale')}</span>` : ''}${adv && doc.has_stock ? `<span class="mr-note mr-adv">${T('role')}: <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select></span>` : ''}${adv ? `
-        <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : (l.note ? `<span class="mr-note">${esc(l.note)}</span>` : '')}
+        <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : noteHtml(nt, p.notesO)}
 </span>
       ${l.per === 'portion' || l.role === 'imballo' || adv ? `<span class="mr-note">${T('per_q')} <select data-ms="per:${esc(l.id)}" class="mr-sel"><option value="" ${l.per !== 'portion' ? 'selected' : ''}>${T('per_lot')}</option><option value="portion" ${l.per === 'portion' ? 'selected' : ''}>${T('per_one', { u: T('pu_' + (y.portion_unit || 'portion') + '1') })}</option></select>${l.per === 'portion' && Number(y.portions) > 0 && l.qty != null ? ` = <b>${nf(l.qty * y.portions, 1)}</b> ${T('per_lot_n')}` : ''}</span>` : ''}
       <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option ${u === ucur ? 'selected' : ''}>${esc(u || '—')}</option>`).join('')}</select><button class="mr-x" data-m="del:${esc(l.id)}" aria-label="${esc(T('remove'))}" title="${esc(T('remove'))}">×</button></span></li>`;
   }
   h += `</ul>`;
+  if (nOther && !(edit && p.adv)) h += `<button class="mr-link mr-notesbtn" data-m="notesO">${p.notesO ? T('notes_hide') : T('notes_orig', { n: nOther })}</button>`;
   if (edit) h += addHtml(p);
   h += `</div><div class="mr-right"><div class="mr-sec"><span>${T('method')}</span></div>`;
   const steps = doc.steps || [];
@@ -545,6 +566,7 @@ function onClick(ev) {
   if (k === 'iss') { p.iss = !p.iss; }
   else if (k === 'reset') { p.f = 1; p.ref = ''; w.prod = null; }
   else if (k === 'units') p.imp = !p.imp;
+  else if (k === 'notesO') p.notesO = !p.notesO;
   else if (k === 'p') p.panel = p.panel === a1 ? null : a1;
   else if (k === 'sub') { const src = shownDoc(d, p), l = src.lines.find(x => x.id === a1); if (!l) return; const sub = (PREVIEW && d.draft_docs && d.draft_docs[l.ref]) || d.docs[l.ref];
       const fr = sub && l.qty != null ? E().subFraction(l.qty * (p.edit ? 1 : (p.f || 1)), l.unit, sub) : { f: null }; H.openRecipe(l.ref, sub ? sub.title : '', fr.f || 1, T('from_parent', { t: src.title })); return; }

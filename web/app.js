@@ -164,18 +164,24 @@ function actButtons(id, a) {
 let MRE_ORDER = [];                                     // ids of the list as last shown: "Next" follows it
 const rmName = r => isChef() && r.draft_title ? r.draft_title : I.dn(r.title);
 function rmRows(L, p) {
-  const q = (p.q || '').trim().toLowerCase(), k = p.k || 'all', st = isChef() ? p.st || 'all' : 'all';
+  const q = fold(p.q || ''), k = p.k || 'all', st = isChef() ? p.st || 'all' : 'all';
   return L.recipes.filter(r => (st === 'archived' ? r.archived : !r.archived)
     && (k === 'all' || (k === 'prep' ? r.prep : r.menu))
     && (st === 'all' || st === 'archived' || (st === 'todo' ? !r.review : st === 'done' ? !!r.review : !!r.draft))
-    && (!q || [r.title, r.draft_title, ...(r.pos_names || [])].some(x => x && String(x).toLowerCase().includes(q))));
+    && (!q || (r._s || (r._s = [r.title, r.draft_title, ...(r.pos_names || [])].filter(Boolean).map(fold).join(' | '))).includes(q)));
 }
+/* R1.18: found by its POS name → that name is shown in the row */
+const posHit = (r, q0) => { const q = fold(q0 || ''); if (!q || [r.title, r.draft_title].some(x => x && fold(x).includes(q))) return '';
+  const m = (r.pos_names || []).find(x => fold(x).includes(q)); return m ? `<span class="rm-was">POS · ${esc(m)}</span>` : ''; };
+/* R1.18: search by name and by POS name, without accents or case ("sauteed" finds "Sautéed Spinach") */
+const fold = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 SCREENS.restaurant = { title: () => t('m_lab_title'), c: '--rest', render(p) {
   const L = need('mre_list', null, 2 * 60000);
   const top = head('', t('m_lab_title'));
   if (!L || !L.recipes) return `<div class="page">${top}${waiting('mre_list')}</div>`;
   const chef = isChef(), live = L.recipes.filter(r => !r.archived), rows = rmRows(L, p);
   MRE_ORDER = rows.map(r => r.id);
+  if (p.q && rows.length && rows.length <= 3) rows.forEach(r => { if (chefOrMre(r.id)) API.ahead('mre_recipe', { id: r.id }, 5 * 60000); });   // R1.18: few matches → read ahead, the tap opens at once
   const k = p.k || 'all', st = p.st || 'all';
   const seg = `<div class="seg rm-seg" role="tablist">${[['all', t('m_rm_all')], ['prep', 'Prep'], ['menu', 'Menu Item']].map(([v, l]) => `<button class="${k === v ? 'on' : ''}" data-a="rmFilter" data-f="k" data-v="${v}" role="tab" aria-selected="${k === v}">${l}</button>`).join('')}</div>`;
   const nDone = live.filter(r => r.review).length, nDraft = live.filter(r => r.draft).length;
@@ -184,7 +190,7 @@ SCREENS.restaurant = { title: () => t('m_lab_title'), c: '--rest', render(p) {
   const prog = chef ? `<div class="rm-prog"><div class="rm-bar"><i style="width:${live.length ? Math.round(nDone / live.length * 1000) / 10 : 0}%"></i></div><span>${t('m_rm_progress', { n: nDone, t: live.length })}</span></div>` : '';
   const tag = r => [r.prep ? `<span class="rm-tag">Prep</span>` : '', r.menu ? `<span class="rm-tag menu">Menu Item</span>` : ''].join('');
   const row = r => `<button class="row rm-row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(rmName(r))}</div>
-      <div class="rm-meta">${tag(r)}${chef && r.draft ? `<span class="rm-draft">${t('m_rm_draft')}</span>` : ''}${chef && r.draft_title ? `<span class="rm-was">${esc(t('m_rm_in_use', { t: I.dn(r.title) }))}</span>` : ''}${chef && r.review && r.review.open ? `<span class="rm-open">⚠ ${r.review.open}</span>` : ''}</div></span>
+      <div class="rm-meta">${tag(r)}${posHit(r, p.q)}${chef && r.draft ? `<span class="rm-draft">${t('m_rm_draft')}</span>` : ''}${chef && r.draft_title ? `<span class="rm-was">${esc(t('m_rm_in_use', { t: I.dn(r.title) }))}</span>` : ''}${chef && r.review && r.review.open ? `<span class="rm-open">⚠ ${r.review.open}</span>` : ''}</div></span>
       ${chef ? `<span class="rm-check${r.review ? ' on' : ''}" aria-label="${esc(r.review ? t('m_rm_done') : t('m_rm_todo'))}">${r.review ? '✓' : ''}</span>` : '<span class="chev">›</span>'}</button>`;
   // R1.14: a reviewed recipe can still have open problems — they stay visible in the list
   const nArch = L.recipes.length - live.length;
@@ -199,7 +205,7 @@ function searchBind(active) {
   const i = $('q'); if (!i) return;
   if (active === 'q') { i.focus(); const v = i.value; i.setSelectionRange(v.length, v.length); }
   // the home of a world starts without params
-  let tm; i.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { const e = cur(); e.p = e.p || {}; e.p.q = i.value; render(true); }, 220); });
+  let tm; i.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { const e = cur(); e.p = e.p || {}; e.p.q = i.value; render(true); }, 90); });   // R1.18: 220 → 90 ms, the list follows the typing
 }
 
 /* ---- recipe tab: BR-UI02 card inside the V020-B tab ---- */
@@ -288,6 +294,7 @@ function tagFocus(el) {
 }
 
 /* ============ MASTER RECIPE ENGINE (B-49 lab) — one recipe/prep screen, see mre.js ============ */
+const chefOrMre = id => isChef() || mreIds().has(id);
 const mreIds = () => new Set(((API.peek('mre_list') || {}).recipes || []).filter(r => r.mre).map(r => r.id));
 SCREENS.mre = { title: p => window.MreUI ? window.MreUI.title(p) : (p.name || ''), c: '--rest', render(p) {
   const h = window.MreUI ? window.MreUI.render(p) : null;
@@ -609,7 +616,7 @@ window.addEventListener('app-signed-out', () => { API.clearToken(); if (ME) toas
 if (window.ChecklistUI) { window.ChecklistUI.init({ esc, need, waiting, backBtn, head, isChef, peek: API.peek, entry: () => cur().p, render, toast, openTab }); Object.assign(SCREENS, window.ChecklistUI.screens); Object.assign(A, window.ChecklistUI.actions); }
 if (window.KitchenUI) { window.KitchenUI.init({ esc, need, waiting, backBtn, head, shortDay, isChef, cat, peek: API.peek, save: () => save() });
   Object.assign(SCREENS, window.KitchenUI.screens); SCREENS.ings.after = (p, active) => searchBind(active); }
-if (window.MreUI) window.MreUI.init({ need, peek: API.peek, render, toast, isChef, entry: () => cur().p,
+if (window.MreUI) window.MreUI.init({ need, peek: API.peek, ahead: API.ahead, render, toast, isChef, entry: () => cur().p,
   openRecipe: (id, name, f, ref) => openMre(id, name, f, ref),
   listRow: id => ((API.peek('mre_list') || {}).recipes || []).find(r => r.id === id) || null,
   /* "Next" during the Chef's review: the following recipe of the list as he last filtered it */

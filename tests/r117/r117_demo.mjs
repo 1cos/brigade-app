@@ -121,7 +121,7 @@ async function page() {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
   const pg = await ctx.newPage()
   pg.on('pageerror', e => ok(false, 'errore JS: ' + e.message)); pg.on('console', m => { if (/^DBG/.test(m.text())) console.log(m.text()) })
-  await pg.route('**/functions/v1/brigade-app-api', async r => { const b = JSON.parse(r.request().postData() || '{}'); await new Promise(x => setTimeout(x, DELAY[b.op] || 80))
+  await pg.route('**/functions/v1/brigade-app-api*', async r => { const b = JSON.parse(r.request().postData() || '{}'); await new Promise(x => setTimeout(x, DELAY[b.op] || 80))
     const out = api(b.op, b); if (Array.isArray(out)) return r.fulfill({ status: out[0], contentType: 'application/json', body: JSON.stringify({ ok: false, error: out[1] }) }); r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(out) }) })
   await pg.route('**/fonts.googleapis.com/**', r => r.fulfill({ status: 200, contentType: 'text/css', body: '' }))
   await pg.addInitScript(() => { localStorage.setItem('brigade-app-token', 'a'.repeat(64)); navigator.serviceWorker && (navigator.serviceWorker.register = () => Promise.resolve()) })

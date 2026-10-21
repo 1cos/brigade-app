@@ -96,7 +96,7 @@ async function page() {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
   const pg = await ctx.newPage()
   pg.on('pageerror', e => ok(false, 'errore JS: ' + e.message)); pg.on('console', m => { if (/^DBG/.test(m.text())) console.log(m.text()) })
-  await pg.route('**/functions/v1/brigade-app-api', async r => { const b = JSON.parse(r.request().postData() || '{}')
+  await pg.route('**/functions/v1/brigade-app-api*', async r => { const b = JSON.parse(r.request().postData() || '{}')
     if (b.op === 'mre_save_draft') { inflight++; maxInflight = Math.max(maxInflight, inflight) }
     let d = DELAY[b.op] || 150; if (b.op === 'mre_save_draft' && slowFirst) { d = slowFirst; slowFirst = 0 }
     await new Promise(x => setTimeout(x, d))
