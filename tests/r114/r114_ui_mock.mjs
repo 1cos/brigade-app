@@ -151,7 +151,7 @@ await pg.click('.mr-ebar [data-m="savedraft"]'); await pg.waitForTimeout(400)
 const over = await pg.evaluate(() => { const fl = document.querySelector('.mr-flash'), t = document.querySelector('.toast:not([hidden])'); const btns = [...document.querySelectorAll('#main button')].filter(b => b.offsetParent)
   const hit = el => { if (!el) return []; const r = el.getBoundingClientRect(); return btns.filter(b => { const q = b.getBoundingClientRect(); return !(q.bottom <= r.top || q.top >= r.bottom || q.right <= r.left || q.left >= r.right) && !el.contains(b) }).map(b => b.innerText) }
   return { flash: fl ? fl.innerText : null, toast: !!t, covers: hit(fl).concat(hit(t)) } })
-ok(over.flash && /Draft v1 saved/.test(over.flash) && !over.toast && over.covers.length === 0, 'conferma dentro la scheda, nessun messaggio sopra i pulsanti — ' + JSON.stringify(over))
+ok(over.flash && /DRAFT v1/.test(over.flash) && !over.toast && over.covers.length === 0, 'conferma dentro la scheda, nessun messaggio sopra i pulsanti — ' + JSON.stringify(over))
 await shot(pg, 'a10_messaggio_in_alto')
 ok(await noScrollX(pg), 'nessuno scorrimento orizzontale')
 await pg.context().close()

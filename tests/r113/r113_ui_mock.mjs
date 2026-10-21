@@ -128,7 +128,7 @@ ok(/Cosa cambia/i.test(pv) && /0\.789 → \$?0\.799/.test(pv.replace(/\$/g, '$')
 ok(await pg.locator('.mr-pub[disabled]').count() === 1 && /Non attiva in modalità prova/.test(pv), 'Pubblica spento, una riga discreta')
 await pg.locator('.mr-pub').evaluate(e => e.click()); ok(publishCalls === 0, 'Pubblica non invia niente')
 await pg.click('.mr-ebar [data-m="savedraft"]'); await pg.waitForTimeout(500); await shot(pg, '7_bozza_salvata')
-ok(saves >= 1 && /Bozza v1 salvata/.test(await txt(pg, '.mr-flash')) && /6 g/.test(await txt(pg, '.mr-ings')), 'Salva bozza: salvata, la ricetta mostra la bozza (6 g)')
+ok(saves >= 1 && /BOZZA v1/.test(await txt(pg, ".mr-flash")) && /6 g/.test(await txt(pg, '.mr-ings')), 'Salva bozza: salvata, la ricetta mostra la bozza (6 g)')
 // back to 5 g so the demo state is the real one
 await pg.click('.mr-editbtn'); await pg.click('b.mq[data-mq="l:p2"]'); await pg.keyboard.press('Meta+A'); await pg.keyboard.type('5'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(300); await pg.click('.mr-ebar [data-m="savedraft"]'); await pg.waitForTimeout(400)
 ok(LAB[POS].draft.lines.find(l => l.id === 'p2').qty === 5, 'riportato a 5 g')

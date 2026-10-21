@@ -100,7 +100,7 @@ role = 'chef'
   ok(LAB[ART].draft && LAB[ART].draft.lines[0].qty === 3, 'draft saved in the test lab while away (Artichokes 3)')
   await back(pg)
   const q2 = (await pg.locator('#main .mr-ings li').first().locator('b.mq').innerText()).trim()
-  ok((await H1(pg)) === 'Artichoke' && /editing|Stai modificando|Editing|Bozza v[0-9]+|Draft v[0-9]+/i.test(await pg.locator('#main .mr-estate').innerText()) && q2.startsWith('3'), `back → still editing, quantity kept (${q2})`)
+  ok((await H1(pg)) === 'Artichoke' && /editing|Stai modificando|Editing|Bozza v[0-9]+|Draft v[0-9]+/i.test(await pg.locator('#main .mr-estate').innerText()) && q2.startsWith('3'), `back → still editing, quantity kept (${q2}) — ${await pg.locator("#main .mr-estate").innerText().catch(() => "-")} — ${await H1(pg)}`)
   // publish in the test lab
   await pg.locator('#main .mr-ebar button[data-m="pv:1"]').click(); await pg.waitForTimeout(300)      // R1.13: Publish lives in Preview
   await pg.locator('#main button[data-m="publish"]').click(); await pg.waitForTimeout(800)

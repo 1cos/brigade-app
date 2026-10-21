@@ -73,7 +73,8 @@ function render(p) {
   h += `<div class="mr-head"><div class="mr-row1"><span class="mr-tags">${tags}</span>${chef && m === 'view' ? `<button class="mr-editbtn" data-m="edit">${T('edit')}</button>` : ''}</div>`;
   if (chef && m === 'view' && d.source !== 'lab' && d.draft) h += `<div class="mr-vs" role="tablist"><button class="${draftView ? 'on' : ''}" data-m="view:draft">${T('v_draft', { v: d.draft._version })}</button><button class="${!draftView ? 'on' : ''}" data-m="view:live">${T('v_live')}</button></div>`;
   else if (chef && d.source === 'lab' && m === 'view') h += `<div><span class="rm-draft">${T('v_new')}</span></div>`;
-  if (m !== 'view') h += `<div class="mr-estate">${T('editing2', { v: (d.draft && d.draft._version) || (Math.max(0, ...(d.versions || []).map(v => v.version)) + 1) })}${p.saved ? ' · ' + T('saved_word') : ''}</div>`;
+  if (m !== 'view') h += `<div class="mr-estate" data-sst="${esc(p.id)}" role="status" aria-live="polite">${statusInner(p.id, d)}</div>`;
+  if (chef && draftView) { const dv = (d.versions || []).find(v => v.state === 'bozza'); h += `<div class="mr-dstate">${T('draft_state', { v: d.draft._version, t: dv && dv.at ? dt(dv.at) : '' })}</div>`; }
   h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(I.dn(doc.title))}</h1>`;
   const parts = [];
   if (edit) {      // R1.14 (Chef 21/10): a prep counted in pieces has its yield in portions; the weight is optional, never required
@@ -201,7 +202,7 @@ function approvedReminder(d) {
 
 function addHtml(p) {
   const w = ui(p.id), r = w.search || {};
-  return `<div class="mr-add"><input id="mrAdd" class="mr-input" data-mred="1" placeholder="${esc(T('add_placeholder'))}" value="${esc(w.q || '')}" autocomplete="off">
+  return `<div class="mr-add"><input id="mrAdd" class="mr-input" data-mred="1" placeholder="${esc(T('add_placeholder'))}" value="${esc(w.q || '')}" autocomplete="off"><span id="mrSearching" class="mr-muted" hidden>${T('searching')}</span>
     ${(r.ingredients || []).map(x => `<button class="mr-link" data-m="addi:${x.id}">${esc((I.lang === 'it' && x.name_it) || x.name)}</button>`).join(' · ')}
     ${(r.recipes || []).length ? '<br>' + r.recipes.map(x => `<button class="mr-link" data-m="addr:${x.id}">${esc(x.title)} (${esc(T('sub_recipe'))})</button>`).join(' · ') : ''}</div>`;
 }
@@ -348,20 +349,82 @@ const dt = iso => iso ? new Intl.DateTimeFormat(loc(), { timeZone: 'America/Chic
 
 /* ============ INTERACTIONS ============ */
 function entry() { return H.entry(); }
-const forget = id => { API.forget('mre_recipe'); API.forget('mre_list'); API.get('mre_list', null, 0).catch(() => {}); };
+/* R1.16 (Chef 21/10 "BUG CRITICI DELL'EDITOR"): data is refreshed in the background and the recipe stays on screen meanwhile.
+   (R1.15 dropped the recipe from memory after every save: the whole section disappeared for 3-4 s while the server re-read it.) */
+const forget = id => { const e = entry(), rid = id || (e && e.id); if (rid) API.get('mre_recipe', { id: rid }, 0).catch(() => {}); API.get('mre_list', null, 0).catch(() => {}); };
 /* R1.14: confirmations and errors are written INSIDE the card (top of the recipe), never floating over buttons */
 function flash(id, msg, bad) { ui(id).flash = { msg, bad: !!bad, at: Date.now() }; }
 async function call(op, body, okMsg) {
   try { const r = await API.call(op, body); const p = entry(); if (okMsg && p && p.id) flash(p.id, okMsg); return r; }
   catch (e) { const c = String(e.code || '').split(':')[0]; const p = entry(); if (p && p.id) { flash(p.id, T('err_' + c) !== 'm_err_' + c ? T('err_' + c) : T('error', { e: e.code || 'error' }), true); H.render(true) } return null; }
 }
-let saveT;
-function scheduleSave(p) {
-  clearTimeout(saveT);
-  saveT = setTimeout(async () => {
-    const r = await call('mre_save_draft', { id: p.id, doc: WORK[p.id], base: (H.peek('mre_recipe', { id: p.id }) || {}).recipe?.current_version });
-    if (r) { p.saved = true; forget(); H.render(true); }
-  }, 900);
+/* ---- background saving (R1.16) ----
+   Every change is applied to the working copy and shown AT ONCE; the server copy follows in the background.
+   One save at a time per recipe, always the newest copy: an older answer can never overwrite newer work.
+   If a save fails the working copy stays here, the state says so and "Retry" sends it again. */
+const SV = {};
+const sv = id => SV[id] || (SV[id] = { seq: 0, done: 0, busy: null, state: null, at: null, ver: null, err: null, t: null });
+function touch(p) { const s = sv(p.id); s.seq++; if (s.state !== 'error') s.state = 'dirty'; paintStatus(p.id); clearTimeout(s.t); s.t = setTimeout(() => flush(p.id), 700); }
+async function flush(id) {
+  const s = sv(id); clearTimeout(s.t);
+  if (s.busy) { await s.busy.catch(() => {}); return SV[id] === s ? flush(id) : true; }      // wait for the save on the way, then send what is newer
+  if (s.dead || !WORK[id] || s.seq === s.done) { if (s.state !== 'error' && s.seq === s.done && s.done) { s.state = 'saved'; paintStatus(id); } return s.state !== 'error'; }
+  const seq = s.seq, doc = JSON.parse(JSON.stringify(WORK[id])), d = H.peek('mre_recipe', { id });
+  s.state = 'saving'; paintStatus(id);
+  s.busy = API.call('mre_save_draft', { id, doc, base: d && d.recipe ? d.recipe.current_version : undefined });
+  let r = null; try { r = await s.busy; } catch (e) { s.err = String(e.code || 'error').split(':')[0]; } finally { s.busy = null; }
+  if (SV[id] !== s || s.dead) return !!r;
+  if (!r) { s.state = 'error'; paintStatus(id); return false; }
+  s.done = Math.max(s.done, seq); s.ver = r.draft_version > 0 ? r.draft_version : null; s.at = new Date().toISOString(); s.err = null;
+  keepDraft(id, doc, r.draft_version, s.at);
+  if (s.seq !== s.done) return flush(id);                    // the Chef kept working while this was saving: send the newest copy
+  s.state = 'saved'; paintStatus(id); API.get('mre_list', null, 0).catch(() => {}); return true;
+}
+/* the saved draft goes into the recipe already in memory: no reload, nothing disappears */
+function keepDraft(id, doc, v, at) {
+  const d = H.peek('mre_recipe', { id }); if (!d) return;
+  if (!(v > 0)) v = (d.draft && d.draft._version) || (Math.max(0, ...(d.versions || []).map(x => Number(x.version) || 0)) + 1);   // never "vNaN"
+  d.draft = Object.assign(JSON.parse(JSON.stringify(doc)), { id, _version: v });
+  const vs = d.versions || (d.versions = []), b = vs.find(x => x.state === 'bozza');
+  if (b) { b.version = v; b.at = at; } else vs.unshift({ version: v, state: 'bozza', reason: null, by: H.me ? (H.me() || {}).name : '', at });
+}
+function statusInner(id, d) {
+  const s = sv(id), dd = d || H.peek('mre_recipe', { id }) || {};
+  const v = s.ver || (dd.draft && dd.draft._version) || (Math.max(0, ...(dd.versions || []).map(x => Number(x.version) || 0)) + 1);
+  if (s.state === 'error') return `<span class="mr-sst bad">${T('st_error', { e: s.err === 'offline' ? T('st_offline') : T('err_' + s.err) !== 'm_err_' + s.err ? T('err_' + s.err) : (s.err || '') })}</span> <button class="mr-link acc" data-m="retry">${T('retry')}</button>`;
+  if (s.state === 'saving') return `<span class="mr-sst busy">${T('st_saving')}</span>`;
+  if (s.state === 'dirty') return `<span class="mr-sst busy">${T('st_editing')}</span>`;
+  if (s.state === 'saved') return `<span class="mr-sst ok">${T('st_saved', { v, t: dt(s.at) })}</span>`;
+  return `<span class="mr-sst">${T('st_start', { v })}</span>`;
+}
+function paintStatus(id) { document.querySelectorAll('#main [data-sst]').forEach(e => { if (e.dataset.sst === id) e.innerHTML = statusInner(id); }); }
+const pending = () => Object.keys(SV).filter(id => SV[id].seq !== SV[id].done || SV[id].busy);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pending().forEach(id => flush(id)); });   // the phone is put away: send now
+
+/* re-draw the card without losing what the Chef is writing: focus, caret and scroll stay where they are */
+function caretOf(el) { const sel = getSelection(); if (!sel.rangeCount || !el.contains(sel.anchorNode)) return null; const r = sel.getRangeAt(0).cloneRange(); r.selectNodeContents(el); r.setEnd(sel.anchorNode, sel.anchorOffset); return r.toString().length; }
+function caretTo(el, n) { if (n == null) return; const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode())) { if (n <= t.length) { const r = document.createRange(); r.setStart(t, n); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return; } n -= t.length; } }
+function paint() {
+  const a = document.activeElement, inCard = a && a.closest && a.closest('#main .mr');
+  const keep = inCard && (a.dataset.mt || a.id === 'mrAdd') ? { mt: a.dataset.mt, id: a.id, c: a.dataset.mt ? caretOf(a) : a.selectionStart } : null;
+  if (keep && keep.mt) readText(a);
+  H.render(true);
+  if (!keep) return;
+  const el = keep.mt ? document.querySelector(`#main [data-mt="${keep.mt}"]`) : document.getElementById(keep.id);
+  if (!el) return; el.focus({ preventScroll: true }); if (keep.mt) caretTo(el, keep.c); else if (keep.c != null) el.setSelectionRange(keep.c, keep.c);
+}
+/* the suggestions must never sit under the sticky bar at the bottom (iPhone): a tap there hit the bar, not the ingredient */
+function showAdd() { const a = document.querySelector('#main .mr-add'), f = document.querySelector('#main .mr-foot'), m = document.getElementById('main'); if (!a || !m) return;
+  const lim = f ? f.getBoundingClientRect().top : m.getBoundingClientRect().bottom, over = a.getBoundingClientRect().bottom - lim + 12; if (over > 0) m.scrollTop += over; }
+/* text of a title / label / note / step into the working copy; true when it changed */
+function readText(t) {
+  const p = entry(), doc = WORK[p && p.id]; if (!doc || !t.dataset.mt) return false;
+  const [k, a] = t.dataset.mt.split(':'), before = JSON.stringify(doc);
+  if (k === 'title') doc.title = t.textContent.trim() || doc.title;
+  else if (k === 'label') doc.yield.label = t.textContent.trim() || null;
+  else if (k === 'note') { const l = doc.lines.find(x => x.id === a); if (l) l.note = t.textContent.trim() || null; }
+  else if (k === 'step') { let s = ''; t.childNodes.forEach(n => { s += n.nodeType === 1 && n.dataset && n.dataset.tok ? `{{${n.dataset.tok}}}` : n.textContent; }); const st = doc.steps[+a]; if (st) st[I.lang] = s.trim(); }
+  return JSON.stringify(doc) !== before;
 }
 
 function onClick(ev) {
@@ -382,27 +445,42 @@ function onClick(ev) {
   else if (k === 'sub') { const src = shownDoc(d, p), l = src.lines.find(x => x.id === a1); if (!l) return; const sub = (PREVIEW && d.draft_docs && d.draft_docs[l.ref]) || d.docs[l.ref];
       const fr = sub && l.qty != null ? E().subFraction(l.qty * (p.edit ? 1 : (p.f || 1)), l.unit, sub) : { f: null }; H.openRecipe(l.ref, sub ? sub.title : '', fr.f || 1, T('from_parent', { t: src.title })); return; }
   else if (k === 'adv') p.adv = !p.adv;
-  else if (k === 'edit') { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.adv = false; p.panel = null; w.err = null; p.f = 1; p.saved = !!d.draft; w.sure = false; }
+  else if (k === 'edit') { if (w.busy) return; SV[p.id] = null; delete SV[p.id]; WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.adv = false; p.panel = null; w.err = null; p.f = 1; p.saved = !!d.draft; w.sure = false; }
   else if (k === 'pv') { p.pv = a1 === '1'; w.sure = false; H.render(true); document.getElementById('main').scrollTop = 0; return; }
   else if (k === 'view') { p.view = a1; p.f = 1; p.ref = ''; w.prod = null; }
-  else if (k === 'savedraft') { document.querySelectorAll('#main [data-m="savedraft"]').forEach(b => { b.disabled = true; b.textContent = T('saving') });   // the server can take a few seconds: say so
-      (async () => { clearTimeout(saveT); const r = await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); if (!r) { H.render(true); return; }
-      delete WORK[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft'; flash(p.id, T('draft_saved_toast', { v: r.draft_version })); forget(); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
+  else if (k === 'savedraft') { if (w.busy) return; w.busy = k; document.querySelectorAll('#main [data-m="savedraft"]').forEach(b => { b.disabled = true; b.textContent = T('saving') });   // the server can take a few seconds: say so
+      const a = document.activeElement; if (a && a.dataset && a.dataset.mt && readText(a)) sv(p.id).seq++;
+      const s = sv(p.id); if (!d.draft && !s.done) s.seq++;            // first save of an untouched recipe still creates the draft
+      (async () => { const ok = await flush(p.id); w.busy = null; if (!ok) { paint(); return; }
+      const v = sv(p.id).ver || (d.draft && d.draft._version); delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft';
+      flash(p.id, T('draft_saved_toast', { v })); API.get('mre_list', null, 0).catch(() => {}); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
+  else if (k === 'retry') { flush(p.id); return; }
   else if (k === 'cancel') { if (!w.sure) { w.sure = true; H.render(true); setTimeout(() => { w.sure = false; }, 4000); return; }   // second tap discards: never a browser dialog
-      w.sure = false; (async () => { clearTimeout(saveT); if (d.draft || p.saved) await call('mre_discard', { id: p.id }, T('discarded')); delete WORK[p.id]; p.edit = false; p.pv = false; p.saved = false; forget(); H.render(true); })(); return; }
-  else if (k === 'review' || k === 'unreview') { (async () => { const r = await call('mre_review', { id: p.id, verified: k === 'review' }); if (!r) return;
-      const nx = k === 'review' && H.next ? H.next(p.id) : null; forget(); if (nx) { flash(nx, T('verified_toast')); H.replace(nx); } else H.render(true); })(); return; }
+      w.sure = false; if (w.busy) return; w.busy = k;
+      (async () => { const s = sv(p.id); s.dead = true; clearTimeout(s.t); if (s.busy) await s.busy.catch(() => {});      // no save may arrive after the discard
+        const had = d.draft || s.done; const r = had ? await call('mre_discard', { id: p.id }, T('discarded')) : true; w.busy = null;
+        if (!r) { s.dead = false; s.seq++; paint(); return; }
+        delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; d.draft = null; d.versions = (d.versions || []).filter(v => v.state !== 'bozza'); forget(p.id); H.render(true); })(); return; }
+  else if (k === 'review' || k === 'unreview') { if (w.busy) return; w.busy = k; el.disabled = true;                 // one tap = one review, even if tapped again while it saves
+      (async () => { const r = await call('mre_review', { id: p.id, verified: k === 'review' }); w.busy = null; if (!r) return;
+      if (d.recipe) d.recipe.review = r.review || null; const nx = k === 'review' && H.next ? H.next(p.id) : null; forget(p.id); if (nx) { flash(nx, T('verified_toast')); H.replace(nx); } else H.render(true); })(); return; }
   else if (k === 'next') { const nx = H.next ? H.next(p.id) : null; if (nx) H.replace(nx); return; }
-  else if (k === 'publish') { (async () => { clearTimeout(saveT); const s = await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); if (!s) return;
+  else if (k === 'publish') { (async () => { if (!(await flush(p.id))) return;
       const r = await call('mre_publish', { id: p.id, reason: w.reason || '', base: d.recipe.current_version }); if (!r) return;
       flash(p.id, T('published', { v: r.version })); delete WORK[p.id]; p.edit = false; p.saved = false; p.f = 1; w.reason = ''; forget(); H.render(true); })(); return; }
   else if (k === 'role') return;
-  else if (k === 'del') { work().lines = work().lines.filter(x => x.id !== a1); scheduleSave(p); }
-  else if (k === 'delstep') { work().steps.splice(+a1, 1); scheduleSave(p); }
-  else if (k === 'addstep') { work().steps.push({ it: '', en: '', es: '' }); scheduleSave(p); }
-  else if (k === 'addi' || k === 'addr') { const nid = 'n' + Date.now().toString(36); work().lines.push({ id: nid, kind: k === 'addr' ? 'recipe' : 'ingredient', ref: a1, qty: null, unit: 'g', role: 'produzione', note: null, group: null }); w.q = ''; w.search = null;
-      (async () => { await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); p.saved = true; forget(); H.render(true); })(); return; }
-  else if (k === 'restore') { (async () => { const r = await call('mre_restore', { id: p.id, version: +a1 }); if (r) { flash(p.id, r.draft ? T('restored_draft', { v: a1 }) : T('restored', { v: a1, n: r.version })); forget(); H.render(true); } })(); return; }
+  // R1.16: every change shows at once (no wait for the server); the save follows in the background
+  else if (k === 'del') { work().lines = work().lines.filter(x => x.id !== a1); touch(p); paint(); return; }
+  else if (k === 'delstep') { const a = document.activeElement; if (a && a.dataset && a.dataset.mt) readText(a); work().steps.splice(+a1, 1); touch(p); el.blur(); H.render(true); return; }
+  else if (k === 'addstep') { const a = document.activeElement; if (a && a.dataset && a.dataset.mt) readText(a); work().steps.push({ it: '', en: '', es: '' }); touch(p); H.render(true);
+      const n = document.querySelector(`#main [data-mt="step:${work().steps.length - 1}"]`); if (n) { n.focus(); n.scrollIntoView({ block: 'center' }); } return; }
+  else if (k === 'addi' || k === 'addr') {
+      // the same suggestion tapped again within 2 s is the same tap (R1.15: three taps = three Ground Nutmeg)
+      if (w.lastAdd && w.lastAdd.ref === a1 && Date.now() - w.lastAdd.at < 2000) return;
+      const nid = 'n' + Date.now().toString(36); work().lines.push({ id: nid, kind: k === 'addr' ? 'recipe' : 'ingredient', ref: a1, qty: null, unit: 'g', role: 'produzione', note: null, group: null });
+      w.lastAdd = { ref: a1, at: Date.now() }; w.q = ''; w.search = null; w.searching = false; clearTimeout(qT); touch(p); el.blur(); H.render(true);
+      const li = document.querySelector(`#main [data-m="del:${nid}"]`); if (li) li.closest('li').classList.add('mr-new'); return; }
+  else if (k === 'restore') { if (w.busy) return; w.busy = k; (async () => { const r = await call('mre_restore', { id: p.id, version: +a1 }); w.busy = null; if (r) { flash(p.id, r.draft ? T('restored_draft', { v: a1 }) : T('restored', { v: a1, n: r.version })); API.forget('mre_recipe'); forget(p.id); H.render(true); } })(); return; }
   else if (k === 'checkdiffs') { (async () => { const r = await call('mre_check_diffs', { id: p.id }, T('checked')); if (r) { forget(); H.render(true); } })(); return; }
   else if (k === 'dec') { (async () => { const r = await call('mre_decide', { suggestion_id: a1, status: a2 }, T('st_' + a2.replace(' ', '_'))); if (r) { forget(); H.render(true); } })(); return; }
   else if (k === 'prod') { w.prod = { real: null, diff: false, used: {} }; w.prodMsg = null; w.sugOpen = false; }
@@ -449,14 +527,14 @@ function commit(b, text) {
   const v = parseFloat(String(text).replace(/\s/g, '').replace(',', '.'));
   const edit = H.isChef() && p.edit && WORK[p.id];
   w.err = null;
-  if (edit && key === 'y:g' && !(v > 0)) { WORK[p.id].yield.g = null; scheduleSave(p); H.render(true); return; }   // weight is optional: empty or 0 removes it
+  if (edit && key === 'y:g' && !(v > 0)) { WORK[p.id].yield.g = null; touch(p); H.render(true); return; }   // weight is optional: empty or 0 removes it
   if (!(v > 0) || String(text).trim() === String(b.dataset.orig || '').trim()) { H.render(true); return; }      // a tap without a new number changes nothing
   if (edit) {
     const doc = WORK[p.id];
     if (key.startsWith('l:')) { const l = doc.lines.find(x => x.id === key.slice(2)); if (l) l.qty = v; }
     else if (key === 'y:g') { const k = E().normUnit(u) || 'g'; doc.yield.g = v * ({ kg: 1000, oz: 28.3495, lb: 453.592 }[k] || 1); }
     else if (key === 'y:p') doc.yield.portions = v;
-    scheduleSave(p); H.render(true); return;
+    touch(p); H.render(true); return;
   }
   const doc = shownDoc(d, p), ctx = ctxFor(d, p.id, doc, PREVIEW);
   let f = null, ref = '';
@@ -474,16 +552,8 @@ function commit(b, text) {
 /* text edits (editor): title, label, notes, steps — saved as draft */
 function onBlurText(ev) {
   const t = ev.target.closest && ev.target.closest('[data-mt]'); if (!t || !t.closest('.mr')) return;
-  const p = entry(), doc = WORK[p && p.id]; if (!doc) return;
-  const [k, a] = t.dataset.mt.split(':');
-  if (k === 'title') doc.title = t.textContent.trim() || doc.title;
-  else if (k === 'label') doc.yield.label = t.textContent.trim() || null;
-  else if (k === 'note') { const l = doc.lines.find(x => x.id === a); if (l) l.note = t.textContent.trim() || null; }
-  else if (k === 'step') {
-    let s = ''; t.childNodes.forEach(n => { s += n.nodeType === 1 && n.dataset && n.dataset.tok ? `{{${n.dataset.tok}}}` : n.textContent; });
-    const st = doc.steps[+a]; if (st) st[I.lang] = s.trim();
-  }
-  scheduleSave(p);
+  const p = entry(); if (!WORK[p && p.id]) return;
+  if (readText(t)) touch(p);
 }
 function onChange(ev) {
   const s = ev.target.closest && ev.target.closest('[data-ms]'); if (!s || !s.closest('.mr')) return;
@@ -491,13 +561,17 @@ function onChange(ev) {
   const [k, a] = s.dataset.ms.split(':');
   if (k === 'has_stock') doc.has_stock = s.value === '1';
   else { const l = doc.lines.find(x => x.id === a); if (!l) return; if (k === 'role') l.role = s.value; if (k === 'unit') l.unit = s.value === '—' ? null : s.value; }
-  scheduleSave(p); H.render(true);
+  touch(p); paint();
 }
 let qT;
 function onInput(ev) {
   const p = entry(); if (!p || !p.id) return;
+  const mt = ev.target.closest && ev.target.closest('[data-mt]');
+  if (mt && mt.closest('.mr') && WORK[p.id]) { if (readText(mt)) touch(p); return; }
   if (ev.target.id === 'mrAdd') { const w = ui(p.id), q = ev.target.value; w.q = q; clearTimeout(qT);
-    qT = setTimeout(async () => { if (q.trim().length < 2) { w.search = null; H.render(true); return; } const r = await call('mre_ingredients', { q }); if (r) { w.search = r; H.render(true); const i = document.getElementById('mrAdd'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } }, 350); }
+    const hint = document.getElementById('mrSearching'); if (hint) hint.hidden = q.trim().length < 2;
+    qT = setTimeout(async () => { if (q.trim().length < 2) { w.search = null; paint(); return; } const r = await call('mre_ingredients', { q });
+      if (r && w.q === q && WORK[p.id]) { w.search = r; paint(); showAdd(); } }, 300); }      // an older search answer never replaces a newer one
   if (ev.target.id === 'mrReason') ui(p.id).reason = ev.target.value;
   if (ev.target.id === 'mrSug') ui(p.id).sugText = ev.target.value;
 }
@@ -507,7 +581,8 @@ window.MreUI = {
     m.addEventListener('click', onClick, true); m.addEventListener('focusout', onBlurText); m.addEventListener('change', onChange); m.addEventListener('input', onInput); },
   render,
   /* sign-out / switch user: nothing of the previous person's working copies stays in memory */
-  reset() { Object.keys(WORK).forEach(k => delete WORK[k]); Object.keys(UI).forEach(k => delete UI[k]); clearTimeout(saveT); clearTimeout(qT); },
+  reset() { Object.keys(SV).forEach(k => { clearTimeout(SV[k].t); SV[k].dead = true; delete SV[k]; }); Object.keys(WORK).forEach(k => delete WORK[k]); Object.keys(UI).forEach(k => delete UI[k]); clearTimeout(qT); },
+  pending,
   title(p) { const d = H && H.peek('mre_recipe', { id: p.id }); if (d) return I.dn(shownDoc(d, p).title);      // a tab always has a name, also while loading
     const r = H && H.listRow && H.listRow(p.id); return p.name || (r ? (H.isChef() && r.draft_title) || I.dn(r.title) : '…'); },
 };
