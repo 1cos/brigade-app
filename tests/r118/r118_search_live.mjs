@@ -7,7 +7,7 @@ let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL 
 const READS = new Set(['me', 'shift', 'mre_list', 'mre_recipe', 'knowledge', 'recipe', 'recipes', 'prep']); const blocked = []
 const br = await webkit.launch(), ctx = await br.newContext({ ...devices['iPhone 13'] })
 const types = { js: 'application/javascript', css: 'text/css', html: 'text/html', json: 'application/json', webmanifest: 'application/manifest+json', png: 'image/png', svg: 'image/svg+xml' }
-await ctx.route('https://1cos.github.io/brigade-app/**', r => { const f = new URL(r.request().url()).pathname.replace('/brigade-app/', '') || 'index.html', fp = process.env.LOCAL_WEB + '/' + f
+if (process.env.LOCAL_WEB) await ctx.route('https://1cos.github.io/brigade-app/**', r => { const f = new URL(r.request().url()).pathname.replace('/brigade-app/', '') || 'index.html', fp = process.env.LOCAL_WEB + '/' + f
   if (!fs.existsSync(fp)) return r.fulfill({ status: 404, body: '' }); r.fulfill({ status: 200, contentType: types[f.split('.').pop()] || 'application/octet-stream', body: fs.readFileSync(fp) }) })
 await ctx.route('**/fonts.googleapis.com/**', r => r.fulfill({ status: 200, contentType: 'text/css', body: '' }))
 await ctx.route(u => u.pathname === '/functions/v1/brigade-app-api', async r => { if (r.request().method() !== 'POST') return r.continue()
