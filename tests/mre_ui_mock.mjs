@@ -24,7 +24,7 @@ function api(op, b) {
     case 'me': return { ok: true, user: u, build: 'mock' }
     case 'shift': return { build: 'mock', today: '2026-10-15', plan_date: '2026-10-15', user: u, items: [], messages: [], done_today: [], reports: [], people: [] }
     case 'recipes': return { recipes: docs.slice(0, 5).map(d => ({ id: d.id, title: d.title, category: d.category })) }
-    case 'mre_list': { const list = docs.map(d => ({ id: d.id, pilot: pil.has(d.id), is_test: d.category === 'Prova tecnica', current_version: LAB[d.id].cur, state: LAB[d.id].versions.find(v => v.version === LAB[d.id].cur).state, title: curDoc(d.id).title, category: d.category, diffs: 0, draft: !!LAB[d.id].draft, pending: LAB[d.id].sugs.filter(s => s.status === 'in attesa').length })); return { recipes: list, pending: list.reduce((a, r) => a + r.pending, 0) } }
+    case 'mre_list': { const list = docs.map(d => ({ id: d.id, mre: true, pilot: pil.has(d.id), is_test: d.category === 'Prova tecnica', current_version: LAB[d.id].cur, state: LAB[d.id].versions.find(v => v.version === LAB[d.id].cur).state, title: curDoc(d.id).title, category: d.category, diffs: 0, draft: !!LAB[d.id].draft, pending: LAB[d.id].sugs.filter(s => s.status === 'in attesa').length })); return { recipes: list, pending: list.reduce((a, r) => a + r.pending, 0) } }
     case 'mre_recipe': { const L = LAB[b.id], root = curDoc(b.id), dd = treeOf(root), ctx = { doc: x => dd[x], facts: x => facts[x], measures }
       const f2 = {}; Object.keys(facts).forEach(k => { f2[k] = u.role === 'chef' ? facts[k] : (({ price, ...r }) => r)(facts[k]) })
       return { recipe: { id: b.id, current_version: L.cur }, doc: root, docs: dd, facts: f2, measures, versions: L.versions.slice().reverse().map(v => ({ version: v.version, state: v.state, reason: v.reason, by: 'Max', at: v.at })),
@@ -93,6 +93,7 @@ await pg.click('[data-m="edit"]'); await pg.waitForTimeout(200)
 await pg.click('.mr-ings b.mq[data-mq="l:t4"]'); await pg.keyboard.press('Meta+A'); await pg.keyboard.type('160'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(1300)
 await pg.screenshot({ path: `${OUT}/5_iphone_editor.png`, fullPage: true })
 ok(/→/.test(await txt(pg, '.mr-foot')), 'editor: anteprima food cost prima → dopo')
+await pg.click('.mr-ebar [data-m="pv:1"]'); await pg.waitForTimeout(300)   // R1.13: Publish lives in Preview
 await pg.click('[data-m="publish"]'); await pg.waitForTimeout(1500)
 console.log('DEBUG toast:', await pg.locator('.toast').allInnerTexts(), 'cur', LAB['00000000-b490-4000-8000-000000000001'].cur, 'draft', !!LAB['00000000-b490-4000-8000-000000000001'].draft)
 ok(LAB['00000000-b490-4000-8000-000000000001'].cur === 2 && (await txt(pg, '.mr-ings li')).includes('160 g'), 'pubblicata v2 con burro 160 g')

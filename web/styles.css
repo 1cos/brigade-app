@@ -438,7 +438,7 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .mr-adv{display:block}
 .mr-advnote{font-size:14px;margin:4px 0 8px}
 .mr-eline .mr-nm{flex:1 1 auto;min-width:0}.mr-eline .mr-eq{flex:0 0 auto}
-@media (max-width:640px){.mr-eline{gap:8px!important}.mr-eq .mr-sel{max-width:76px}}
+@media (max-width:640px){.mr-eline{gap:8px!important}.mr-eq .mr-sel{max-width:96px}}
 .mr-x{margin-left:6px;width:32px;height:32px;border-radius:50%;color:var(--txm);font-size:20px;line-height:1;flex:0 0 auto}
 .mr-x:hover,.mr-x:focus-visible{color:var(--red,#dc2626);background:var(--surf2)}
 .mr-eq{display:inline-flex;align-items:center;gap:6px}
@@ -464,3 +464,42 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .scw-t{border-collapse:collapse;margin-top:4px;font-variant-numeric:tabular-nums}
 .scw-t td{padding:2px 12px 2px 0;color:var(--tx2)}
 .scw-t td:last-child{color:var(--tx);font-weight:600}
+/* R1.13 Recipe Master — one list, Chef review (TRUST · EASY · CLEAN) */
+.rm .seg.rm-seg{margin-top:2px}
+.rm-chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+.rm-chips button{flex:0 0 auto;height:38px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--surf);font-weight:650;font-size:15px;color:var(--tx2)}
+.rm-chips button.on{background:var(--tx);border-color:var(--tx);color:var(--bg)}
+.rm-prog{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--txm);font-weight:600}
+.rm-bar{flex:1;height:6px;border-radius:6px;background:var(--surf2);overflow:hidden}
+.rm-bar i{display:block;height:100%;background:var(--ok);border-radius:6px}
+.rm-row{min-height:64px}
+.rm-meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:5px}
+.rm-tag{font:700 11px var(--fd);letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:6px;background:var(--surf2);color:var(--tx2)}
+.rm-tag.menu{background:color-mix(in srgb,var(--rest) 14%,transparent);color:var(--rest)}
+.rm-draft{font-size:13px;font-weight:700;color:var(--warn);display:inline-flex;align-items:center;gap:5px}
+.rm-draft::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+.rm-was{font-size:13px;color:var(--txm)}
+.rm-check{flex:0 0 auto;width:30px;height:30px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-weight:800;font-size:16px;color:transparent}
+.rm-check.on{background:var(--ok);border-color:var(--ok);color:var(--surf)}
+.rm-foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:6px 2px 10px}
+/* recipe card: one clear Edit button, draft / in-use switch, review bar */
+.mr-editbtn{flex:0 0 auto;font:700 15px var(--fb);color:#fff;background:var(--rest);padding:9px 16px;border-radius:999px;white-space:nowrap}
+.mr-tags{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
+.mr-vs{display:inline-flex;background:var(--surf2);border-radius:10px;padding:3px;gap:2px;justify-self:start}
+.mr-vs button{font:650 14px var(--fb);color:var(--tx2);padding:6px 12px;border-radius:8px;white-space:nowrap}
+.mr-vs button.on{background:var(--surf);color:var(--tx);box-shadow:var(--shadow)}
+.mr-ok{color:var(--ok);font-weight:700;font-size:15px}
+.mr-review{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding-top:14px;border-top:1px solid var(--line)}
+.mr-btn{font:700 16px var(--fb);min-height:48px;padding:0 18px;border-radius:14px;background:var(--surf);border:1px solid var(--line);color:var(--tx)}
+.mr-btn.pri{background:var(--ok);border-color:var(--ok);color:var(--surf)}
+.mr-btn.dark{background:var(--tx);border-color:var(--tx);color:var(--bg)}
+.mr-btn.grow{flex:1 1 auto}
+.mr-ebar{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;background:var(--bg);border-bottom:1px solid var(--line)}
+.mr-ebar .mr-vs{margin:0}
+.mr-estate{font-size:13px;color:var(--txm)}
+.mr-change{display:grid;gap:2px;padding:14px 16px;border-radius:16px;background:var(--surf);border:1px solid var(--line)}
+.mr-change h3{margin:0 0 6px;font:700 13px var(--fd);letter-spacing:.1em;text-transform:uppercase;color:var(--txm)}
+.mr-big{font-size:20px;font-weight:700}
+.mr-pubrow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.mr-pubrow .mr-muted{font-size:13px}
+.mq-ro{font-weight:800;white-space:nowrap;font-size:19px}

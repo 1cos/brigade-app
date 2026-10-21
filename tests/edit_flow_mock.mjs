@@ -45,7 +45,8 @@ function api(op, b) {
         const out = buildLabDoc({ id: b.id, r: Object.assign({ ingredients: [], procedure: '' }, r), rows, stepRows: [], prepRows: [], y: {}, byId: recById })
         LAB[b.id] = { cur: 1, versions: [{ state: 'importata', doc: out.doc, reason: 'Copia di prova' }], draft: null, diffs: out.diffs } }
       return { ok: true, id: b.id, imported: 1 } }
-    case 'mre_recipe': return LAB[b.id] ? labPayload(b.id, chef) : [404, 'not_found']
+    case 'mre_recipe': if (!LAB[b.id] && recById[b.id] && chef) { role = 'chef'; api('mre_prepare_edit', b) }   // R1.13: the server reads ANY official recipe for the Chef
+      return LAB[b.id] ? labPayload(b.id, chef) : [404, 'not_found']
     case 'mre_save_draft': if (!chef) return [403, 'forbidden']; LAB[b.id].draft = b.doc; return { ok: true }
     case 'mre_discard': LAB[b.id].draft = null; return { ok: true }
   }
@@ -69,7 +70,7 @@ const toComplete = async (pg, kind) => {
   await pg.click('button[data-a="openComplete"]'); await pg.waitForTimeout(400)
   await pg.locator(`button[data-a="kMore"][data-k="m_${kind}"]`).click(); await pg.waitForTimeout(300)
 }
-const hlText = pg => pg.locator('#main section.hl h2, #main .hl .mr-sec span').allTextContents()
+const hlText = async pg => (await pg.locator('#main section.hl h2, #main .hl .mr-sec span').allTextContents()).concat(await pg.locator('#main .mr-yield.hl').count() ? ['Resa'] : [])   // R1.13: the Chef's card marks the Yield line
 for (const [dev, w, h] of [['telefono', 390, 844], ['computer', 1440, 900]]) {
   role = 'chef'; for (const k in LAB) delete LAB[k]
   const pg = await page(w, h)
@@ -78,12 +79,12 @@ for (const [dev, w, h] of [['telefono', 390, 844], ['computer', 1440, 900]]) {
   await pg.locator(`#main button[data-a="openRecipe"][data-r="${PROC.id}"]`).click(); await pg.waitForTimeout(600)
   const box = await pg.locator('#main .fixbox .h').textContent().catch(() => '')
   ok(box === 'Da completare: manca il procedimento' && (await hlText(pg)).includes('Procedimento'), `${dev} · "${PROC.title}": riquadro "${box}", evidenziato "${(await hlText(pg)).join(',')}"`)
-  ok(await pg.locator('#main .rc-headrow button[data-a="editRecipe"]').count() === 1, `${dev} · pulsante "Modifica" nella scheda ricetta`)
+  ok(await pg.locator('#main .mr-editbtn[data-m="edit"], #main .rc-headrow button[data-a="editRecipe"]').count() === 1, `${dev} · pulsante "Modifica" nella scheda ricetta`)
   await pg.screenshot({ path: `${OUT}/${P}${dev}_1_manca_procedimento.png` })
   // 2) Edit → lab copy → editor, isolation note, part still marked
   await pg.locator('#main .fixbox button[data-a="editRecipe"]').click(); await pg.waitForTimeout(1200)
-  const isol = await pg.locator('#main .mr-isol').textContent().catch(() => '')
-  ok(await pg.locator('#main .mr.mr-edit').count() === 1 && /ricetta ufficiale di Brigade non cambia/.test(isol) && ops.includes('Max:mre_prepare_edit'), `${dev} · Modifica: editor aperto sulla copia di prova ("${isol.slice(0, 60)}…")`)
+  const isol = await pg.locator('#main .mr-ebar').textContent().catch(() => '')     // R1.13: Edit · Preview · Save draft (technical notes only in "Info tecniche")
+  ok(await pg.locator('#main .mr.mr-edit').count() === 1 && /Modifica/.test(isol) && /Anteprima/.test(isol) && /Salva bozza/.test(isol), `${dev} · Modifica: editor aperto sulla bozza ("${isol.slice(0, 60)}…")`)
   ok(await pg.locator('#main .mr-right.hl').count() === 1 && /manca il procedimento/.test(await pg.locator('#main .fixbox').textContent()), `${dev} · nell'editor il procedimento resta evidenziato con la segnalazione`)
   await pg.screenshot({ path: `${OUT}/${P}${dev}_2_editor.png` })
   // 3) write the missing procedure in a draft; footer shows the cost check
@@ -93,7 +94,7 @@ for (const [dev, w, h] of [['telefono', 390, 844], ['computer', 1440, 900]]) {
   const dr = LAB[PROC.id].draft
   ok(dr && dr.steps.length === 1 && /Mescola tutti gli ingredienti/.test(dr.steps[0].it), `${dev} · bozza salvata con il procedimento nuovo`)
   const foot = await pg.locator('#main .mr-foot').textContent().catch(() => '')
-  ok(/→/.test(foot) && /Salva v2 nella prova/.test(foot), `${dev} · controllo del costo nel piede ("${foot.split('$')[0].trim().slice(0, 40)}… → …") e pulsante "Salva v2 nella prova"`)
+  ok(/Food cost/.test(foot) && /Anteprima/.test(foot), `${dev} · costo nel piede ("${foot.split('$')[0].trim().slice(0, 40)}…") e passaggio all'Anteprima`)
   ok(LAB[PROC.id].cur === 1 && JSON.stringify({ r: recById[PROC.id], b: D.bom.filter(y => y.parent_recipe_id === PROC.id) }) === OFFICIAL && !ops.some(o => /Max:(mre_publish|act)/.test(o)), `${dev} · versione in uso invariata (v1), dati ufficiali invariati, nessuna pubblicazione`)
   await pg.screenshot({ path: `${OUT}/${P}${dev}_3_bozza.png`, fullPage: true })
   // 4) missing photo → Brigade card on Foto; 5) yield → Resa

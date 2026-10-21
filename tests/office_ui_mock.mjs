@@ -24,6 +24,9 @@ function api(op, b) {
     case 'mre_list': return { recipes: [], pending: 0 }
     case 'office': officeCalls[u.role]++; return u.role === 'chef' ? OFFICE : [403, 'forbidden']
     case 'recipe': { const r = D.recipes.find(x => x.id === b.id) || { id: b.id, title: 'Recipe', category: '' }; return { recipe: Object.assign({ base_servings: null, base_weight_g: null, yield_text: '' }, r), steps: [], bom: [], preps: [], used_in: [], can_cost: u.role === 'chef' } }
+    case 'mre_recipe': { if (u.role !== 'chef') return [404, 'not_found']   // R1.13: the Chef opens every recipe in the Recipe Master card (official, read fresh)
+      const r = D.recipes.find(x => x.id === b.id) || { id: b.id, title: 'Recipe', category: '' }, doc = { schema: 1, id: b.id, title: r.title, category: r.category, yield: { g: null, portions: null }, has_stock: false, stock: [], lines: [], steps: [] }
+      return { source: 'official', publish_locked: true, recipe: { id: b.id, current_version: 0, linked: false, review: null }, doc, docs: { [b.id]: doc }, draft_docs: {}, facts: {}, measures: {}, versions: [], productions: [], suggestions: [], draft: null, diffs: [], diffs_checked: null, cost: { food: 0, per_portion: null, complete: true, missing: 0, byLine: {} } } }
     case 'recipe_tree': return { byParent: {}, preps: [] }
     case 'recipe_cost': return u.role === 'chef' ? { ok: true, breakdown: null } : [403, 'forbidden']
   }

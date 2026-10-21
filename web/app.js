@@ -158,20 +158,40 @@ function actButtons(id, a) {
     ${a.count ? `<p class="note" style="font-size:15px">${t('counted_at', { t: tFmt(a.count.at), q: qtyU(a.count.qty, a.count.unit) })}</p>` : ''}`;
 }
 
-/* ============ RECIPES (Restaurant world) ============ */
-SCREENS.restaurant = { title: () => t('w_rest'), c: '--rest', render(p) {
-  const d = need('recipes', null, 10 * 60000);
-  const top = head(t('read_only'), t('w_rest'));
-  if (!d) return `<div class="page">${top}${waiting('recipes')}</div>`;
-  const lab = mreSection(p);
-  const q = (p.q || '').trim().toLowerCase();
-  const list = d.recipes.filter(r => !q || r.title.toLowerCase().includes(q));
-  const groups = {}; list.forEach(r => { (groups[cat(r.category)] = groups[cat(r.category)] || []).push(r); });
-  const ings = !q && window.KitchenUI ? window.KitchenUI.ingsRow(need('ingredients', null, 10 * 60000)) : '';
-  return `<div class="page" style="--c:var(--rest)">${top}${ings}${lab}
-    ${lab ? `<div class="chap"><h2>${t('m_lab_others')}</h2></div>` : ''}
-    <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: d.recipes.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
-    ${Object.keys(groups).sort().map(g => `<section><div class="chap"><h2>${esc(g)}</h2><span>${groups[g].length}</span></div><div class="list">${groups[g].map(r => `<button class="row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(I.dn(r.title))}</div></span><span class="chev">›</span></button>`).join('')}</div></section>`).join('') || `<p class="note">${esc(t('nothing_for', { q }))}</p>`}
+/* ============ RECIPE MASTER (Restaurant world) — R1.13 (Chef 20/10 "TRUST · EASY · CLEAN") ============
+   ONE list: every recipe once (official Brigade recipes + the Chef's new proposals). Drafts and history live INSIDE the recipe.
+   Filters: Prep / Menu Item; for the Chef also To review / Verified / Drafts. "Verified by the Chef" is not "Published". */
+let MRE_ORDER = [];                                     // ids of the list as last shown: "Next" follows it
+const rmName = r => isChef() && r.draft_title ? r.draft_title : I.dn(r.title);
+function rmRows(L, p) {
+  const q = (p.q || '').trim().toLowerCase(), k = p.k || 'all', st = isChef() ? p.st || 'all' : 'all';
+  return L.recipes.filter(r => (st === 'archived' ? r.archived : !r.archived)
+    && (k === 'all' || (k === 'prep' ? r.prep : r.menu))
+    && (st === 'all' || st === 'archived' || (st === 'todo' ? !r.review : st === 'done' ? !!r.review : !!r.draft))
+    && (!q || [r.title, r.draft_title, ...(r.pos_names || [])].some(x => x && String(x).toLowerCase().includes(q))));
+}
+SCREENS.restaurant = { title: () => t('m_lab_title'), c: '--rest', render(p) {
+  const L = need('mre_list', null, 2 * 60000);
+  const top = head('', t('m_lab_title'));
+  if (!L || !L.recipes) return `<div class="page">${top}${waiting('mre_list')}</div>`;
+  const chef = isChef(), live = L.recipes.filter(r => !r.archived), rows = rmRows(L, p);
+  MRE_ORDER = rows.map(r => r.id);
+  const k = p.k || 'all', st = p.st || 'all';
+  const seg = `<div class="seg rm-seg" role="tablist">${[['all', t('m_rm_all')], ['prep', 'Prep'], ['menu', 'Menu Item']].map(([v, l]) => `<button class="${k === v ? 'on' : ''}" data-a="rmFilter" data-f="k" data-v="${v}" role="tab" aria-selected="${k === v}">${l}</button>`).join('')}</div>`;
+  const nDone = live.filter(r => r.review).length, nDraft = live.filter(r => r.draft).length;
+  // Chef review filters: tap again to show all again (no second "All")
+  const chips = chef ? `<div class="rm-chips">${[['todo', t('m_rm_todo')], ['done', t('m_rm_done')], ['draft', t('m_rm_drafts') + (nDraft ? ' · ' + nDraft : '')]].map(([v, l]) => `<button class="${st === v ? 'on' : ''}" data-a="rmFilter" data-f="st" data-v="${st === v ? 'all' : v}" aria-pressed="${st === v}">${l}</button>`).join('')}</div>` : '';
+  const prog = chef ? `<div class="rm-prog"><div class="rm-bar"><i style="width:${live.length ? Math.round(nDone / live.length * 1000) / 10 : 0}%"></i></div><span>${t('m_rm_progress', { n: nDone, t: live.length })}</span></div>` : '';
+  const tag = r => [r.prep ? `<span class="rm-tag">Prep</span>` : '', r.menu ? `<span class="rm-tag menu">Menu Item</span>` : ''].join('');
+  const row = r => `<button class="row rm-row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(rmName(r))}</div>
+      <div class="rm-meta">${tag(r)}${chef && r.draft ? `<span class="rm-draft">${t('m_rm_draft')}</span>` : ''}${chef && r.draft_title ? `<span class="rm-was">${esc(t('m_rm_in_use', { t: I.dn(r.title) }))}</span>` : ''}</div></span>
+      ${chef ? `<span class="rm-check${r.review ? ' on' : ''}" aria-label="${esc(r.review ? t('m_rm_done') : t('m_rm_todo'))}">${r.review ? '✓' : ''}</span>` : '<span class="chev">›</span>'}</button>`;
+  const nArch = L.recipes.length - live.length;
+  return `<div class="page rm" style="--c:var(--rest)">${top}
+    <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: live.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
+    ${seg}${chips}${prog}
+    ${rows.length ? `<div class="list">${rows.map(row).join('')}</div>` : `<p class="note">${esc(p.q ? t('nothing_for', { q: p.q }) : t('m_rm_none'))}</p>`}
+    <div class="rm-foot">${chef ? `<button class="mr-link" data-a="rmFilter" data-f="st" data-v="${st === 'archived' ? 'all' : 'archived'}">${st === 'archived' ? t('m_rm_back') : t('m_rm_archived', { n: nArch })}</button>` : ''}<button class="mr-link" data-a="openIngs">${t('k_ings')} ›</button></div>
   </div>`;
 }, after(p, active) { searchBind(active); } };
 function searchBind(active) {
@@ -267,16 +287,7 @@ function tagFocus(el) {
 }
 
 /* ============ MASTER RECIPE ENGINE (B-49 lab) — one recipe/prep screen, see mre.js ============ */
-function mreSection(p) {
-  const L = need('mre_list', null, 2 * 60000);
-  if (!L || !L.recipes) return '';
-  const q = (p.q || '').trim().toLowerCase();
-  const row = r => `<button class="row" data-a="openMre" data-r="${r.id}"><span class="main"><div class="name">${esc(I.dn(r.title))}</div>${isChef() ? `<div class="meta">${r.draft ? t('m_lab_draft') + ' · ' : ''}${r.state === 'ufficiale' ? t('m_lab_official') : r.lab_only ? t('m_lab_proposal') : r.state === 'importata' ? t('m_lab_imported') : t('m_lab_published', { v: r.current_version })}${r.pending ? ' · ' + t('m_n_new', { n: r.pending }) : ''}</div>` : ''}</span><span class="chev">›</span></button>`;
-  const pil = L.recipes.filter(r => (r.pilot || r.draft || r.lab_only) && !r.is_test && (!q || String(r.title || '').toLowerCase().includes(q))), ex = L.recipes.filter(r => r.is_test && !q);
-  return `<section><div class="chap"><h2>${t('m_lab_title')}</h2><span>${pil.length}</span></div><p class="note" style="font-size:14px;margin:0 0 8px">${t('m_lab_sub')}</p>
-    <div class="list">${pil.map(row).join('')}</div>${ex.length ? `<div class="chap" style="margin-top:12px"><h2>${t('m_lab_example')}</h2></div><div class="list">${ex.map(row).join('')}</div>` : ''}</section>`;
-}
-const mreIds = () => new Set(((API.peek('mre_list') || {}).recipes || []).map(r => r.id));
+const mreIds = () => new Set(((API.peek('mre_list') || {}).recipes || []).filter(r => r.mre).map(r => r.id));
 SCREENS.mre = { title: p => window.MreUI ? window.MreUI.title(p) : (p.name || ''), c: '--rest', render(p) {
   const h = window.MreUI ? window.MreUI.render(p) : null;
   if (h == null) return `<div class="page">${backBtn()}${waiting('mre_recipe')}</div>`;
@@ -442,11 +453,12 @@ const A = {
   openPrep(el) { const id = +el.dataset.id; const i = (API.peek('shift') || { items: [] }).items.find(x => x.id === id); openTab('prep', String(id), { s: 'prep', p: { id, name: i ? i.name : '' } }); },
   /* data-focus (yield / bom): opened from a decision, the card shows what to fix and marks that part, as in Shell V020 */
   openRecipe(el) { const focus = isChef() ? el.dataset.focus || '' : '', fix = isChef() ? el.dataset.fix || '' : '';
-    if (mreIds().has(el.dataset.r) && focus !== 'photo') { openMre(el.dataset.r, '', 1, '', focus, fix); return; }   // the lab card has no photo: photo opens the Brigade card
+    if ((isChef() || mreIds().has(el.dataset.r)) && focus !== 'photo') { openMre(el.dataset.r, '', 1, '', focus, fix); return; }   // R1.13: the Chef opens EVERY recipe in the Recipe Master card (photo: Brigade card)
     openTab('recipe', el.dataset.r + (focus ? ':' + focus : ''), { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null, focus, fix, tab: focus === 'yield' ? 'struct' : 'prep' } }); },
   /* "Edit" (Chef) on any recipe: the server makes an isolated lab copy if needed, then the B-49 editor opens on it */
   async editRecipe(el) {
     if (!isChef() || el.disabled) return;
+    const e0 = cur(); if (e0 && e0.s === 'mre' && e0.p && e0.p.id === el.dataset.r) { e0.p.startEdit = true; render(true); return; }   // R1.13: already in the Recipe Master card — the first draft links the recipe by itself
     const id = el.dataset.r, p = cur().p || {}, rd = API.peek('recipe', { id }), name = rd && rd.recipe ? rd.recipe.title : '';
     el.disabled = true; el.textContent = t('preparing_copy');
     try { await API.call('mre_prepare_edit', { id }); }
@@ -457,6 +469,7 @@ const A = {
     openMre(id, name, 1, '', p.focus === 'photo' ? '' : p.focus || '', p.fix || '', true);
   },
   openMre(el) { openMre(el.dataset.r); },
+  rmFilter(el) { const e = cur(); e.p = Object.assign({}, e.p, { [el.dataset.f]: el.dataset.v }); e.y = 0; render(true); $('main').scrollTop = 0; },
   openOffice(el) { const k = el.dataset.k, scope = el.dataset.scope || 'all'; openTab('office', k + ':' + scope, { s: k, p: { scope } }); },
   openIng(el) { openTab('ing', el.dataset.id, { s: 'ing', p: { id: el.dataset.id } }); },
   openIngs() { openTab('ings', 'all', { s: 'ings', p: {} }); },
@@ -587,7 +600,12 @@ if (window.ChecklistUI) { window.ChecklistUI.init({ esc, need, waiting, backBtn,
 if (window.KitchenUI) { window.KitchenUI.init({ esc, need, waiting, backBtn, head, shortDay, isChef, cat, peek: API.peek, save: () => save() });
   Object.assign(SCREENS, window.KitchenUI.screens); SCREENS.ings.after = (p, active) => searchBind(active); }
 if (window.MreUI) window.MreUI.init({ need, peek: API.peek, render, toast, isChef, entry: () => cur().p,
-  openRecipe: (id, name, f, ref) => openMre(id, name, f, ref) });
+  openRecipe: (id, name, f, ref) => openMre(id, name, f, ref),
+  listRow: id => ((API.peek('mre_list') || {}).recipes || []).find(r => r.id === id) || null,
+  /* "Next" during the Chef's review: the following recipe of the list as he last filtered it */
+  next: id => { const all = ((API.peek('mre_list') || {}).recipes || []).filter(r => !r.archived).map(r => r.id), o = MRE_ORDER.length ? MRE_ORDER : all, i = o.indexOf(id); return i < 0 ? o[0] || null : o[i + 1] || null; },
+  replace: id => { const tb = S.active !== 'home' ? tabById(S.active) : null;      // the same tab moves on: no pile of tabs during a long review
+    if (tb && tb.kind === 'mre' && tb.stack.length === 1) { S.tabs = S.tabs.filter(x => x === tb || !(x.kind === 'mre' && String(x.ref).split(':')[0] === id)); tb.ref = id; tb.stack[0] = { s: 'mre', p: { id, name: '', f: 1, ref: '', panel: null, edit: false, focus: '', fix: '' } }; render(); $('main').scrollTop = 0; } else openMre(id); } });
 (async function boot() {
   I.set(I.lang, false);
   if (!API.hasToken()) { signedOut(); return; }

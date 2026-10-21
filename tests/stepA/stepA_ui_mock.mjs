@@ -1,3 +1,4 @@
+// SUPERSEDED by tests/r113/r113_ui_mock.mjs (R1.13, Chef 20/10 "TRUST · EASY · CLEAN"): the step-A texts checked here (official · read only, lab proposal, long lock note) were removed from the interface on purpose.
 // STEP A (Chef GO 20/10) — the EXISTING Chef editor with the step-A server answers: official recipe read fresh (read only),
 // lab = drafts + history, Draft and Preview, Publish LOCKED. API answered in memory with the shapes of brigade-app-api/mre.ts
 // (tested on its own in tests/stepA/bench.mjs). Nothing is sent to Supabase. WebKit, iPhone size.

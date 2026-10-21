@@ -13,7 +13,7 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 
-const BUILD = 'api-r1.12-stepA'
+const BUILD = 'api-r1.13-clean'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -340,6 +340,7 @@ Deno.serve(async (req: Request) => {
       case 'mre_production': out = await MRE.mreProduction(u, body); break
       case 'mre_suggest': out = await MRE.mreSuggest(u, body); break
       case 'mre_decide': out = await MRE.mreDecide(u, body); break
+      case 'mre_review': out = await MRE.mreReview(u, body, svc); break
       default: throw bad('bad_op')
     }
     return new Response(JSON.stringify(out), { headers: H })

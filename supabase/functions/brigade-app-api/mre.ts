@@ -103,23 +103,63 @@ const LOCK = 'pubblicazione_bloccata'   // step A: nothing is ever published to 
 function stripPrices(facts: any) { const o: any = {}; for (const k of Object.keys(facts)) { const { price, ...rest } = facts[k]; o[k] = rest } return o }
 
 /* ---------------- reads ---------------- */
+/** R1.13 (Chef 20/10 "una sola lista"): EVERY recipe once. Official recipes from Brigade (read only) + lab-only proposals.
+ *  Old lab copies, drafts and history are attached to their recipe, never listed as other recipes.
+ *  Kind, read from Brigade: MENU ITEM = has a POS name (all 62 recipes sold in the last 120 days have one, verified 20/10);
+ *  PREP = has an active prep task or is used as a sub-recipe. A lab proposal that takes over the POS names of a recipe
+ *  (CD-067: Butter Spinach POS ITEM over the Spinach Cup draft) moves the MENU ITEM kind to itself in the Chef's list. */
 export async function mreList(u: U, svc: any) {
-  const rows: any[] = await lab<any[]>(tx => tx`
-    select r.id, r.pilot, r.is_test, r.current_version, v.state, v.doc->>'title' as title, v.doc->>'category' as category,
-           jsonb_array_length(r.diffs) as diffs, r.diffs_checked_at is not null as diffs_checked,
-           exists (select 1 from mre.versions d where d.recipe_id = r.id and d.state = 'bozza') as draft,
+  const chefU = u.role === 'chef'
+  const [recs, preps, subs] = await Promise.all([
+    svc.from('recipes').select('id,title,category,pos_name').order('title').limit(3000).then(must),
+    svc.from('prep_tasks').select('recipe_id,archived').not('recipe_id', 'is', null).limit(5000).then(must),
+    svc.from('recipe_bom').select('sub_recipe_id').eq('component_type', 'RECIPE').not('sub_recipe_id', 'is', null).limit(5000).then(must),
+  ]) as any[][]
+  const prepSet = new Set(preps.filter((p: any) => p.archived !== true).map((p: any) => p.recipe_id)), subSet = new Set(subs.map((b: any) => b.sub_recipe_id))
+  const labRows: any[] = await lab<any[]>(tx => tx`
+    select r.id, r.pilot, r.is_test, r.current_version, r.source, d.version as draft_version, d.doc->>'title' as draft_title, d.doc->>'category' as draft_category,
            (select count(*)::int from mre.suggestions s where s.recipe_id = r.id and s.status = 'in attesa') as pending,
-           coalesce((r.source->>'on_demand')::boolean, false) as on_demand, coalesce((r.source->>'lab_only')::boolean, false) as lab_only
-    from mre.recipes r left join lateral (select * from mre.versions x where x.recipe_id = r.id order by (x.state = 'bozza') desc, x.version desc limit 1) v on true`)
-  // titles and categories of official recipes come from Brigade (one source); lab-only ones from their draft
-  const offIds = rows.filter((r: any) => !r.is_test && !r.lab_only).map((r: any) => r.id)
-  const off: Record<string, any> = {}
-  for (let i = 0; i < offIds.length; i += 200) (must(await svc.from('recipes').select('id,title,category').in('id', offIds.slice(i, i + 200))) as any[]).forEach(r => { off[r.id] = r })
-  rows.forEach((r: any) => { if (off[r.id]) { r.title = off[r.id].title; r.category = off[r.id].category; r.state = 'ufficiale' } else if (!r.is_test && !r.lab_only) r.state = 'non_in_brigade' })
-  rows.sort((a: any, b: any) => String(a.title || '').localeCompare(String(b.title || '')))
-  // copies made by the Chef's "Edit" (B-25) are Chef work in progress: staff keep the official Brigade card for them
-  const list = rows.filter((r: any) => r.state !== 'non_in_brigade' && (u.role === 'chef' || (!r.on_demand && !r.lab_only))).map((r: any) => u.role === 'chef' ? r : { id: r.id, pilot: r.pilot, is_test: r.is_test, title: r.title, category: r.category, state: r.state })
-  return { engine: E.MRE_ENGINE_VERSION, source: 'official', publish_locked: true, recipes: list, pending: u.role === 'chef' ? rows.reduce((a: number, r: any) => a + r.pending, 0) : 0 }
+           coalesce((r.source->>'lab_only')::boolean, false) as lab_only, coalesce((r.source->>'on_demand')::boolean, false) as on_demand
+    from mre.recipes r left join mre.versions d on d.recipe_id = r.id and d.state = 'bozza'`)
+  const L: Record<string, any> = Object.fromEntries(labRows.map((r: any) => [r.id, r]))
+  const takenPos = new Set(labRows.filter((r: any) => r.lab_only && r.draft_version != null && r.source && r.source.takes_pos_from).map((r: any) => r.source.takes_pos_from))
+  const review = (r: any) => r && r.source && r.source.review ? r.source.review : null
+  const out: any[] = []
+  for (const r of recs) {
+    const l = L[r.id], archived = /archiv/i.test(r.category || '')
+    const menu = !!String(r.pos_name || '').trim(), prep = prepSet.has(r.id) || subSet.has(r.id)
+    const row: any = { id: r.id, title: r.title, category: r.category, menu, prep, archived,
+      mre: !!(l && !l.is_test && !l.lab_only && (chefU || !l.on_demand)) }       // staff: the recipes they already open in this card
+    if (chefU) {
+      if (l && l.draft_version != null) { row.draft = true; row.draft_version = l.draft_version; if (l.draft_title && l.draft_title !== r.title) row.draft_title = l.draft_title }
+      if (takenPos.has(r.id) && row.draft) row.menu = false                     // its POS names go to the proposal (CD-067)
+      row.review = review(l); row.pending = l ? l.pending : 0
+    }
+    out.push(row)
+  }
+  if (chefU) for (const l of labRows) if (l.lab_only && !l.is_test && l.draft_version != null)  // proposals: not in Brigade yet, Chef only
+    out.push({ id: l.id, title: l.draft_title, category: l.draft_category, menu: l.source.kind !== 'prep', prep: l.source.kind === 'prep', archived: false, mre: true, lab_only: true, draft: true, draft_version: l.draft_version, review: review(l), pending: l.pending, pos_names: l.source.pos_names || null })
+  out.sort((a, b) => String(a.draft_title || a.title || '').localeCompare(String(b.draft_title || b.title || ''), 'en', { sensitivity: 'base' }))
+  return { engine: E.MRE_ENGINE_VERSION, source: 'official', publish_locked: true, recipes: out, pending: chefU ? labRows.reduce((a: number, r: any) => a + r.pending, 0) : 0 }
+}
+
+/** Chef's review mark (R1.13): "verified by the Chef" — kept in the lab next to the recipe. It is NOT a publication and
+ *  changes nothing in the recipe, in Brigade or in the bots. */
+export async function mreReview(u: U, b: any, svc: any) {
+  chef(u)
+  const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
+  const on = b?.verified !== false
+  const off = await readOfficial(svc, [id])
+  return await lab(async tx => {
+    const [r] = await tx`select source, is_test from mre.recipes where id = ${id} for update`
+    if (!r && !off.docs[id]) throw new MreError(404, 'not_found')
+    const mark = on ? { by: u.name, by_id: u.id, at: new Date().toISOString() } : null
+    if (!r) await tx`insert into mre.recipes (id, pilot, current_version, source, diffs) values (${id}, false, 0, ${sql.json({ link: 'official', on_demand: true, requested_by: u.id, at: off.read_at, review: mark } as any)}, ${sql.json(off.diffs[id] || [])})`
+    else if (mark) await tx`update mre.recipes set source = jsonb_set(coalesce(source, '{}'::jsonb), '{review}', ${sql.json(mark as any)}::jsonb) where id = ${id}`
+    else await tx`update mre.recipes set source = coalesce(source, '{}'::jsonb) - 'review' where id = ${id}`
+    await audit(tx, u, on ? 'review_verified' : 'review_cleared', id, {})
+    return { ok: true, review: mark }
+  })
 }
 
 export async function mreRecipe(u: U, id: string, svc: any) {
@@ -134,7 +174,7 @@ export async function mreRecipe(u: U, id: string, svc: any) {
     if (source === 'lab' && !isChef && !(r && r.is_test)) throw new MreError(404, 'not_found')     // proposals are Chef work in progress
     const t = await tree(tx, svc, cur, isChef)
     const out: any = { engine: E.MRE_ENGINE_VERSION, source, read_at: off.read_at, publish_locked: !(r && r.is_test),
-      recipe: { id, pilot: r ? r.pilot : false, current_version: r ? r.current_version : 0, linked: !!r },
+      recipe: { id, pilot: r ? r.pilot : false, current_version: r ? r.current_version : 0, linked: !!r, review: isChef && r && r.source && r.source.review ? r.source.review : null },
       doc: cur, docs: t.docs, draft_docs: isChef ? t.draftDocs : {}, facts: isChef ? t.facts : stripPrices(t.facts), measures: t.measures }
     const vers = r ? await tx`select version, state, reason, created_by, created_at, published_by, published_at from mre.versions where recipe_id = ${id} order by version desc` : []
     const prods = r ? await tx`select id, version, factor, reference, yield_planned_g, yield_real_g, changed, note, user_id, created_at from mre.productions where recipe_id = ${id} ${isChef ? tx`` : tx`and user_id = ${u.id}`} order by created_at desc limit 20` : []
@@ -206,8 +246,14 @@ export async function mreSaveDraft(u: U, b: any, svc: any) {
   const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
   const doc = cleanDoc(id, b?.doc)
   return await lab(async tx => {
-    const [r] = await tx`select current_version from mre.recipes where id = ${id} for update`
-    if (!r) throw new MreError(404, 'not_found')
+    let [r] = await tx`select current_version from mre.recipes where id = ${id} for update`
+    if (!r) {                                  // R1.13: the first draft of an official recipe links it (same row as "Edit" made before)
+      const off = await readOfficial(svc, [id], tx)
+      if (!off.docs[id]) throw new MreError(404, 'not_found')
+      await tx`insert into mre.recipes (id, pilot, current_version, source, diffs) values (${id}, false, 0, ${sql.json({ link: 'official', on_demand: true, requested_by: u.id, at: off.read_at } as any)}, ${sql.json(off.diffs[id] || [])})`
+      await audit(tx, u, 'link_official', id, { at: off.read_at });
+      [r] = await tx`select current_version from mre.recipes where id = ${id} for update`
+    }
     if (b?.base != null && Number(b.base) !== r.current_version) throw new MreError(409, 'versione_cambiata')
     // every link must point to an existing ingredient (public.ingredients, via the read-only helper) or an existing recipe
     const ingIds: string[] = doc.lines.filter((l: any) => l.kind === 'ingredient').map((l: any) => l.ref), recIds: string[] = doc.lines.filter((l: any) => l.kind === 'recipe').map((l: any) => l.ref)

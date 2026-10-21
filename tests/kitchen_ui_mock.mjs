@@ -30,6 +30,12 @@ function api(op, b) {
       const bom = D.bom.filter(x => x.parent_recipe_id === r.id).map((x, i) => ({ bom_id: i, parent_recipe_id: r.id, quantity: 100, unit: 'g', component_type: x.component_type, item_id: x.item_id, sub_recipe_id: x.sub_recipe_id, ingredients: x.item_id ? { name: (D.ingredients.find(y => y.id === x.item_id) || {}).name } : null, recipes: null }))
       return { recipe: Object.assign({ base_servings: 1 }, r), steps: [], bom, preps: [], used_in: [], can_cost: chef } }
     case 'recipe_tree': return { byParent: {}, preps: [] }
+    case 'mre_recipe': { if (!chef) return [404, 'not_found']   // R1.13: the Chef opens every recipe in the Recipe Master card (official, read fresh)
+      const r = D.recipes.find(x => x.id === b.id) || REC, rows = D.bom.filter(x => x.parent_recipe_id === r.id)
+      const lines = rows.map((x, i) => ({ id: 'b' + i, kind: x.component_type === 'RECIPE' ? 'recipe' : 'ingredient', ref: x.component_type === 'RECIPE' ? x.sub_recipe_id : x.item_id, qty: 100, unit: 'g', role: 'produzione', note: null, group: null }))
+      const facts = Object.fromEntries(lines.filter(l => l.kind === 'ingredient').map(l => { const i = D.ingredients.find(x => x.id === l.ref) || {}; return [l.ref, { id: l.ref, name: i.name || '?', name_it: i.name_it || null, base_unit: 'g' }] }))
+      const doc = { schema: 1, id: r.id, title: r.title, category: r.category, yield: { g: null, portions: 1 }, has_stock: false, stock: [], lines, steps: [] }
+      return { source: 'official', publish_locked: true, recipe: { id: r.id, current_version: 0, linked: false, review: null }, doc, docs: { [r.id]: doc }, draft_docs: {}, facts, measures: {}, versions: [], productions: [], suggestions: [], draft: null, diffs: [], diffs_checked: null, cost: { food: 0, per_portion: 0, complete: true, missing: 0, byLine: {} } } }
   }
   return [400, 'bad_op']
 }

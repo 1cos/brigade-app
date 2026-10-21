@@ -18,6 +18,7 @@ function from(t: string) {
   const q: any = {
     select(cols: string) { join = /ingredients\(/.test(cols); return q },
     in(c: string, v: any[]) { const s = new Set(v); rows = rows.filter(r => s.has(r[c])); return q },
+    eq(c: string, v: any) { rows = rows.filter(r => r[c] === v); return q },
     not(c: string, op: string, v: any) { rows = rows.filter(r => !(op === 'is' && r[c] === v)); return q },
     ilike(c: string, pat: string) { const re = new RegExp('^' + pat.replace(/%/g, '.*') + '$', 'i'); rows = rows.filter(r => re.test(String(r[c] || ''))); return q },
     order(c: string) { rows.sort((a, b) => (a[c] ?? 0) > (b[c] ?? 0) ? 1 : -1); return q },
@@ -38,7 +39,12 @@ const ctxOf = (o: any, drafts: boolean) => ({ doc: (x: string) => x === o.recipe
 Deno.test('A1 la lista: ricette ufficiali con titolo da Brigade, Publish bloccato', async () => {
   const L = await M.mreList(CHEF, svc)
   const w = L.recipes.find((r: any) => r.id === WHEEL)
-  assertEquals(w.title, 'Wheel Pasta'); assertEquals(w.state, 'ufficiale'); assertEquals(L.publish_locked, true)
+  assertEquals(w.title, 'Wheel Pasta'); assertEquals(L.publish_locked, true)
+  // R1.13: one row per recipe — every official recipe once, the old 15/10 copy and the test example are not other recipes
+  const ids = L.recipes.map((r: any) => r.id)
+  assertEquals(new Set(ids).size, ids.length, 'nessun doppione'); assertEquals(ids.length, S.recipes.length, 'tutte le ricette ufficiali, una volta')
+  assert(!ids.includes(TEST), 'l\'esempio tecnico non è una ricetta del ricettario')
+  const sp = L.recipes.find((r: any) => r.id === SPIN); assert(sp.menu && sp.prep, 'BUTTER SPINACH oggi: piatto POS e prep #318')
 })
 
 Deno.test('A2 ricetta = ufficiale letta adesso (non la copia vecchia del laboratorio)', async () => {
@@ -73,7 +79,7 @@ Deno.test('A4 "Modifica" collega soltanto (nessuna copia), poi bozza Spinach Cup
 Deno.test('A5 POS ITEM proposta (solo laboratorio) collegata per ID alla bozza Spinach Cup', async () => {
   await db.begin(async (tx: any) => {
     await tx`set local role mre_app`
-    await tx`insert into mre.recipes (id, pilot, current_version, source) values (${POS}, true, 0, ${tx.json({ lab_only: true, proposal: 'CD-067' })})`
+    await tx`insert into mre.recipes (id, pilot, current_version, source) values (${POS}, true, 0, ${tx.json({ lab_only: true, proposal: 'CD-067', kind: 'menu', takes_pos_from: SPIN, pos_names: ['Butter Spinach', 'Sautéed Spinach'] })})`
   })
   const doc = { schema: 1, id: POS, title: 'Butter Spinach / Sautéed Spinach', category: 'Contorni', yield: { g: null, portions: 1, label: '1 porzione' }, has_stock: false, stock: [],
     lines: [{ id: 'p1', kind: 'recipe', ref: SPIN, qty: 1, unit: 'portion', role: 'produzione', note: '1 Spinach Cup', group: null },
@@ -88,6 +94,37 @@ Deno.test('A5 POS ITEM proposta (solo laboratorio) collegata per ID alla bozza S
   const L = await M.mreList(CHEF, svc)
   assert(L.recipes.some((r: any) => r.id === POS && r.lab_only), 'la proposta è nella lista dello Chef')
   assert(!(await M.mreList(STAFF, svc)).recipes.some((r: any) => r.id === POS), 'il cuoco non vede la proposta')
+})
+
+Deno.test('B1 una sola lista: Spinach Cup — PREP e Butter Spinach — MENU ITEM, ognuna una volta', async () => {
+  const L = await M.mreList(CHEF, svc), ids = L.recipes.map((r: any) => r.id)
+  assertEquals(new Set(ids).size, ids.length, 'nessun doppione')
+  const sp = L.recipes.find((r: any) => r.id === SPIN), pos = L.recipes.find((r: any) => r.id === POS)
+  assertEquals(sp.draft_title, 'Spinach Cup'); assert(sp.prep && !sp.menu && sp.draft, 'Spinach Cup = PREP con la sua bozza')
+  assert(pos.menu && !pos.prep && pos.lab_only, 'Butter Spinach = MENU ITEM (proposta)'); assertEquals(pos.pos_names, ['Butter Spinach', 'Sautéed Spinach'])
+  const st = await M.mreList(STAFF, svc), s2 = st.recipes.find((r: any) => r.id === SPIN)
+  assert(!st.recipes.some((r: any) => r.id === POS) && !('draft' in s2) && !('draft_title' in s2) && s2.menu, 'il cuoco vede solo la ricetta in uso')
+})
+
+Deno.test('B2 la prima bozza di una ricetta ufficiale la collega da sola (nessuna copia, nessuna scrittura in Brigade)', async () => {
+  const [{ n0 }] = await db`select count(*)::int n0 from mre.recipes where id = ${PARM}`; assertEquals(n0, 0)
+  const off = (await M.mreRecipe(CHEF, PARM, svc)).doc
+  const s = await M.mreSaveDraft(CHEF, { id: PARM, doc: Object.assign({}, off, { notes: 'prova R1.13' }), base: 0 }, svc)
+  assertEquals(s.draft_version, 1)
+  const [{ n }] = await db`select count(*)::int n from mre.versions where recipe_id = ${PARM}`; assertEquals(n, 1, 'solo la bozza')
+  await M.mreDiscard(CHEF, { id: PARM })
+})
+
+Deno.test('B3 "verificata dallo Chef": segno di revisione, non pubblicazione', async () => {
+  const r = await M.mreReview(CHEF, { id: WHEEL, verified: true }, svc); assertEquals(r.review.by, 'Max')
+  let w = (await M.mreList(CHEF, svc)).recipes.find((x: any) => x.id === WHEEL); assertEquals(w.review.by, 'Max')
+  assertEquals((await M.mreRecipe(CHEF, WHEEL, svc)).recipe.review.by, 'Max')
+  const [{ v }] = await db`select count(*)::int v from mre.versions where recipe_id = ${WHEEL} and state = 'pubblicata'`; assertEquals(v, 0, 'nessuna pubblicazione')
+  await M.mreReview(CHEF, { id: WHEEL, verified: false }, svc)
+  w = (await M.mreList(CHEF, svc)).recipes.find((x: any) => x.id === WHEEL); assertEquals(w.review, null)
+  const ok = await M.mreReview(CHEF, { id: SPIN, verified: true }, svc); assert(ok.ok)
+  assertEquals(await err(M.mreReview(STAFF as any, { id: SPIN }, svc)), 'forbidden')
+  assert(!('review' in (await M.mreList(STAFF, svc)).recipes.find((x: any) => x.id === SPIN)), 'il cuoco non vede la revisione')
 })
 
 Deno.test('A6 Publish BLOCCATO sulle ricette ufficiali e sulle proposte; il tentativo resta nel registro', async () => {

@@ -25,7 +25,7 @@ function api(op, b) {
     case 'shift': return { today: '2026-10-16', plan_date: '2026-10-16', user: u, items: [], messages: [], done_today: [], reports: [], people: [], my_reports: [] }
     case 'recipes': return { recipes: docs.map(d => ({ id: d.id, title: d.title, category: d.category })) }
     case 'ingredients': return { ingredients: K.ingredientList(KA.ingredients, chef ? KA.vendors : [], chef) }
-    case 'mre_list': return { recipes: docs.map(d => ({ id: d.id, pilot: pil.has(d.id), is_test: false, current_version: LAB[d.id].cur, state: 'importata', title: curDoc(d.id).title, category: d.category, draft: !!LAB[d.id].draft, pending: 0 })), pending: 0 }
+    case 'mre_list': return { recipes: docs.map(d => ({ id: d.id, mre: true, pilot: pil.has(d.id), is_test: false, current_version: LAB[d.id].cur, state: 'importata', title: curDoc(d.id).title, category: d.category, draft: !!LAB[d.id].draft, pending: 0 })), pending: 0 }
     case 'mre_recipe': { const L = LAB[b.id], root = curDoc(b.id), dd = treeOf(root), ctx = { doc: x => dd[x], facts: x => facts[x], measures }
       const f2 = {}; Object.keys(facts).forEach(k => { f2[k] = chef ? facts[k] : (({ price, ...r }) => r)(facts[k]) })
       return { recipe: { id: b.id, current_version: L.cur }, doc: root, docs: dd, facts: f2, measures, versions: L.versions.map(v => ({ version: v.version, state: v.state, reason: v.reason, by: 'Max', at: v.at })), productions: [], suggestions: [],
@@ -57,7 +57,7 @@ const back = async pg => { await pg.locator('#main button.back').first().click()
 const ART = 'dbdc80fd-142f-4ca1-8f83-7bcebe19ee63'
 async function openArtichoke(pg) {
   await pg.click('button.w[data-w="restaurant"]'); await pg.waitForTimeout(600)
-  await pg.locator(`#main button[data-a="openMre"][data-r="${ART}"]`).click(); await pg.waitForTimeout(700)
+  await pg.locator(`#main button[data-a="openRecipe"][data-r="${ART}"]`).click(); await pg.waitForTimeout(700)
 }
 // ---------------- Chef ----------------
 role = 'chef'
@@ -100,8 +100,9 @@ role = 'chef'
   ok(LAB[ART].draft && LAB[ART].draft.lines[0].qty === 3, 'draft saved in the test lab while away (Artichokes 3)')
   await back(pg)
   const q2 = (await pg.locator('#main .mr-ings li').first().locator('b.mq').innerText()).trim()
-  ok((await H1(pg)) === 'Artichoke' && /editing|Stai modificando|Editing|Bozza v[0-9]+ nel laboratorio|Draft v[0-9]+ in the lab/i.test(await pg.locator('#main .mr-editbar').innerText()) && q2.startsWith('3'), `back → still editing, quantity kept (${q2})`)
+  ok((await H1(pg)) === 'Artichoke' && /editing|Stai modificando|Editing|Bozza v[0-9]+|Draft v[0-9]+/i.test(await pg.locator('#main .mr-estate').innerText()) && q2.startsWith('3'), `back → still editing, quantity kept (${q2})`)
   // publish in the test lab
+  await pg.locator('#main .mr-ebar button[data-m="pv:1"]').click(); await pg.waitForTimeout(300)      // R1.13: Publish lives in Preview
   await pg.locator('#main button[data-m="publish"]').click(); await pg.waitForTimeout(800)
   ok(LAB[ART].cur === 2 && LAB[ART].versions[1].doc.lines[0].qty === 3 && calls.includes('mre_publish'), 'save v2 in the test lab: version 2 with the new quantity')
   const roles2 = LAB[ART].versions[1].doc.lines.map(l => l.role).join(','), roles1 = LAB[ART].versions[0].doc.lines.map(l => l.role).join(',')

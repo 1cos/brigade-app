@@ -70,11 +70,12 @@ await pg.locator('.mr-panel').scrollIntoViewIfNeeded(); await pg.screenshot({ pa
 ok(/\$17,02|\$17\.02/.test(await txt(pg, '.mr-panel')), 'food cost lotto $17,02 = FC05')
 await pg.click('[data-m="edit"]'); await pg.waitForTimeout(300)
 await pg.click('.mr-ings b.mq[data-mq="l:b1757"]'); await pg.keyboard.press('Meta+A'); await pg.keyboard.type('90'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(1400)
-await pg.locator('.mr-foot').scrollIntoViewIfNeeded(); await pg.screenshot({ path: `${OUT}/4_spinach_anteprima_75_90.png` })
-const ft = await txt(pg, '.mr-foot')
-ok(/Prima di pubblicare/i.test(ft) && /Parmesan Grated|Grated Parmesan/.test(ft) && /75 g → 90 g/.test(ft.replace(/\s+/g, ' ')), 'anteprima: 1 lotto prodotto, parmigiano 75 g → 90 g; vendita invariata')
+await pg.click('.mr-ebar [data-m="pv:1"]'); await pg.waitForTimeout(300)          // R1.13: what changes is shown in Preview
+await pg.locator('.mr-change').scrollIntoViewIfNeeded(); await pg.screenshot({ path: `${OUT}/4_spinach_anteprima_75_90.png` })
+const ft = await txt(pg, '.mr-change')
+ok(/Cosa cambia/i.test(ft) && /Parmesan Grated|Grated Parmesan/.test(ft) && /75 g → 90 g/.test(ft.replace(/\s+/g, ' ')), 'anteprima: 1 lotto prodotto, parmigiano 75 g → 90 g; vendita invariata')
 ok(!/1 porzione venduta/i.test(ft), 'anteprima: la vendita non cambia')
-await pg.click('[data-m="cancel"]'); await pg.waitForTimeout(400)
+await pg.click('[data-m="cancel"]'); await pg.waitForTimeout(200); await pg.click('[data-m="cancel"]'); await pg.waitForTimeout(400)   // R1.13: second tap discards
 ok(LAB[SPIN].draft === null && published === 0, 'bozza scartata, niente pubblicato')
 await pg.context().close()
 
