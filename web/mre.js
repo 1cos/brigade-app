@@ -287,7 +287,7 @@ function editFoot(p, d, doc) {
 /* Preview: the recipe exactly as it will read, then what changes (food cost, deductions) — same engine as the nightly run */
 function changeBox(p, d, doc) {
   const c = costPair(d, p, doc), errs = E().validate(doc, c.ctxNew, true);
-  const row = (k, a, b) => `<div class="mr-kv"><span>${k}</span><span>${a} → <b>${b}</b></span></div>`;
+  const row = (k, a, b) => `<div class="mr-kv"><span>${k}</span><span>${a === b ? `<b>${b}</b>` : `${a} → <b>${b}</b>`}</span></div>`;
   return `<div class="mr-change"><h3>${T('what_changes')}</h3>
       ${c.pb != null || c.pa != null ? row(T('fc_portion_c'), usd(c.pa), usd(c.pb)) : ''}${Number(doc.yield && doc.yield.portions) === 1 && Number(d.doc.yield && d.doc.yield.portions) === 1 ? '' : row(T('fc_lot'), usd(c.a.food), usd(c.b.food))}
       ${c.b.missing ? `<div class="mr-muted">${T('missing_prices', { n: c.b.missing })}</div>` : ''}
@@ -349,7 +349,8 @@ function onClick(ev) {
   else if (k === 'edit') { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.panel = null; p.f = 1; p.saved = !!d.draft; w.sure = false; }
   else if (k === 'pv') { p.pv = a1 === '1'; w.sure = false; H.render(true); document.getElementById('main').scrollTop = 0; return; }
   else if (k === 'view') { p.view = a1; p.f = 1; p.ref = ''; w.prod = null; }
-  else if (k === 'savedraft') { (async () => { clearTimeout(saveT); const r = await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); if (!r) return;
+  else if (k === 'savedraft') { document.querySelectorAll('#main [data-m="savedraft"]').forEach(b => { b.disabled = true; b.textContent = T('saving') });   // the server can take a few seconds: say so
+      (async () => { clearTimeout(saveT); const r = await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); if (!r) { H.render(true); return; }
       delete WORK[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft'; H.toast(T('draft_saved_toast', { v: r.draft_version })); forget(); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
   else if (k === 'cancel') { if (!w.sure) { w.sure = true; H.render(true); setTimeout(() => { w.sure = false; }, 4000); return; }   // second tap discards: never a browser dialog
       w.sure = false; (async () => { clearTimeout(saveT); if (d.draft || p.saved) await call('mre_discard', { id: p.id }, T('discarded')); delete WORK[p.id]; p.edit = false; p.pv = false; p.saved = false; forget(); H.render(true); })(); return; }

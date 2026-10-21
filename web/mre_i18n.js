@@ -107,6 +107,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   lab_imported: ['imported · to check', 'importata · da controllare', 'importada · por revisar'], lab_official: ['official · read only', 'ufficiale · sola lettura', 'oficial · solo lectura'], lab_proposal: ['lab proposal', 'proposta del laboratorio', 'propuesta'], lab_published: ['published v{v}', 'pubblicata v{v}', 'publicada v{v}'], lab_draft: ['draft open', 'bozza aperta', 'borrador abierto'],
   lab_others: ['Other recipes (current Brigade card)', 'Altre ricette (scheda Brigade attuale)', 'Otras recetas (ficha Brigade actual)'],
   /* R1.13 — final interface (Chef 20/10 "TRUST · EASY · CLEAN") */
+  saving: ['Saving…', 'Salvo…', 'Guardando…'],
   saved_word: ['saved', 'salvata', 'guardado'],
   tab_edit: ['Edit', 'Modifica', 'Editar'], tab_preview: ['Preview', 'Anteprima', 'Vista previa'], save_draft: ['Save draft', 'Salva bozza', 'Guardar borrador'],
   v_draft: ['Draft v{v}', 'Bozza v{v}', 'Borrador v{v}'], v_live: ['In use', 'In uso', 'En uso'], v_new: ['Draft · new recipe', 'Bozza · nuova ricetta', 'Borrador · receta nueva'],
