@@ -35,7 +35,8 @@ function api(op, b) {
     case 'office': return chef ? { checked_at: D.at, today: '2026-10-16', decisions: [], stale: [], history: [], completeness: [], invoices: { warnings: 0, invoices: 0, needs: [], queue: [], info: [], excluded: 0, docs: [], tile: { now: 0, review: 0 } } } : [403, 'forbidden']
     case 'completeness': return chef ? C : [403, 'forbidden']
     case 'ingredients': return { ingredients: K.ingredientList(D.ingredients, D.vendors, chef) }
-    case 'mre_list': return { recipes: Object.keys(LAB).filter(() => chef).map(id => ({ id, pilot: false, is_test: false, current_version: LAB[id].cur, state: 'importata', title: recById[id].title, category: recById[id].category, draft: !!LAB[id].draft, pending: 0, on_demand: true })), pending: 0 }
+    // R1.13+: one list with every recipe, for the Chef and the cook (shape of mreList); the cook never sees drafts
+    case 'mre_list': return { recipes: D.recipes.map(r => Object.assign({ id: r.id, title: r.title, category: r.category, menu: false, prep: false, archived: false, mre: false }, chef ? { draft: !!(LAB[r.id] && LAB[r.id].draft), review: null, pending: 0 } : {})), pending: 0 }
     case 'recipe': { const r = recById[b.id]; const bom = D.bom.filter(x => x.parent_recipe_id === b.id).map((x, i) => ({ bom_id: i + 1, parent_recipe_id: b.id, quantity: 100, unit: 'g', component_type: x.component_type, item_id: x.item_id, sub_recipe_id: x.sub_recipe_id, ingredients: x.item_id ? { name: (ingById[x.item_id] || {}).name } : null, recipes: null }))
       return { recipe: Object.assign({ base_servings: null, yield_text: '', procedure: '' }, r), steps: [], bom, preps: [], used_in: [], can_cost: chef } }
     case 'recipe_tree': return { byParent: {}, preps: [] }

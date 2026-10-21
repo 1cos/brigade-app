@@ -38,7 +38,11 @@ function navName(l, name) {
 }
 
 /* ---------- bold, tappable quantity ---------- */
-const Q = (key, n, u, extra) => `<b class="mq" data-mq="${esc(key)}" data-u="${esc(u || '')}"><span class="n">${esc(n)}</span>${u ? ' ' + esc(u) : ''}</b>${extra || ''}`;
+// R1.14: data-u is the UNIT (portion, pz, kg…), never the label shown ("porz."): the label coming back as a unit was the iPhone error
+const Q = (key, n, u, extra, unit) => `<b class="mq" data-mq="${esc(key)}" data-u="${esc(unit != null ? unit : (u || ''))}"><span class="n">${esc(n)}</span>${u ? ' ' + esc(u) : ''}</b>${extra || ''}`;
+const UL = { 'porz.': 'u_portion', nidi: 'u_nest', pz: 'u_pz', case: 'u_case' };
+const uLabel = u => UL[u] ? T(UL[u]) : u;
+const unitOf = (l, s) => E().dimOf(l.unit) === 'c' ? E().normUnit(l.unit) : s.u;
 
 /* ============ RENDER ============ */
 /* R1.13 (Chef 20/10 "TRUST · EASY · CLEAN"): what the Chef sees is the final interface. One recipe, its active draft opened by
@@ -51,7 +55,7 @@ function render(p) {
   if (!d) return null;                                   // app shows the loading state
   if (!E()) return `<div class="mr"><p class="mr-muted">${T('loading_engine')}</p></div>`;
   // opened with "Edit" from any recipe card (B-25): start the editor on the open draft, or on the recipe in use
-  if (p.startEdit && H.isChef()) { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.panel = null; p.saved = !!d.draft; delete p.startEdit; }
+  if (p.startEdit && H.isChef()) { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.adv = false; p.panel = null; p.saved = !!d.draft; delete p.startEdit; }
   const chef = H.isChef(), m = mode(d, p), edit = m === 'edit', pv = m === 'preview';
   const doc = shownDoc(d, p), draftView = m === 'view' && showsDraft(d, p) && !!d.draft;
   const f = m !== 'view' ? 1 : (p.f > 0 ? p.f : 1);
@@ -59,6 +63,7 @@ function render(p) {
   const ctx = ctxFor(d, p.id, doc, PREVIEW), pref = p.imp ? 'imperial' : 'metric';
   const y = doc.yield || {}, row = H.listRow ? H.listRow(p.id) : null;
   let h = `<div class="mr${edit ? ' mr-edit' : ''}">`;
+  const fl = ui(p.id).flash; if (fl && Date.now() - fl.at < 8000) h += `<div class="mr-flash${fl.bad ? ' bad' : ''}" role="status">${esc(fl.msg)}</div>`;
 
   // editor bar: Edit | Preview, and Save draft — the whole path on one line
   if (m !== 'view') h += `<div class="mr-ebar"><div class="mr-vs" role="tablist"><button class="${edit ? 'on' : ''}" data-m="pv:0" role="tab" aria-selected="${edit}">${T('tab_edit')}</button><button class="${pv ? 'on' : ''}" data-m="pv:1" role="tab" aria-selected="${pv}">${T('tab_preview')}</button></div><button class="mr-btn dark" data-m="savedraft">${T('save_draft')}</button></div>`;
@@ -71,11 +76,16 @@ function render(p) {
   if (m !== 'view') h += `<div class="mr-estate">${T('editing2', { v: (d.draft && d.draft._version) || (Math.max(0, ...(d.versions || []).map(v => v.version)) + 1) })}${p.saved ? ' · ' + T('saved_word') : ''}</div>`;
   h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(I.dn(doc.title))}</h1>`;
   const parts = [];
-  if (Number(y.g) > 0) { const s = E().showMass(y.g * f, pref, loc()); parts.push(`${T('yield')} ${Q('y:g', s.n, s.u)}`); }
-  else if (edit) parts.push(`${T('yield')} ${Q('y:g', '—', 'g')}`);
-  if (Number(y.portions) > 0 || edit) parts.push(`${Q('y:p', Number(y.portions) > 0 ? nf(y.portions * f, 1) : '—', '')} ${Math.abs(y.portions * f - 1) < 1e-9 ? T('portion') : T('portions')}`);
+  if (edit) {      // R1.14 (Chef 21/10): a prep counted in pieces has its yield in portions; the weight is optional, never required
+    parts.push(`${T('yield')} ${Q('y:p', Number(y.portions) > 0 ? nf(y.portions, 1) : '—', '')} ${Number(y.portions) === 1 ? T('portion') : T('portions')}`);
+    parts.push(`<span class="mr-muted">${T('weight_opt')}</span> ${Q('y:g', Number(y.g) > 0 ? nf(y.g, 0) : '—', 'g')}`);
+  } else {
+    if (Number(y.g) > 0) { const s = E().showMass(y.g * f, pref, loc()); parts.push(`${T('yield')} ${Q('y:g', s.n, s.u)}`); }
+    if (Number(y.portions) > 0) parts.push(`${Q('y:p', nf(y.portions * f, 1), '')} ${Math.abs(y.portions * f - 1) < 1e-9 ? T('portion') : T('portions')}`);
+  }
   if (m === 'view' && !(Number(y.portions) === 1 && !(Number(y.g) > 0))) parts.push(`${Q('y:l', nf(f, 2), '')} ${f === 1 ? T('batch') : T('batches')}`);   // a single dish has no "batch"
   h += `<div class="mr-yield">${parts.join(' · ')}</div>`;
+  if (ui(p.id).err && /^y:/.test(ui(p.id).err.key)) h += `<div class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</div>`;
   if (edit) h += `<div class="mr-meta">${T('yield_label')}: <span contenteditable="true" data-mt="label" data-mred="1" class="mr-txt">${esc(y.label || '')}</span>${p.adv ? ` · ${T('stock')}: <select data-ms="has_stock" class="mr-sel"><option value="1" ${doc.has_stock ? 'selected' : ''}>${T('yes')}</option><option value="0" ${!doc.has_stock ? 'selected' : ''}>${T('no')}</option></select>` : ''}</div>`;
   if (m === 'view' && f !== 1) {
     const rounded = (doc.lines || []).filter(l => E().dimOf(l.unit) === 'c').map(l => ({ l, s: E().showLine(l, f, ctx, pref, loc()) })).filter(x => x.s.theo);
@@ -83,9 +93,10 @@ function render(p) {
     h += `<div class="mr-scaled">${fromParent ? esc(p.ref[0].toUpperCase() + p.ref.slice(1)) : T('scaled_from', { ref: esc(p.ref || '') })}${rounded.map(x => ' · ' + T('rounded', { name: esc(lineName(d, x.l).toLowerCase()), v: x.s.theo })).join('')} · <button class="mr-link acc" data-m="reset">${T('reset')}</button></div>`;
   }
   if (chef && m === 'view') { const c = !PREVIEW && d.cost ? d.cost : E().cost(p.id, 1, ctx); const pp = c.per_portion;
-    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + T('portion')}</b>${c.complete ? '' : ` <span class="mr-bad">· ${T('missing_prices', { n: c.missing })}</span>`}</div>`;
+    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + T('portion')}</b> <span class="${c.complete ? 'mr-okc' : 'mr-bad'}">· ${c.complete ? T('fc_complete') : T('fc_partial')}</span></div>`;
     const rv = d.recipe && d.recipe.review;
-    if (rv) h += `<div class="mr-ok">✓ ${T('verified_by', { by: esc(rv.by || ''), at: esc(dt(rv.at)) })}</div>`; }
+    if (rv) h += `<div class="mr-ok">✓ ${T('verified_by', { by: esc(rv.by || ''), at: esc(dt(rv.at)) })}</div>`;
+    h += issuesHtml(d, p.id, ctx, p.iss); }
   h += `</div>`;
   if (edit) h += approvedReminder(d);
   if (pv) h += changeBox(p, d, doc);                    // Preview: what changes comes first, then the recipe as it will read
@@ -95,14 +106,15 @@ function render(p) {
   for (const l of doc.lines || []) {
     const s = E().showLine(l, f, ctx, pref, loc()), name = lineName(d, l);
     const nameHtml = navName(l, name);
-    const qty = s.status === 'da_definire' ? `<span class="mr-muted">${T('to_define')}</span>` : pv ? `<b class="mq-ro">${esc(s.n)}${s.u ? ' ' + esc(s.u) : ''}</b>` : Q('l:' + l.id, s.n, s.u);
-    if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${l.note ? `<span class="mr-note">${esc(l.note)}</span>` : ''}</span>${qty}</li>`; continue; }
+    const qty = s.status === 'da_definire' ? `<span class="mr-muted">${T('to_define')}</span>` : pv ? `<b class="mq-ro">${esc(s.n)}${s.u ? ' ' + esc(uLabel(s.u)) : ''}</b>` : Q('l:' + l.id, s.n, uLabel(s.u), '', unitOf(l, s));
+    const ie = ui(p.id).err && ui(p.id).err.key === 'l:' + l.id ? `<li class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</li>` : '';   // the message stays next to its line, never over the buttons
+    if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${l.note ? `<span class="mr-note">${esc(l.note)}</span>` : ''}</span>${qty}</li>${ie}`; continue; }
     const units = ['g', 'kg', 'ml', 'l', 'pz', 'oz', 'lb', 'nests'], ucur = l.unit || '';
     // editor line: name, quantity and unit first; role and technical note only under Advanced (logic unchanged)
     const stx = statusOf(d, l), bad = /mr-bad/.test(stx), adv = p.adv;
     h += `<li class="mr-eline"><span class="mr-nm">${nameHtml}${l.kind === 'recipe' ? ` <span class="mr-muted mr-kind">${T('sub_recipe')}</span>` : ''}
         ${bad || adv ? `<span class="mr-note">${stx}</span>` : ''}
-        ${adv ? `<span class="mr-note mr-adv">${T('role')}: <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select></span>
+        ${adv && !doc.has_stock ? `<span class="mr-note mr-adv">${T('role_sale')}</span>` : ''}${adv && doc.has_stock ? `<span class="mr-note mr-adv">${T('role')}: <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select></span>` : ''}${adv ? `
         <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : (l.note ? `<span class="mr-note">${esc(l.note)}</span>` : '')}
 </span>
       <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option ${u === ucur ? 'selected' : ''}>${esc(u || '—')}</option>`).join('')}</select><button class="mr-x" data-m="del:${esc(l.id)}" aria-label="${esc(T('remove'))}" title="${esc(T('remove'))}">×</button></span></li>`;
@@ -150,24 +162,41 @@ function render(p) {
 }
 const cat = c => { const x = String(c || '').split('|')[0].trim(); return x ? x[0].toUpperCase() + x.slice(1).toLowerCase() : ''; };
 
+/* what a line still needs, from the SAME rule as the food cost (R1.14): a weight is asked only when the price is per gram */
 function statusOf(d, l) {
-  if (l.kind === 'recipe') { const s = d.docs[l.ref]; return s ? esc(T('sub_recipe')) : `<span class="mr-bad">${T('missing_sub')}</span>`; }
+  if (l.kind === 'recipe') { const s = (PREVIEW && d.draft_docs && d.draft_docs[l.ref]) || d.docs[l.ref]; if (!s) return `<span class="mr-bad">${T('missing_sub')}</span>`;
+    const fr = E().subFraction(l.qty == null ? 0 : l.qty, l.unit, s); return fr.status === 'ok' ? esc(T('sub_recipe')) : `<span class="mr-bad">${esc(T('s_' + fr.status))}</span>`; }
   const f = d.facts[l.ref];
   if (!f) return `<span class="mr-bad">${T('missing_product')}</span>`;
   const a = E().ingredientAmount(l.qty == null ? 0 : l.qty, l.unit, f, d.measures);
-  if (a.status === 'densita_mancante') return `<span class="mr-bad">${T('need_density')}</span>`;
-  // bought and used by the piece (price each known): no weight needed (Chef 16/10). Only when the cost really needs it.
-  if (a.status === 'peso_pezzo_mancante') return f.price && f.price.cost_per_each != null ? esc(T('by_piece')) : `<span class="mr-bad">${T('need_piece')}</span>`;
   if (a.status === 'da_definire' || a.status === 'unita_sconosciuta') return `<span class="mr-bad">${T('need_unit')}</span>`;
-  if (f.piece_g && E().dimOf(l.unit) === 'c') return esc(T('piece_is', { g: nf(f.piece_g.v, 1) }));
-  if (H.isChef() && !f.price && f.policy !== 'non_food' && f.policy !== 'zero_cost') return `<span class="mr-bad">${T('no_price')}</span>`;
-  return esc(T('ok'));
+  const c = E().leafCost({ dim: a.dim, g: a.g, ml: a.ml != null ? a.ml : (a.dim === 'v' ? a.val : null), count: a.dim === 'c' ? a.val : null, status: a.status }, f);
+  const pack = l.role === 'imballo' || f.policy === 'non_food';
+  if (!H.isChef()) return a.status === 'densita_mancante' ? `<span class="mr-bad">${T('need_density')}</span>` : esc(T('ok'));
+  if (c.cost != null) return a.dim === 'c' && !(f.piece_g) ? esc(T('by_piece')) : esc(T('ok'));
+  if (pack) return `<span class="mr-warnm">${T('pack_no_price')}</span>`;
+  if (c.status === 'prezzo_mancante') return `<span class="mr-bad">${T('no_price')}</span>`;
+  if (c.status === 'peso_pezzo_mancante') return `<span class="mr-bad">${T('need_piece')}</span>`;
+  if (c.status === 'densita_mancante') return `<span class="mr-bad">${T('need_density')}</span>`;
+  return `<span class="mr-bad">${esc(T('s_' + c.status))}</span>`;
+}
+/* open problems of the recipe shown (Chef): visible, folded under one line, never mixed with the review mark */
+function issueText(d, x, ctx) {
+  const nm = x.ref ? (((ctx.doc(x.ref) || {}).title && I.dn(ctx.doc(x.ref).title)) || ((I.lang === 'it' && (d.facts[x.ref] || {}).name_it) || (d.facts[x.ref] || {}).name) || '?') : '';
+  const where = x.sub ? ' ' + T('in_sub', { t: I.dn(((ctx.doc(x.sub) || {}).title) || '') }) : '';
+  const what = x.code === 'conversione' ? T('s_' + x.status) : T('i_' + x.code);
+  return `${nm ? `<b>${esc(nm)}</b>: ` : ''}${esc(what)}${esc(where)}`;
+}
+function issuesHtml(d, id, ctx, open) {
+  const iss = E().issues ? E().issues(id, ctx) : [];
+  if (!iss.length) return `<div class="mr-okc mr-issok">${T('no_issues')}</div>`;
+  return `<details class="mr-issues"${open ? ' open' : ''}><summary data-m="iss">${T('open_issues', { n: iss.length })}</summary><ul>${iss.map(x => `<li>${issueText(d, x, ctx)}</li>`).join('')}</ul></details>`;
 }
 
 function approvedReminder(d) {
   const a = (d.suggestions || []).filter(s => s.status === 'approvato');
   return a.map(s => `<div class="mr-scaled">${T('approved_sug')}: “${esc(s.text)}” — ${esc(s.by || '')}</div>`).join('') +
-    (d.diffs && d.diffs.length && !d.diffs_checked ? `<div class="mr-scaled">${T('diffs_to_check', { n: d.diffs.length })} <button class="mr-link acc" data-m="p:diffs">${T('see')}</button></div>` : '');
+    '';
 }
 
 function addHtml(p) {
@@ -230,7 +259,7 @@ function panelHtml(p, d, doc, ctx) {
       h += `<p class="mr-sim">${T('sim_theo')}</p>` + simList(d, E().explode(p.id, 1 / por, 'costo', ctx).filter(x => x.kind !== 'prep'));
     }
     if (doc.has_stock) { h += `<p class="mr-sim">${T('sim_prod')}</p>` + simList(d, E().explode(p.id, 1, 'produzione', ctx)); }
-    h += `<p class="mr-muted">${T('sim_note')}</p></div>`;
+    h += `<p class="mr-sim">${T('stock_title')}</p><p class="mr-muted">${T('stock_note')}</p><p class="mr-muted">${T('sim_note')}</p></div>`;
     return h;
   }
   if (p.panel === 'hist') {
@@ -292,7 +321,8 @@ function changeBox(p, d, doc) {
       ${c.pb != null || c.pa != null ? row(T('fc_portion_c'), usd(c.pa), usd(c.pb)) : ''}${Number(doc.yield && doc.yield.portions) === 1 && Number(d.doc.yield && d.doc.yield.portions) === 1 ? '' : row(T('fc_lot'), usd(c.a.food), usd(c.b.food))}
       ${c.b.missing ? `<div class="mr-muted">${T('missing_prices', { n: c.b.missing })}</div>` : ''}
       ${conseqHtml(d, p.id, c.ctxOld, c.ctxNew)}
-      ${errs.length ? `<div class="mr-bad">${esc(errs.map(e => T('v_' + e.split(':')[0])).join(' · '))}</div>` : ''}</div>`;
+      ${errs.length ? `<div class="mr-bad">${esc(errs.map(e => T('v_' + e.split(':')[0])).join(' · '))}</div>` : ''}
+      ${issuesHtml(d, p.id, c.ctxNew, false)}</div>`;
 }
 function pvFoot(p, d, doc) {
   const errs = E().validate(doc, ctxFor(d, p.id, doc, true), true);
@@ -317,9 +347,11 @@ const dt = iso => iso ? new Intl.DateTimeFormat(loc(), { timeZone: 'America/Chic
 /* ============ INTERACTIONS ============ */
 function entry() { return H.entry(); }
 const forget = id => { API.forget('mre_recipe'); API.forget('mre_list'); API.get('mre_list', null, 0).catch(() => {}); };
+/* R1.14: confirmations and errors are written INSIDE the card (top of the recipe), never floating over buttons */
+function flash(id, msg, bad) { ui(id).flash = { msg, bad: !!bad, at: Date.now() }; }
 async function call(op, body, okMsg) {
-  try { const r = await API.call(op, body); if (okMsg) H.toast(okMsg); return r; }
-  catch (e) { H.toast(T('err_' + String(e.code || '').split(':')[0]) !== 'm_err_' + String(e.code || '').split(':')[0] ? T('err_' + String(e.code || '').split(':')[0]) : T('error', { e: e.code || 'error' })); return null; }
+  try { const r = await API.call(op, body); const p = entry(); if (okMsg && p && p.id) flash(p.id, okMsg); return r; }
+  catch (e) { const c = String(e.code || '').split(':')[0]; const p = entry(); if (p && p.id) { flash(p.id, T('err_' + c) !== 'm_err_' + c ? T('err_' + c) : T('error', { e: e.code || 'error' }), true); H.render(true) } return null; }
 }
 let saveT;
 function scheduleSave(p) {
@@ -340,33 +372,35 @@ function onClick(ev) {
   const m = el.dataset.m, w = ui(p.id);
   const [k, a1, a2] = m.split(':');
   const work = () => WORK[p.id];
-  if (k === 'reset') { p.f = 1; p.ref = ''; w.prod = null; }
+  w.err = null; w.flash = null;
+  if (k === 'iss') { p.iss = !p.iss; }
+  else if (k === 'reset') { p.f = 1; p.ref = ''; w.prod = null; }
   else if (k === 'units') p.imp = !p.imp;
   else if (k === 'p') p.panel = p.panel === a1 ? null : a1;
   else if (k === 'sub') { const src = shownDoc(d, p), l = src.lines.find(x => x.id === a1); if (!l) return; const sub = (PREVIEW && d.draft_docs && d.draft_docs[l.ref]) || d.docs[l.ref];
       const fr = sub && l.qty != null ? E().subFraction(l.qty * (p.edit ? 1 : (p.f || 1)), l.unit, sub) : { f: null }; H.openRecipe(l.ref, sub ? sub.title : '', fr.f || 1, T('from_parent', { t: src.title })); return; }
   else if (k === 'adv') p.adv = !p.adv;
-  else if (k === 'edit') { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.panel = null; p.f = 1; p.saved = !!d.draft; w.sure = false; }
+  else if (k === 'edit') { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.adv = false; p.panel = null; w.err = null; p.f = 1; p.saved = !!d.draft; w.sure = false; }
   else if (k === 'pv') { p.pv = a1 === '1'; w.sure = false; H.render(true); document.getElementById('main').scrollTop = 0; return; }
   else if (k === 'view') { p.view = a1; p.f = 1; p.ref = ''; w.prod = null; }
   else if (k === 'savedraft') { document.querySelectorAll('#main [data-m="savedraft"]').forEach(b => { b.disabled = true; b.textContent = T('saving') });   // the server can take a few seconds: say so
       (async () => { clearTimeout(saveT); const r = await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); if (!r) { H.render(true); return; }
-      delete WORK[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft'; H.toast(T('draft_saved_toast', { v: r.draft_version })); forget(); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
+      delete WORK[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft'; flash(p.id, T('draft_saved_toast', { v: r.draft_version })); forget(); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
   else if (k === 'cancel') { if (!w.sure) { w.sure = true; H.render(true); setTimeout(() => { w.sure = false; }, 4000); return; }   // second tap discards: never a browser dialog
       w.sure = false; (async () => { clearTimeout(saveT); if (d.draft || p.saved) await call('mre_discard', { id: p.id }, T('discarded')); delete WORK[p.id]; p.edit = false; p.pv = false; p.saved = false; forget(); H.render(true); })(); return; }
   else if (k === 'review' || k === 'unreview') { (async () => { const r = await call('mre_review', { id: p.id, verified: k === 'review' }); if (!r) return;
-      const nx = k === 'review' && H.next ? H.next(p.id) : null; forget(); if (nx) { H.toast(T('verified_toast')); H.replace(nx); } else H.render(true); })(); return; }
+      const nx = k === 'review' && H.next ? H.next(p.id) : null; forget(); if (nx) { flash(nx, T('verified_toast')); H.replace(nx); } else H.render(true); })(); return; }
   else if (k === 'next') { const nx = H.next ? H.next(p.id) : null; if (nx) H.replace(nx); return; }
   else if (k === 'publish') { (async () => { clearTimeout(saveT); const s = await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); if (!s) return;
       const r = await call('mre_publish', { id: p.id, reason: w.reason || '', base: d.recipe.current_version }); if (!r) return;
-      H.toast(T('published', { v: r.version })); delete WORK[p.id]; p.edit = false; p.saved = false; p.f = 1; w.reason = ''; forget(); H.render(true); })(); return; }
+      flash(p.id, T('published', { v: r.version })); delete WORK[p.id]; p.edit = false; p.saved = false; p.f = 1; w.reason = ''; forget(); H.render(true); })(); return; }
   else if (k === 'role') return;
   else if (k === 'del') { work().lines = work().lines.filter(x => x.id !== a1); scheduleSave(p); }
   else if (k === 'delstep') { work().steps.splice(+a1, 1); scheduleSave(p); }
   else if (k === 'addstep') { work().steps.push({ it: '', en: '', es: '' }); scheduleSave(p); }
   else if (k === 'addi' || k === 'addr') { const nid = 'n' + Date.now().toString(36); work().lines.push({ id: nid, kind: k === 'addr' ? 'recipe' : 'ingredient', ref: a1, qty: null, unit: 'g', role: 'produzione', note: null, group: null }); w.q = ''; w.search = null;
       (async () => { await call('mre_save_draft', { id: p.id, doc: work(), base: d.recipe.current_version }); p.saved = true; forget(); H.render(true); })(); return; }
-  else if (k === 'restore') { (async () => { const r = await call('mre_restore', { id: p.id, version: +a1 }); if (r) { H.toast(r.draft ? T('restored_draft', { v: a1 }) : T('restored', { v: a1, n: r.version })); forget(); H.render(true); } })(); return; }
+  else if (k === 'restore') { (async () => { const r = await call('mre_restore', { id: p.id, version: +a1 }); if (r) { flash(p.id, r.draft ? T('restored_draft', { v: a1 }) : T('restored', { v: a1, n: r.version })); forget(); H.render(true); } })(); return; }
   else if (k === 'checkdiffs') { (async () => { const r = await call('mre_check_diffs', { id: p.id }, T('checked')); if (r) { forget(); H.render(true); } })(); return; }
   else if (k === 'dec') { (async () => { const r = await call('mre_decide', { suggestion_id: a1, status: a2 }, T('st_' + a2.replace(' ', '_'))); if (r) { forget(); H.render(true); } })(); return; }
   else if (k === 'prod') { w.prod = { real: null, diff: false, used: {} }; w.prodMsg = null; w.sugOpen = false; }
@@ -398,7 +432,7 @@ async function saveProduction(p, d) {
 /* ---- bold number editing in place ---- */
 function startEdit(b) {
   const sp = b.querySelector('.n'); if (!sp || sp.isContentEditable) return;
-  sp.setAttribute('contenteditable', 'true'); sp.setAttribute('inputmode', 'decimal'); sp.dataset.mred = '1';
+  sp.setAttribute('contenteditable', 'true'); sp.setAttribute('inputmode', 'decimal'); sp.dataset.mred = '1'; b.dataset.orig = sp.textContent;
   if (sp.textContent === '—') sp.textContent = '';
   sp.focus();
   const r = document.createRange(); r.selectNodeContents(sp); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
@@ -411,8 +445,10 @@ function commit(b, text) {
   const p = entry(), d = H.peek('mre_recipe', { id: p.id }); if (!d) return;
   const key = b.dataset.mq, u = b.dataset.u || '', w = ui(p.id);
   const v = parseFloat(String(text).replace(/\s/g, '').replace(',', '.'));
-  if (!(v > 0)) { H.render(true); return; }
   const edit = H.isChef() && p.edit && WORK[p.id];
+  w.err = null;
+  if (edit && key === 'y:g' && !(v > 0)) { WORK[p.id].yield.g = null; scheduleSave(p); H.render(true); return; }   // weight is optional: empty or 0 removes it
+  if (!(v > 0) || String(text).trim() === String(b.dataset.orig || '').trim()) { H.render(true); return; }      // a tap without a new number changes nothing
   if (edit) {
     const doc = WORK[p.id];
     if (key.startsWith('l:')) { const l = doc.lines.find(x => x.id === key.slice(2)); if (l) l.qty = v; }
@@ -429,7 +465,7 @@ function commit(b, text) {
   else if (key === 'y:l') { f = E().factorFromBatches(v); ref = `${nf(v, 2)} ${T('batches')}`; }
   else if (key === 'real') { w.prod.real = v * ({ kg: 1000 }[u] || 1); H.render(true); return; }
   else if (key.startsWith('act:')) { w.prod.used[key.slice(4)] = v; H.render(true); return; }
-  if (f && isFinite(f) && f > 0) { p.f = f; p.ref = ref; w.prod = null; } else H.toast(T('cannot_scale'));
+  if (f && isFinite(f) && f > 0) { p.f = f; p.ref = ref; w.prod = null; } else w.err = { key, msg: T('cannot_scale') };
   H.render(true);
 }
 
@@ -470,6 +506,7 @@ window.MreUI = {
   render,
   /* sign-out / switch user: nothing of the previous person's working copies stays in memory */
   reset() { Object.keys(WORK).forEach(k => delete WORK[k]); Object.keys(UI).forEach(k => delete UI[k]); clearTimeout(saveT); clearTimeout(qT); },
-  title(p) { const d = H && H.peek('mre_recipe', { id: p.id }); return d ? I.dn(shownDoc(d, p).title) : (p.name || ''); },
+  title(p) { const d = H && H.peek('mre_recipe', { id: p.id }); if (d) return I.dn(shownDoc(d, p).title);      // a tab always has a name, also while loading
+    const r = H && H.listRow && H.listRow(p.id); return p.name || (r ? (H.isChef() && r.draft_title) || I.dn(r.title) : '…'); },
 };
 })();

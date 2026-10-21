@@ -153,12 +153,20 @@ export async function mreReview(u: U, b: any, svc: any) {
   return await lab(async tx => {
     const [r] = await tx`select source, is_test from mre.recipes where id = ${id} for update`
     if (!r && !off.docs[id]) throw new MreError(404, 'not_found')
-    const mark = on ? { by: u.name, by_id: u.id, at: new Date().toISOString() } : null
+    // R1.14 (Chef 21/10): the review mark keeps the problems still open on what the Chef reviewed (his draft if any, else the
+    // official recipe) — a reviewed recipe is NOT a complete or published one, and its open problems stay visible
+    let open: any[] = []
+    if (on) {
+      const [dr] = await tx`select doc from mre.versions where recipe_id = ${id} and state = 'bozza'`
+      const root = dr ? Object.assign({}, dr.doc, { id }) : (off.docs[id] || (await labOnlyDocs(tx, [id]))[id])
+      if (root) { const t = await tree(tx, svc, root, true); open = E.issues(id, ctxOf(t, true)).map((x: any) => ({ code: x.code, status: x.status || null, ref: x.ref || null })) }
+    }
+    const mark = on ? { by: u.name, by_id: u.id, at: new Date().toISOString(), open: open.length, issues: open } : null
     if (!r) await tx`insert into mre.recipes (id, pilot, current_version, source, diffs) values (${id}, false, 0, ${sql.json({ link: 'official', on_demand: true, requested_by: u.id, at: off.read_at, review: mark } as any)}, ${sql.json(off.diffs[id] || [])})`
     else if (mark) await tx`update mre.recipes set source = jsonb_set(coalesce(source, '{}'::jsonb), '{review}', ${sql.json(mark as any)}::jsonb) where id = ${id}`
     else await tx`update mre.recipes set source = coalesce(source, '{}'::jsonb) - 'review' where id = ${id}`
     await audit(tx, u, on ? 'review_verified' : 'review_cleared', id, {})
-    return { ok: true, review: mark }
+    return { ok: true, review: mark }   // never touches the recipe, the BOM, the bots or the stock
   })
 }
 

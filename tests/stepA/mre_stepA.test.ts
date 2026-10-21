@@ -117,6 +117,7 @@ Deno.test('B2 la prima bozza di una ricetta ufficiale la collega da sola (nessun
 
 Deno.test('B3 "verificata dallo Chef": segno di revisione, non pubblicazione', async () => {
   const r = await M.mreReview(CHEF, { id: WHEEL, verified: true }, svc); assertEquals(r.review.by, 'Max')
+  assert(r.review.open >= 1 && r.review.issues.some((x: any) => x.code === 'prezzo_mancante'), 'R1.14: la revisione tiene i problemi aperti (rum senza prezzo): ' + JSON.stringify(r.review.issues))
   let w = (await M.mreList(CHEF, svc)).recipes.find((x: any) => x.id === WHEEL); assertEquals(w.review.by, 'Max')
   assertEquals((await M.mreRecipe(CHEF, WHEEL, svc)).recipe.review.by, 'Max')
   const [{ v }] = await db`select count(*)::int v from mre.versions where recipe_id = ${WHEEL} and state = 'pubblicata'`; assertEquals(v, 0, 'nessuna pubblicazione')

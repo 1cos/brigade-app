@@ -47,7 +47,8 @@ test('unità: g/kg/oz/lb/ml/L; il volume diventa peso solo con densità verifica
   assert.equal(E.ingredientAmount(2, 'l', { density: { v: 1.03 } }).g, 2060)
   assert.equal(E.ingredientAmount(1, 'lb', facts[BUT]).g, 453.592)
   assert.equal(E.ingredientAmount(3, 'pz', facts[EGG]).g, 165)
-  assert.equal(E.ingredientAmount(3, 'pz', facts[SUG]).status, 'peso_pezzo_mancante')
+  assert.equal(E.ingredientAmount(3, 'pz', facts[SUG]).status, 'ok'); assert.equal(E.ingredientAmount(3, 'pz', facts[SUG]).g, null)   // R1.14: 3 pieces are 3 pieces
+  assert.equal(E.leafCost({ dim: 'c', count: 3, g: null, status: 'ok' }, facts[SUG]).status, facts[SUG].price ? 'peso_pezzo_mancante' : 'prezzo_mancante')   // the weight is asked only when the price is per gram
   assert.equal(E.ingredientAmount(2, 'pinch', facts[SUG], ctx.measures).status, 'stima')
   assert.equal(E.normUnit('Gr'), 'g'); assert.equal(E.normUnit('each'), 'pz'); assert.equal(E.normUnit('da definire'), null)
 })

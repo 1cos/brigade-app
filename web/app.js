@@ -184,8 +184,9 @@ SCREENS.restaurant = { title: () => t('m_lab_title'), c: '--rest', render(p) {
   const prog = chef ? `<div class="rm-prog"><div class="rm-bar"><i style="width:${live.length ? Math.round(nDone / live.length * 1000) / 10 : 0}%"></i></div><span>${t('m_rm_progress', { n: nDone, t: live.length })}</span></div>` : '';
   const tag = r => [r.prep ? `<span class="rm-tag">Prep</span>` : '', r.menu ? `<span class="rm-tag menu">Menu Item</span>` : ''].join('');
   const row = r => `<button class="row rm-row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(rmName(r))}</div>
-      <div class="rm-meta">${tag(r)}${chef && r.draft ? `<span class="rm-draft">${t('m_rm_draft')}</span>` : ''}${chef && r.draft_title ? `<span class="rm-was">${esc(t('m_rm_in_use', { t: I.dn(r.title) }))}</span>` : ''}</div></span>
+      <div class="rm-meta">${tag(r)}${chef && r.draft ? `<span class="rm-draft">${t('m_rm_draft')}</span>` : ''}${chef && r.draft_title ? `<span class="rm-was">${esc(t('m_rm_in_use', { t: I.dn(r.title) }))}</span>` : ''}${chef && r.review && r.review.open ? `<span class="rm-open">⚠ ${r.review.open}</span>` : ''}</div></span>
       ${chef ? `<span class="rm-check${r.review ? ' on' : ''}" aria-label="${esc(r.review ? t('m_rm_done') : t('m_rm_todo'))}">${r.review ? '✓' : ''}</span>` : '<span class="chev">›</span>'}</button>`;
+  // R1.14: a reviewed recipe can still have open problems — they stay visible in the list
   const nArch = L.recipes.length - live.length;
   return `<div class="page rm" style="--c:var(--rest)">${top}
     <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: live.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
@@ -416,7 +417,7 @@ function openTab(kind, ref, entry) {
 function sheet(html) { $('sheet').innerHTML = `<div class="grab"></div>${html}`; $('sheet').hidden = false; $('scrim').hidden = false; }
 function closeSheet() { $('sheet').hidden = true; $('scrim').hidden = true; $('sheet').innerHTML = ''; }
 $('scrim').onclick = closeSheet;
-let toastT; function toast(msg) { let el = document.querySelector('.toast'); if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); } el.style.bottom = ($('worlds').offsetHeight + 12) + 'px'; el.innerHTML = `<span>${esc(msg)}</span>`; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2600); }
+let toastT; function toast(msg) { let el = document.querySelector('.toast'); if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); } el.style.top = ($('top').offsetHeight + 8) + 'px'; el.style.bottom = 'auto'; el.style.pointerEvents = 'none'; el.innerHTML = `<span>${esc(msg)}</span>`; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2600); }
 const errText = e => e && e.code === 'offline' ? t('offline_save') : e && e.code === 'bad_qty' ? t('check_qty') : e && e.code === 'bad_unit' ? t('choose_unit') : t('not_saved');
 async function write(kind, body, okMsg) {
   try { await API.act(kind, body); API.forget('shift'); API.forget('prep'); closeSheet(); toast(okMsg); rerender(); return true; }
@@ -453,7 +454,8 @@ const A = {
   openPrep(el) { const id = +el.dataset.id; const i = (API.peek('shift') || { items: [] }).items.find(x => x.id === id); openTab('prep', String(id), { s: 'prep', p: { id, name: i ? i.name : '' } }); },
   /* data-focus (yield / bom): opened from a decision, the card shows what to fix and marks that part, as in Shell V020 */
   openRecipe(el) { const focus = isChef() ? el.dataset.focus || '' : '', fix = isChef() ? el.dataset.fix || '' : '';
-    if ((isChef() || mreIds().has(el.dataset.r)) && focus !== 'photo') { openMre(el.dataset.r, '', 1, '', focus, fix); return; }   // R1.13: the Chef opens EVERY recipe in the Recipe Master card (photo: Brigade card)
+    const lr = ((API.peek('mre_list') || {}).recipes || []).find(r => r.id === el.dataset.r);   // R1.14: the tab has its name at once
+    if ((isChef() || mreIds().has(el.dataset.r)) && focus !== 'photo') { openMre(el.dataset.r, lr ? rmName(lr) : '', 1, '', focus, fix); return; }   // R1.13: the Chef opens EVERY recipe in the Recipe Master card (photo: Brigade card)
     openTab('recipe', el.dataset.r + (focus ? ':' + focus : ''), { s: 'recipe', p: { id: el.dataset.r, prep: el.dataset.prep || '', factor: 1, subWarn: null, focus, fix, tab: focus === 'yield' ? 'struct' : 'prep' } }); },
   /* "Edit" (Chef) on any recipe: the server makes an isolated lab copy if needed, then the B-49 editor opens on it */
   async editRecipe(el) {

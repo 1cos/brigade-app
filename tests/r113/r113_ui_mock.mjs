@@ -1,3 +1,4 @@
+// (R1.14: wording 'revisionata' and in-card confirmation)
 // R1.13 (Chef 20/10 "TRUST · EASY · CLEAN") — the final Recipe Master interface, iPhone size, WebKit.
 // List = the 265 real Brigade recipes (read-only snapshot, kinds as the server computes them) + the Chef's proposal.
 // Recipe contents = the read-only snapshot of step A. API answered in memory with the shapes of brigade-app-api/mre.ts
@@ -97,7 +98,7 @@ ok(!names.includes('BUTTER SPINACH') && names.includes('Spinach Cup') && names.i
 const rowOf = async n => txt(pg, `#main .rm-row:has(.name:text-is("${n}"))`)
 ok(/PREP/i.test(await rowOf('Spinach Cup')) && !/MENU ITEM/i.test(await rowOf('Spinach Cup')) && /Bozza/.test(await rowOf('Spinach Cup')) && /in uso: BUTTER SPINACH/.test(await rowOf('Spinach Cup')), 'Spinach Cup — PREP · Bozza (in uso: BUTTER SPINACH)')
 ok(/MENU ITEM/i.test(await rowOf('Butter Spinach')) && !/PREP/i.test(await rowOf('Butter Spinach')), 'Butter Spinach — MENU ITEM')
-ok(/0 di 257 verificate/.test(main), 'avanzamento revisione Chef: 0 di 257 (non è "pubblicata")')
+ok(/0 di 257 revisionate/.test(main), 'avanzamento revisione Chef: 0 di 257 (non è "pubblicata")')
 ok(await noScrollX(pg), 'nessuno scorrimento orizzontale')
 // filters + search
 await pg.click('[data-a="rmFilter"][data-v="prep"]'); await pg.waitForTimeout(250); names = await rowNames(pg)
@@ -127,7 +128,7 @@ ok(/Cosa cambia/i.test(pv) && /0\.789 → \$?0\.799/.test(pv.replace(/\$/g, '$')
 ok(await pg.locator('.mr-pub[disabled]').count() === 1 && /Non attiva in modalità prova/.test(pv), 'Pubblica spento, una riga discreta')
 await pg.locator('.mr-pub').evaluate(e => e.click()); ok(publishCalls === 0, 'Pubblica non invia niente')
 await pg.click('.mr-ebar [data-m="savedraft"]'); await pg.waitForTimeout(500); await shot(pg, '7_bozza_salvata')
-ok(saves >= 1 && /Bozza v1 salvata/.test(await txt(pg, '.toast')) && /6 g/.test(await txt(pg, '.mr-ings')), 'Salva bozza: salvata, la ricetta mostra la bozza (6 g)')
+ok(saves >= 1 && /Bozza v1 salvata/.test(await txt(pg, '.mr-flash')) && /6 g/.test(await txt(pg, '.mr-ings')), 'Salva bozza: salvata, la ricetta mostra la bozza (6 g)')
 // back to 5 g so the demo state is the real one
 await pg.click('.mr-editbtn'); await pg.click('b.mq[data-mq="l:p2"]'); await pg.keyboard.press('Meta+A'); await pg.keyboard.type('5'); await pg.keyboard.press('Enter'); await pg.waitForTimeout(300); await pg.click('.mr-ebar [data-m="savedraft"]'); await pg.waitForTimeout(400)
 ok(LAB[POS].draft.lines.find(l => l.id === 'p2').qty === 5, 'riportato a 5 g')
@@ -149,7 +150,7 @@ const tabs0 = await pg.locator('#tabs > *').count()
 await pg.click('[data-m="review"]'); await pg.waitForTimeout(900)
 ok((await pg.locator('#tabs > *').count()) <= tabs0, 'la revisione non apre schede nuove (e non lascia doppioni)')
 ok(reviews === 1 && /Spinach Cup/.test(await txt(pg, 'h1.mr-title')), '"Verificata · prossima": segnata e aperta la successiva (Spinach Cup) nella stessa scheda')
-await list(pg); ok(/1 di 257 verificate/.test(await txt(pg, '#main')) && (await pg.locator('#main .rm-row:has(.name:text-is("Butter Spinach")) .rm-check.on').count()) === 1, 'elenco: Butter Spinach con ✓, 1 di 257')
+await list(pg); ok(/1 di 257 revisionate/.test(await txt(pg, '#main')) && (await pg.locator('#main .rm-row:has(.name:text-is("Butter Spinach")) .rm-check.on').count()) === 1, 'elenco: Butter Spinach con ✓, 1 di 257')
 await shot(pg, '12_lista_verificata')
 // cook
 role = 'staff'; let pc = await page(390, 844); await list(pc)

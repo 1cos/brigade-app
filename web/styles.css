@@ -278,7 +278,8 @@ textarea.search{height:auto;min-height:120px;padding:12px 14px;resize:vertical}
 .msg .who{font-size:14px;font-weight:700;color:var(--txm)}
 .msg .txt{font-size:18px;margin-top:2px;white-space:pre-wrap}
 .msg.unread .txt{font-weight:650}
-.testbar{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--warn)}
+.testbar{font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--txm);display:inline-flex;align-items:center;gap:5px}
+.testbar::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warn);opacity:.8}   /* R1.14: one discreet test-mode mark */
 
 /* ===== Recipe card (BR-UI02 layout) in the V020-B theme: same tokens, same font ===== */
 .rc-sticky{position:sticky;top:-18px;z-index:5;background:var(--bg);margin:0 -16px;padding:10px 16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line)}
@@ -503,3 +504,16 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .mr-pubrow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .mr-pubrow .mr-muted{font-size:13px}
 .mq-ro{font-weight:800;white-space:nowrap;font-size:19px}
+/* R1.14 — messages next to what they are about, never over buttons; recipe state */
+.mr-inlerr{list-style:none;margin:-2px 0 6px;padding:8px 12px;border-radius:10px;background:var(--warn-bg);color:var(--warn);font-size:14px;font-weight:600}
+.mr-okc{color:var(--ok)}
+.mr-warnm{color:var(--tx2)}
+.mr-issok{font-size:14px}
+.mr-issues{font-size:15px;border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--surf)}
+.mr-issues>summary{cursor:pointer;color:var(--warn);font-weight:700;list-style:none}
+.mr-issues>summary::-webkit-details-marker{display:none}
+.mr-issues ul{margin:6px 0 2px;padding-left:18px;display:grid;gap:4px;color:var(--tx2)}
+.mr-issues b{color:var(--tx);font-weight:650}
+.rm-open{font-size:13px;font-weight:700;color:var(--warn)}
+.mr-flash{padding:10px 14px;border-radius:12px;background:var(--ok-bg);color:var(--ok);font-weight:650;font-size:15px}
+.mr-flash.bad{background:var(--warn-bg);color:var(--warn)}

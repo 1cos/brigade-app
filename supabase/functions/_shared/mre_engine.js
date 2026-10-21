@@ -17,7 +17,7 @@ const SYN = {
   ounce: 'oz', ounces: 'oz', 'fl oz': 'fl_oz', floz: 'fl_oz', 'fl.oz': 'fl_oz', lt: 'l', ltr: 'l', liter: 'l', litre: 'l', litri: 'l', litro: 'l', L: 'l',
   gallon: 'gal', gallone: 'gal', galloni: 'gal', quart: 'qt', pint: 'pt', cups: 'cup',
   pezzi: 'pz', pezzo: 'pz', pc: 'pz', pcs: 'pz', each: 'pz', ea: 'pz', n: 'pz', piece: 'pz', pieces: 'pz', pieza: 'pz', piezas: 'pz', unit: 'pz', units: 'pz',
-  nests: 'nest', nidi: 'nest', nido: 'nest', porzioni: 'portion', porzione: 'portion', portions: 'portion', porciones: 'portion',
+  nests: 'nest', nidi: 'nest', nido: 'nest', porzioni: 'portion', porzione: 'portion', portions: 'portion', porciones: 'portion', 'porz.': 'portion', porz: 'portion', 'porc.': 'portion', porción: 'portion',
   cs: 'case', fogli: 'foglio', sheet: 'foglio', sheets: 'foglio', pizzichi: 'pizzico',
 };
 /** Canonical unit key, or null when unknown / "to be defined". */
@@ -49,7 +49,9 @@ export function ingredientAmount(qty, unit, facts, measures) {
   const pg = facts && facts.piece_g && Number(facts.piece_g.v) > 0 ? Number(facts.piece_g.v) : null;
   if (k in MASS) { const g = q * MASS[k]; return { dim: 'm', val: g, g, ml: d ? g / d : null, status: 'ok' }; }
   if (k in VOL) { const ml = q * VOL[k]; return { dim: 'v', val: ml, ml, g: d ? ml * d : null, status: d ? 'ok' : 'densita_mancante' }; }
-  if (k in COUNT) return { dim: 'c', val: q, count: q, ckey: COUNT[k], g: pg && COUNT[k] === 'pz' ? q * pg : null, status: pg || COUNT[k] !== 'pz' ? 'ok' : 'peso_pezzo_mancante' };
+  // R1.14 (Chef 21/10): a count is a complete amount (22 cups = 22 cups). Grams only when a piece weight is known; whether the
+  // weight is NEEDED is decided where it is needed (the cost, when the price is per gram) — never asked for nothing.
+  if (k in COUNT) return { dim: 'c', val: q, count: q, ckey: COUNT[k], g: pg && COUNT[k] === 'pz' ? q * pg : null, status: 'ok' };
   const m = measures && Number(measures[k]) > 0 ? Number(measures[k]) : null;
   if (m) return { dim: 'm', val: q * m, g: q * m, status: 'stima' };
   return { dim: null, val: null, g: null, status: 'unita_sconosciuta' };
@@ -63,7 +65,12 @@ export function subFraction(qty, unit, sub) {
   if (k in COUNT || k === 'cup') {
     if (k === 'cup') return { f: null, status: 'unita_sospetta' };
     if (Number(y.count) > 0 && normUnit(y.count_unit) === k) return { f: q / Number(y.count), status: 'ok' };   // e.g. 50 nests per lot
-    if (Number(y.portions) > 0) return { f: q / Number(y.portions), status: 'ok' };
+    // R1.14 (Chef 21/10): portions are counted against portions only. Pieces / nests / cases of a sub-recipe need the lot's
+    // count in that same unit — a case is never read as a portion.
+    if (k === 'portion' && Number(y.portions) > 0) return { f: q / Number(y.portions), status: 'ok' };
+    // "1 pz" of a prep whose yield is only in portions (e.g. Thaw Salmon, Meatballs): read as 1 portion as before, but marked
+    // 'pezzo_come_porzione' so that it shows as a point to confirm in the recipe, never silently
+    if (k === 'pz' && Number(y.portions) > 0) return { f: q / Number(y.portions), status: 'pezzo_come_porzione' };
     return { f: null, status: 'resa_mancante' };
   }
   if (k in VOL) return { f: null, status: 'densita_mancante' };
@@ -206,25 +213,27 @@ export function leafCost(leaf, facts) {
   const pg = facts.piece_g && Number(facts.piece_g.v);
   if (leaf.g != null && perEach != null && pg > 0) return { cost: leaf.g / pg * perEach, status: 'ok' };
   if (leaf.count != null && perG != null && pg > 0) return { cost: leaf.count * pg * perG, status: 'ok' };
+  if (leaf.dim === 'c' && perG != null) return { cost: null, status: 'peso_pezzo_mancante' };        // used by the piece, bought by weight
+  if (leaf.dim === 'v' && perG != null) return { cost: null, status: 'densita_mancante' };          // used by volume, bought by weight
   return { cost: null, status: leaf.status !== 'ok' ? leaf.status : 'conversione_mancante' };
 }
 
 /** Food cost of one lot × factor. Per top line and total. Missing parts are counted, never treated as zero. */
 export function cost(rootId, factor, ctx) {
   const doc = ctx.doc(rootId), leaves = explode(rootId, factor, 'costo', ctx);
-  const byLine = {}; let food = 0, pack = 0, missing = 0, estimated = 0;
+  const byLine = {}; let food = 0, pack = 0, missing = 0, estimated = 0, packMissing = 0;
   for (const lf of leaves) {
     const top = lf.path[1];
     const b = byLine[top] || (byLine[top] = { cost: 0, missing: 0, status: 'ok' });
     if (lf.kind !== 'ingredient') { b.missing++; b.status = lf.status; missing++; continue; }
     const f = ctx.facts(lf.ref), c = leafCost(lf, f);
     const isPack = lf.role === 'imballo' || (f && f.policy === 'non_food');
-    if (c.cost == null) { if (!isPack) { b.missing++; b.status = c.status; missing++; } continue; }
+    if (c.cost == null) { if (!isPack) { b.missing++; b.status = c.status; missing++; } else packMissing++; continue; }
     if (isPack) pack += c.cost; else { food += c.cost; b.cost += c.cost; }
     if (c.status === 'stima') { estimated++; if (b.status === 'ok') b.status = 'stima'; }
   }
   const portions = doc && Number(doc.yield && doc.yield.portions) > 0 ? doc.yield.portions * factor : null;
-  return { food, pack, missing, estimated, complete: missing === 0, per_portion: portions ? food / portions : null, portions, byLine };
+  return { food, pack, missing, pack_missing: packMissing, estimated, complete: missing === 0, state: missing === 0 ? 'completo' : 'parziale', per_portion: portions ? food / portions : null, portions, byLine };
 }
 
 /* ---------------- one number for every module (B-49, Chef 20/10) ----------------
@@ -348,6 +357,33 @@ export function modelCheck(rootId, ctx, opt = {}) {
   return out;
 }
 
+/** R1.14 (Chef 21/10): the open problems of a recipe, shown and kept apart from the Chef's review (a reviewed recipe can still have them).
+ *  [{ code, ref, line, sub }] — code: prezzo_mancante · conversione (status) · imballo_senza_prezzo · pezzo_come_porzione · procedimento_mancante · resa_mancante.
+ *  Nothing is guessed: every item comes from the same walk as the food cost. */
+export function issues(rootId, ctx) {
+  const doc = ctx.doc(rootId), out = [];
+  if (!doc) return [{ code: 'ricetta_mancante', ref: rootId }];
+  const y = doc.yield || {};
+  if (!(Number(y.g) > 0) && !(Number(y.portions) > 0) && !(Number(y.count) > 0)) out.push({ code: 'resa_mancante' });
+  if (!(doc.steps || []).some(st => String(st.it || st.en || st.es || '').trim())) out.push({ code: 'procedimento_mancante' });
+  const seen = new Set(), add = o => { const k = o.code + ':' + (o.ref || '') + ':' + (o.status || ''); if (!seen.has(k)) { seen.add(k); out.push(o) } };
+  const subs = (d, path) => { for (const l of d.lines || []) { if (l.kind !== 'recipe' || path.includes(l.ref)) continue; const sd = ctx.doc(l.ref); if (!sd) continue
+      const fr = subFraction(l.qty, l.unit, sd); if (fr.status === 'pezzo_come_porzione') add({ code: 'pezzo_come_porzione', ref: l.ref, line: path.length === 1 ? l.id : path[1], sub: d.id !== rootId ? d.id : null })
+      subs(sd, path.concat(l.ref)) } };
+  subs(doc, [rootId]);
+  for (const lf of explode(rootId, 1, 'costo', ctx)) {
+    const top = lf.path[1];
+    if (lf.kind !== 'ingredient') { add({ code: 'conversione', status: lf.status, ref: lf.ref, line: top, sub: lf.from !== rootId ? lf.from : null }); continue; }
+    const f = ctx.facts(lf.ref), c = leafCost(lf, f), pack = lf.role === 'imballo' || (f && f.policy === 'non_food');
+    if (c.cost != null) continue;
+    const sub = lf.from !== rootId ? lf.from : null;
+    if (pack) add({ code: 'imballo_senza_prezzo', ref: lf.ref, line: top, sub });
+    else if (c.status === 'prezzo_mancante' || c.status === 'ingrediente_mancante') add({ code: 'prezzo_mancante', ref: lf.ref, line: top, sub });
+    else add({ code: 'conversione', status: c.status, ref: lf.ref, line: top, sub });
+  }
+  return out;
+}
+
 /** What a change does BEFORE it is published: 1 portion sold, 1 lot produced, food cost. Only items that change are listed. */
 export function consequences(id, ctxOld, ctxNew) {
   const one = (ctx, kind) => { const d = ctx.doc(id); if (!d) return null; return kind === 'vendita' ? movements({ kind, recipe: id, portions: 1 }, ctx) : (d.has_stock ? movements({ kind, recipe: id, lots: 1 }, ctx) : null) };
@@ -391,4 +427,4 @@ export function validate(doc, ctx, strict) {
   return [...new Set(err)];
 }
 
-export const MRE_ENGINE_VERSION = 'mre-1.0';
+export const MRE_ENGINE_VERSION = 'mre-1.1';
