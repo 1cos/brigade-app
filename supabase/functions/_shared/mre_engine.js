@@ -5,6 +5,15 @@
 //
 // A recipe document ("doc") is one lot with one yield:
 //   { schema:1, title, category, yield:{ g, portions, label }, has_stock, lines:[...], steps:[{it,en,es}], notes }
+//   R1.17 (Chef 21/10 "STANDARD DI RESA"), all optional, absent = exactly as before:
+//     yield.portion_g    standard weight of ONE portion (e.g. 80 g cooked spinach per cup) — the portioning standard
+//     yield.portions     EXPECTED yield of one lot (e.g. 15 cups): what the cost and the plan use; a real lot may give 14 or 16
+//     yield.portion_unit what a portion is called when a parent recipe counts it (e.g. 'cup': "1 cup" of Spinach Cup = 1 portion, not a volume)
+//     yield.g            weight of the whole lot ONLY when it is its own standard (sauces in kg). With portion_g it is derived, never typed twice.
+//     yield.label        descriptive text only: NEVER read for a number (kept as history)
+//     line.per = 'portion'  the quantity is per portion (1 container per cup): the lot uses qty × expected portions
+//     step { src, it, en, es, tr:{ en|it|es: 'auto'|'chef'|'stale'|'check' }, h }  src = language the Chef actually wrote in;
+//       numbers are tokens {{lineId}} / {{y:portion_g}} / {{y:portions}}, so the three languages always show the same structured value
 //   line: { id, kind:'ingredient'|'recipe', ref:<uuid>, qty, unit, role:'produzione'|'al_piatto'|'imballo', note, group }
 // Ingredient facts (read live from Brigade, never copied): { name, piece_g:{v}, density:{v}, policy, price:{basis_dim,cost_per_base,cost_per_each,cost_per_ml} }
 // Nothing here ever invents a number: when a conversion, a price or a yield is missing the result says so (status), value null.
@@ -20,6 +29,26 @@ const SYN = {
   nests: 'nest', nidi: 'nest', nido: 'nest', porzioni: 'portion', porzione: 'portion', portions: 'portion', porciones: 'portion', 'porz.': 'portion', porz: 'portion', 'porc.': 'portion', porción: 'portion',
   cs: 'case', fogli: 'foglio', sheet: 'foglio', sheets: 'foglio', pizzichi: 'pizzico',
 };
+/* ---------------- R1.17: derived values (one number, one place) ---------------- */
+const RES = new WeakMap(), DONE = new WeakSet();
+/** The document as the engine reads it: per-portion lines become lot quantities (qty × expected portions) and, with a standard
+ *  portion weight, the expected lot weight = portions × portion_g. Documents without these fields come back UNCHANGED (same object). */
+export function resolveDoc(doc) {
+  if (!doc || typeof doc !== 'object' || DONE.has(doc)) return doc;                 // already resolved: never multiplied twice
+  const y = doc.yield || {}, pg = Number(y.portion_g), P = Number(y.portions);
+  const per = (doc.lines || []).some(l => l.per === 'portion');
+  if (!per && !(pg > 0)) return doc;
+  // the editor changes its working copy in place: the memo is valid only while the numbers it depends on are the same
+  const sig = JSON.stringify([y, (doc.lines || []).map(l => [l.id, l.qty, l.per, l.unit, l.ref, l.role, l.kind])]);
+  const hit = RES.get(doc); if (hit && hit.sig === sig) return hit.out;
+  const ny = Object.assign({}, y);
+  if (pg > 0 && P > 0 && !(Number(y.g) > 0)) { ny.g = pg * P; ny.g_derived = true; }
+  const lines = (doc.lines || []).map(l => l.per === 'portion' ? Object.assign({}, l, { per_qty: l.qty, qty: l.qty == null || !(P > 0) ? null : Number(l.qty) * P }) : l);
+  const out = Object.assign({}, doc, { yield: ny, lines });
+  DONE.add(out); RES.set(doc, { sig, out }); return out;
+}
+const D = (ctx, id) => resolveDoc(ctx.doc(id));
+
 /** Canonical unit key, or null when unknown / "to be defined". */
 export function normUnit(u) {
   if (u == null) return null;
@@ -59,9 +88,11 @@ export function ingredientAmount(qty, unit, facts, measures) {
 
 /** Which part of a sub-recipe lot a line uses (0..n). null + status when it cannot be known. */
 export function subFraction(qty, unit, sub) {
+  sub = resolveDoc(sub);
   const k = normUnit(unit), q = Number(qty), y = (sub && sub.yield) || {};
   if (k == null || !isFinite(q)) return { f: null, status: 'quantita_mancante' };
   if (k in MASS) return Number(y.g) > 0 ? { f: q * MASS[k] / Number(y.g), status: 'ok' } : { f: null, status: 'resa_mancante' };
+  if (y.portion_unit && Number(y.portions) > 0 && normUnit(y.portion_unit) === k) return { f: q / Number(y.portions), status: 'ok' };   // R1.17 CD-071
   if (k in COUNT || k === 'cup') {
     if (k === 'cup') return { f: null, status: 'unita_sospetta' };
     if (Number(y.count) > 0 && normUnit(y.count_unit) === k) return { f: q / Number(y.count), status: 'ok' };   // e.g. 50 nests per lot
@@ -80,10 +111,11 @@ export function subFraction(qty, unit, sub) {
 /* ---------------- free scaling ---------------- */
 /** Factor that makes the line read newQty newUnit. Any compatible unit (5 uova, 12 oz, 0,35 kg). */
 export function factorFromLine(doc, lineId, newQty, newUnit, ctx) {
+  doc = resolveDoc(doc);
   const ln = (doc.lines || []).find(l => l.id === lineId);
   if (!ln || !(Number(newQty) > 0)) return null;
   if (ln.kind === 'recipe') {
-    const sub = ctx.doc(ln.ref);
+    const sub = D(ctx, ln.ref);
     const a = subFraction(ln.qty, ln.unit, sub), b = subFraction(newQty, newUnit || ln.unit, sub);
     if (a.f > 0 && b.f > 0) return b.f / a.f;
     const ka = normUnit(ln.unit), kb = normUnit(newUnit || ln.unit);
@@ -97,6 +129,7 @@ export function factorFromLine(doc, lineId, newQty, newUnit, ctx) {
 export const factorFromPortions = (doc, p) => Number(doc.yield && doc.yield.portions) > 0 && Number(p) > 0 ? Number(p) / Number(doc.yield.portions) : null;
 export const factorFromBatches = b => Number(b) > 0 ? Number(b) : null;
 export function factorFromYield(doc, qty, unit) {
+  doc = resolveDoc(doc);
   const k = normUnit(unit), q = Number(qty);
   if (!(q > 0) || !(Number(doc.yield && doc.yield.g) > 0) || !(k in MASS)) return null;
   return q * MASS[k] / Number(doc.yield.g);
@@ -140,12 +173,16 @@ export function stepNumber(ln, factor, loc) {
 }
 /** Step text with tokens {{lineId}} resolved for a factor. Returns [{t:'txt'|'q', v, id}] so the screen keeps number+unit together. */
 export function stepParts(text, doc, factor, loc) {
-  const out = [], re = /\{\{([A-Za-z0-9_-]+)\}\}/g; let m, last = 0;
+  doc = resolveDoc(doc);
+  const out = [], re = /\{\{([A-Za-z0-9_:-]+)\}\}/g; let m, last = 0;
   const s = String(text || '');
   while ((m = re.exec(s))) {
     if (m.index > last) out.push({ t: 'txt', v: s.slice(last, m.index) });
-    const ln = (doc.lines || []).find(l => l.id === m[1]);
-    out.push(ln ? { t: 'q', v: stepNumber(ln, factor, loc), id: ln.id } : { t: 'txt', v: '?' });
+    const y = (doc && doc.yield) || {};
+    if (m[1] === 'y:portion_g') out.push(Number(y.portion_g) > 0 ? { t: 'q', v: nf(y.portion_g, 1, loc), id: m[1], fixed: true } : { t: 'txt', v: '?' });   // a portion stays a portion when the lot scales
+    else if (m[1] === 'y:portions') out.push(Number(y.portions) > 0 ? { t: 'q', v: nf(Number(y.portions) * factor, 1, loc), id: m[1] } : { t: 'txt', v: '?' });
+    else { const ln = (doc.lines || []).find(l => l.id === m[1]);
+      out.push(ln ? { t: 'q', v: stepNumber(ln, factor, loc), id: ln.id } : { t: 'txt', v: '?' }); }
     last = re.lastIndex;
   }
   if (last < s.length) out.push({ t: 'txt', v: s.slice(last) });
@@ -161,7 +198,7 @@ export function stepParts(text, doc, factor, loc) {
  *                         if the dish itself has stock, the dish prep is consumed and only its 'al_piatto' lines are added. */
 export function explode(rootId, factor, purpose, ctx) {
   const out = [];
-  const root = ctx.doc(rootId);
+  const root = D(ctx, rootId);
   if (!root) return [{ kind: 'error', ref: rootId, status: 'ricetta_mancante' }];
   if (purpose === 'vendita' && root.has_stock) {
     out.push({ kind: 'prep', ref: rootId, fraction: factor, g: Number(root.yield && root.yield.g) > 0 ? factor * root.yield.g : null, portions: Number(root.yield && root.yield.portions) > 0 ? factor * root.yield.portions : null, path: [rootId], status: 'ok' });
@@ -182,7 +219,7 @@ function walk(doc, id, factor, path, keep, out, purpose, ctx) {
       continue;
     }
     if (path.includes(ln.ref)) { out.push({ kind: 'error', ref: ln.ref, line: ln.id, from: id, status: 'ciclo', path: p }); continue; }
-    const sub = ctx.doc(ln.ref);
+    const sub = D(ctx, ln.ref);
     if (!sub) { out.push({ kind: 'error', ref: ln.ref, line: ln.id, from: id, status: 'sotto_ricetta_mancante', path: p }); continue; }
     if (!(sub.lines || []).length) { out.push({ kind: 'error', ref: ln.ref, line: ln.id, from: id, status: 'sotto_ricetta_vuota', path: p }); continue; }
     const fr = subFraction(Number(ln.qty) * factor, ln.unit, sub);
@@ -220,7 +257,7 @@ export function leafCost(leaf, facts) {
 
 /** Food cost of one lot × factor. Per top line and total. Missing parts are counted, never treated as zero. */
 export function cost(rootId, factor, ctx) {
-  const doc = ctx.doc(rootId), leaves = explode(rootId, factor, 'costo', ctx);
+  const doc = D(ctx, rootId), leaves = explode(rootId, factor, 'costo', ctx);
   const byLine = {}; let food = 0, pack = 0, missing = 0, estimated = 0, packMissing = 0;
   for (const lf of leaves) {
     const top = lf.path[1];
@@ -241,6 +278,7 @@ export function cost(rootId, factor, ctx) {
  * The lot/portion rule lives only here: n portions = n / yield.portions lots. No caller divides on its own. */
 /** Lots for a number of portions. null + status when the recipe has no portions. */
 export function lotsFromPortions(doc, portions) {
+  doc = resolveDoc(doc);
   const p = Number(doc && doc.yield && doc.yield.portions), n = Number(portions);
   if (!(p > 0)) return { lots: null, status: 'porzioni_mancanti' };
   if (!isFinite(n)) return { lots: null, status: 'quantita_mancante' };
@@ -253,7 +291,7 @@ const mvRow = (x, sign) => ({ target: x.kind === 'prep' ? 'prep' : x.kind === 'i
  *  Consumption is negative; a production also adds the made lot to the recipe's own stock (positive).
  *  The rows are computed once and stored with the version: a later recipe change never alters them. */
 export function movements(ev, ctx) {
-  const doc = ctx.doc(ev.recipe);
+  const doc = D(ctx, ev.recipe);
   if (!doc) return { event: ev, lots: null, rows: [], errors: ['ricetta_mancante'] };
   let lots = ev.lots != null ? Number(ev.lots) : null, errors = [];
   if (lots == null) { const r = lotsFromPortions(doc, ev.portions); lots = r.lots; if (r.status !== 'ok') errors.push(r.status) }
@@ -291,8 +329,8 @@ export function sumMovements(list) {
  *  whether or not anyone registered the production. Same walk as the food cost (rule 4). */
 export function theoretical(rootId, portions, ctx, lotsIn, onlyPrep) {
   let lots = lotsIn;
-  if (lots == null) { const r = lotsFromPortions(ctx.doc(rootId), portions); if (r.lots == null) return { rows: [], errors: [r.status] }; lots = r.lots }
-  const rows = [], errors = [], root = ctx.doc(rootId), leaves = [];
+  if (lots == null) { const r = lotsFromPortions(D(ctx, rootId), portions); if (r.lots == null) return { rows: [], errors: [r.status] }; lots = r.lots }
+  const rows = [], errors = [], root = D(ctx, rootId), leaves = [];
   // onlyPrep: what MAKING the prep uses (its 'al_piatto' lines are added at service and counted at the sale, never twice)
   if (!root) leaves.push({ kind: 'error', ref: rootId, status: 'ricetta_mancante' });
   else walk(root, rootId, lots, [rootId], onlyPrep ? (l => l.role !== 'al_piatto') : (() => true), leaves, 'costo', ctx);
@@ -301,6 +339,7 @@ export function theoretical(rootId, portions, ctx, lotsIn, onlyPrep) {
 }
 /** A quantity of a prep ({portions} or {g}) as lots of its recipe; null when the recipe cannot say. */
 export function prepLots(doc, q) {
+  doc = resolveDoc(doc);
   if (!doc || !q) return null;
   if (q.lots != null) return Number(q.lots);
   if (q.portions != null && Number(doc.yield && doc.yield.portions) > 0) return Number(q.portions) / doc.yield.portions;
@@ -314,8 +353,8 @@ export function prepLots(doc, q) {
 export function reconcile({ sales = [], productions = [], counts = {} }, ctx) {
   const saleMv = sales.map(s => movements({ kind: 'vendita', recipe: s.recipe, portions: s.portions, version: s.version }, ctx));
   const prodMv = productions.map(p => movements({ kind: 'produzione', recipe: p.recipe, lots: p.lots, version: p.version }, ctx));
-  const preps = {}, y = id => (ctx.doc(id) || {}).yield || {};
-  const P = id => preps[id] || (preps[id] = { prep: id, sold_lots: 0, produced_lots: 0, start_lots: counts[id] ? prepLots(ctx.doc(id), counts[id]) : null });
+  const preps = {}, y = id => (D(ctx, id) || {}).yield || {};
+  const P = id => preps[id] || (preps[id] = { prep: id, sold_lots: 0, produced_lots: 0, start_lots: counts[id] ? prepLots(D(ctx, id), counts[id]) : null });
   for (const m of saleMv) for (const r of m.rows) if (r.target === 'prep' && r.lots != null) P(r.ref).sold_lots += -r.lots;
   for (const m of prodMv) for (const r of m.rows) if (r.target === 'prep' && r.role === 'prodotto') P(r.ref).produced_lots += r.lots;
   const uncoveredMv = [];
@@ -344,7 +383,7 @@ export function reconcile({ sales = [], productions = [], counts = {} }, ctx) {
 }
 /** Structure check against CD-066 for one recipe (no judgement on culinary values): copies, mixed prep/POS item, missing links. */
 export function modelCheck(rootId, ctx, opt = {}) {
-  const doc = ctx.doc(rootId), out = [];
+  const doc = D(ctx, rootId), out = [];
   if (!doc) return [{ code: 'ricetta_mancante' }];
   const direct = new Set((doc.lines || []).filter(l => l.kind === 'ingredient').map(l => l.ref));
   for (const l of doc.lines || []) {
@@ -361,13 +400,13 @@ export function modelCheck(rootId, ctx, opt = {}) {
  *  [{ code, ref, line, sub }] — code: prezzo_mancante · conversione (status) · imballo_senza_prezzo · pezzo_come_porzione · procedimento_mancante · resa_mancante.
  *  Nothing is guessed: every item comes from the same walk as the food cost. */
 export function issues(rootId, ctx) {
-  const doc = ctx.doc(rootId), out = [];
+  const doc = D(ctx, rootId), out = [];
   if (!doc) return [{ code: 'ricetta_mancante', ref: rootId }];
   const y = doc.yield || {};
   if (!(Number(y.g) > 0) && !(Number(y.portions) > 0) && !(Number(y.count) > 0)) out.push({ code: 'resa_mancante' });
   if (!(doc.steps || []).some(st => String(st.it || st.en || st.es || '').trim())) out.push({ code: 'procedimento_mancante' });
   const seen = new Set(), add = o => { const k = o.code + ':' + (o.ref || '') + ':' + (o.status || ''); if (!seen.has(k)) { seen.add(k); out.push(o) } };
-  const subs = (d, path) => { for (const l of d.lines || []) { if (l.kind !== 'recipe' || path.includes(l.ref)) continue; const sd = ctx.doc(l.ref); if (!sd) continue
+  const subs = (d, path) => { for (const l of d.lines || []) { if (l.kind !== 'recipe' || path.includes(l.ref)) continue; const sd = D(ctx, l.ref); if (!sd) continue
       const fr = subFraction(l.qty, l.unit, sd); if (fr.status === 'pezzo_come_porzione') add({ code: 'pezzo_come_porzione', ref: l.ref, line: path.length === 1 ? l.id : path[1], sub: d.id !== rootId ? d.id : null })
       subs(sd, path.concat(l.ref)) } };
   subs(doc, [rootId]);
@@ -386,7 +425,7 @@ export function issues(rootId, ctx) {
 
 /** What a change does BEFORE it is published: 1 portion sold, 1 lot produced, food cost. Only items that change are listed. */
 export function consequences(id, ctxOld, ctxNew) {
-  const one = (ctx, kind) => { const d = ctx.doc(id); if (!d) return null; return kind === 'vendita' ? movements({ kind, recipe: id, portions: 1 }, ctx) : (d.has_stock ? movements({ kind, recipe: id, lots: 1 }, ctx) : null) };
+  const one = (ctx, kind) => { const d = D(ctx, id); if (!d) return null; return kind === 'vendita' ? movements({ kind, recipe: id, portions: 1 }, ctx) : (d.has_stock ? movements({ kind, recipe: id, lots: 1 }, ctx) : null) };
   const diff = (a, b) => {
     const A = a ? sumMovements([a]) : {}, B = b ? sumMovements([b]) : {}, out = [];
     for (const k of new Set([...Object.keys(A), ...Object.keys(B)])) {
@@ -398,7 +437,7 @@ export function consequences(id, ctxOld, ctxNew) {
   };
   const so = one(ctxOld, 'vendita'), sn = one(ctxNew, 'vendita'), po = one(ctxOld, 'produzione'), pn = one(ctxNew, 'produzione');
   const co = cost(id, 1, ctxOld), cn = cost(id, 1, ctxNew);
-  const tOf = ctx => { const d = ctx.doc(id); if (!d) return null; const t = Number(d.yield && d.yield.portions) > 0 ? theoretical(id, 1, ctx) : theoretical(id, null, ctx, 1); return { rows: t.rows } };
+  const tOf = ctx => { const d = D(ctx, id); if (!d) return null; const t = Number(d.yield && d.yield.portions) > 0 ? theoretical(id, 1, ctx) : theoretical(id, null, ctx, 1); return { rows: t.rows } };
   return { theoretical: diff(tOf(ctxOld), tOf(ctxNew)), sale: diff(so, sn), sale_errors: sn ? sn.errors : ['ricetta_mancante'], production: diff(po, pn), production_errors: pn ? pn.errors : [],
     cost: { lot_before: co.food, lot_after: cn.food, portion_before: co.per_portion, portion_after: cn.per_portion, missing_after: cn.missing } };
 }
@@ -418,13 +457,70 @@ export function validate(doc, ctx, strict) {
     if (!['produzione', 'al_piatto', 'imballo'].includes(l.role)) err.push('riga_ruolo:' + l.id);
     if (l.qty != null && !(Number(l.qty) >= 0)) err.push('riga_quantita:' + l.id);
     if (strict && dimOf(l.unit) == null) err.push('riga_unita:' + l.id);
+    if (l.per != null && l.per !== 'portion') err.push('riga_per:' + l.id);
+    if (l.per === 'portion' && !(Number(y.portions) > 0)) err.push('riga_per_senza_porzioni:' + l.id);
   }
+  // R1.17: one number, one place — a lot weight typed next to a portion weight that says something else is refused
+  if (Number(y.portion_g) > 0 && Number(y.g) > 0 && Number(y.portions) > 0 && Math.abs(y.portion_g * y.portions - y.g) > 0.02 * y.g) err.push('resa_doppia');
   for (const st of doc.steps || []) for (const k of ['it', 'en', 'es']) {
-    const re = /\{\{([A-Za-z0-9_-]+)\}\}/g; let m;
-    while ((m = re.exec(String(st[k] || '')))) if (!ids.has(m[1])) err.push('passo_collegamento:' + m[1]);
+    const re = /\{\{([A-Za-z0-9_:-]+)\}\}/g; let m;
+    while ((m = re.exec(String(st[k] || '')))) if (!ids.has(m[1]) && !['y:portion_g', 'y:portions'].includes(m[1])) err.push('passo_collegamento:' + m[1]);
   }
   if (ctx && doc.id) { const cyc = explode(doc.id, 1, 'costo', ctx).filter(x => x.status === 'ciclo'); if (cyc.length) err.push('ciclo'); }
   return [...new Set(err)];
 }
 
-export const MRE_ENGINE_VERSION = 'mre-1.1';
+/* ---------------- R1.17: steps in three languages ---------------- */
+export const LANGS = ['en', 'it', 'es'];
+const STOP = {
+  it: ['il', 'lo', 'la', 'gli', 'le', 'di', 'del', 'della', 'dei', 'delle', 'nel', 'nella', 'con', 'per', 'senza', 'che', 'e', 'un', 'una', 'si', 'sono', 'ogni', 'gli', 'mettere', 'scaldare', 'cuocere', 'lasciare', 'aggiungere', 'tutti', 'insieme', 'sul', 'sulla', 'poi', 'fino', 'minuti', 'affinché', 'eventualmente', 'piatto', 'servire', 'subito', 'ben', 'caldo', 'caldi', 'freddo', 'tagliare', 'mescolare', 'versare', 'formare', 'mettere', 'spinaci', 'burro', 'sale', 'pepe', 'contenitore', 'leggermente', 'raffreddare'],
+  en: ['the', 'of', 'and', 'with', 'for', 'without', 'in', 'on', 'each', 'into', 'add', 'cook', 'let', 'put', 'until', 'minutes', 'all', 'together', 'then', 'a', 'an', 'to', 'is', 'are', 'heat', 'place', 'from', 'it', 'plate', 'serve', 'hot', 'cold', 'cut', 'mix', 'pour', 'form', 'spinach', 'butter', 'salt', 'container', 'slightly', 'cool'],
+  es: ['el', 'los', 'las', 'de', 'del', 'con', 'para', 'sin', 'que', 'y', 'un', 'una', 'cada', 'poner', 'cocinar', 'dejar', 'añadir', 'agregar', 'todos', 'juntos', 'luego', 'hasta', 'minutos', 'en', 'la', 'se', 'calentar', 'plato', 'espinacas', 'servir', 'caliente', 'frío', 'cortar', 'mezclar', 'verter', 'formar', 'mantequilla', 'recipiente', 'ligeramente', 'enfriar'],
+};
+/** Language the text is ACTUALLY written in (never the language of the screen). { lang, sure } — sure=false when the words do not decide. */
+export function langOf(text) {
+  const w = String(text || '').toLowerCase().replace(/\{\{[^}]*\}\}/g, ' ').match(/[a-zàèéìòóùñü']+/g) || [];
+  const sc = { it: 0, en: 0, es: 0 };
+  for (const x of w) for (const k of LANGS) if (STOP[k].includes(x)) sc[k]++;
+  if (/[ñ¿¡]/.test(text)) sc.es += 2;
+  if (/\b\w+zione\b|\b\w+mente\b|à\b|è\b|ù\b/.test(text)) sc.it += 1;
+  const o = LANGS.slice().sort((a, b) => sc[b] - sc[a]);
+  return { lang: o[0], sure: sc[o[0]] >= 2 && sc[o[0]] >= 2 * sc[o[1]], score: sc };
+}
+/** Before translating: structured numbers become markers the translator cannot change; after: put them back and check. */
+export function protectTokens(text) {
+  const map = []; const t = String(text || '').replace(/\{\{([A-Za-z0-9_:-]+)\}\}/g, (m) => { map.push(m); return `[[${map.length}]]`; });
+  return { text: t, map };
+}
+const digits = t => (String(t || '').replace(/\[\[\d+\]\]|\{\{[^}]*\}\}/g, ' ').match(/\d+(?:[.,]\d+)?/g) || []).map(x => x.replace(',', '.')).sort().join('|');
+/** { text, ok, why } — ok=false when a linked number got lost/duplicated or a written number (temperature, minutes) changed. */
+export function restoreTokens(translated, map, source) {
+  let t = String(translated || ''), ok = true, why = null;
+  map.forEach((m, i) => { const k = `[[${i + 1}]]`, n = t.split(k).length - 1; if (n !== 1) { ok = false; why = 'numero_collegato_perso'; } t = t.split(k).join(m); });
+  if (/\[\[\d+\]\]/.test(t)) { ok = false; why = 'numero_collegato_perso'; }
+  if (source != null && digits(source) !== digits(t)) { ok = false; why = why || 'numeri_diversi'; }
+  // the service gave back the original (out of quota, error): it is NOT a translation — never stored as one
+  if (source != null && String(translated || '').replace(/\s+/g, ' ').trim().toLowerCase() === String(source).replace(/\s+/g, ' ').trim().toLowerCase()) return { text: null, ok: false, why: 'non_tradotto' };
+  return { text: t.trim(), ok, why };
+}
+/** The Chef writes "80 g": when it is EXACTLY the standard portion weight (or one line's quantity, only one), it becomes the structured value. */
+export function linkNumbers(text, doc) {
+  doc = resolveDoc(doc) || {};
+  const y = doc.yield || {}, lines = doc.lines || [];
+  return String(text || '').replace(/(\d+(?:[.,]\d+)?)(\s?)(kg|g|gr|grammi|grams|ml|l|oz|lb|lbs|pz|pcs)\b/gi, (m, num, sp, u) => {
+    const q = Number(num.replace(',', '.')), ku = normUnit(u);
+    if (ku === 'g' && Number(y.portion_g) > 0 && q === Number(y.portion_g)) return `{{y:portion_g}}${sp}${u}`;
+    const c = lines.filter(l => Number(l.per === 'portion' ? l.per_qty : l.qty) === q && normUnit(l.unit) === ku);
+    return c.length === 1 ? `{{${c[0].id}}}${sp}${u}` : m;
+  });
+}
+/** Text of a step for a language: the language if present and current, otherwise the original (marked). */
+export function stepIn(st, lang) {
+  if (!st) return { text: '', lang: null, kind: 'none' };
+  const tr = st.tr || {}, src = st.src || null;
+  if (String(st[lang] || '').trim() && tr[lang] !== 'stale') return { text: st[lang], lang, kind: src === lang ? 'original' : (tr[lang] || (src ? 'auto' : 'imported')) };
+  const o = src && String(st[src] || '').trim() ? src : LANGS.concat(['it']).find(k => String(st[k] || '').trim());
+  return o ? { text: st[o], lang: o, kind: 'fallback' } : { text: '', lang: null, kind: 'none' };
+}
+
+export const MRE_ENGINE_VERSION = 'mre-1.2';

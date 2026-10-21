@@ -243,10 +243,19 @@ function cleanDoc(id: string, d: any) {
   const lines = (Array.isArray(d.lines) ? d.lines : []).slice(0, 200).map((l: any) => ({
     id: str(l.id, 40), kind: l.kind === 'recipe' ? 'recipe' : 'ingredient', ref: isUuid(l.ref) ? l.ref : (() => { throw bad('bad_ref') })(),
     qty: num(l.qty), unit: str(l.unit, 20), role: ['produzione', 'al_piatto', 'imballo'].includes(l.role) ? l.role : 'produzione',
-    note: str(l.note, 300), group: str(l.group, 60), src: l.src && typeof l.src === 'object' ? l.src : null }))
-  const steps = (Array.isArray(d.steps) ? d.steps : []).slice(0, 60).map((s: any) => ({ it: str(s.it, 4000) || '', en: str(s.en, 4000) || '', es: str(s.es, 4000) || '', title_it: str(s.title_it, 200), title_en: str(s.title_en, 200), title_es: str(s.title_es, 200) }))
+    note: str(l.note, 300), group: str(l.group, 60), src: l.src && typeof l.src === 'object' ? l.src : null,
+    ...(l.per === 'portion' ? { per: 'portion' } : {}) }))      // R1.17: quantity per portion (1 container per cup)
+  const LG = ['it', 'en', 'es'], TRS = ['auto', 'chef', 'stale', 'check', 'imported']
+  const steps = (Array.isArray(d.steps) ? d.steps : []).slice(0, 60).map((s: any) => {
+    const o: any = { it: str(s.it, 4000) || '', en: str(s.en, 4000) || '', es: str(s.es, 4000) || '', title_it: str(s.title_it, 200), title_en: str(s.title_en, 200), title_es: str(s.title_es, 200) }
+    if (LG.includes(s.src)) o.src = s.src                                        // R1.17: the language the Chef actually wrote in
+    if (s.tr && typeof s.tr === 'object') { o.tr = {}; for (const k of LG) if (TRS.includes(s.tr[k])) o.tr[k] = s.tr[k] }
+    if (s.h != null) o.h = str(s.h, 40)
+    return o })
   const y = d.yield || {}
-  return { schema: 1, id, title: str(d.title, 200) || '', category: str(d.category, 100), yield: { g: num(y.g), portions: num(y.portions), label: str(y.label, 120), count: num(y.count), count_unit: str(y.count_unit, 20) },
+  const hist = (Array.isArray(y.label_hist) ? y.label_hist : []).slice(0, 10).map((x: any) => str(x, 200)).filter(Boolean)
+  return { schema: 1, id, title: str(d.title, 200) || '', category: str(d.category, 100), yield: { g: num(y.g), portions: num(y.portions), label: str(y.label, 120), count: num(y.count), count_unit: str(y.count_unit, 20),
+      ...(num(y.portion_g) ? { portion_g: num(y.portion_g) } : {}), ...(y.portion_unit ? { portion_unit: str(y.portion_unit, 20) } : {}), ...(hist.length ? { label_hist: hist } : {}) },
     has_stock: !!d.has_stock, stock: Array.isArray(d.stock) ? d.stock.slice(0, 10) : [], lines, steps, notes: str(d.notes, 4000) }
 }
 
@@ -461,4 +470,40 @@ export async function mreMatchDecide(u: U, b: any, svc: any) {
     await audit(tx, u, 'match_' + decision, decision === 'collega' ? b.recipe_id : null, { ingredient: id, key, target: c.target ? c.target.id : null })
   })
   return { ok: true, decision, draft_version: saved ? saved.draft_version : null, target: c.target }
+}
+
+/* ---------------- R1.17 (Chef 21/10 "UNA RICETTA, UN NUMERO, TRE LINGUE"): translations of the steps ----------------
+   The Chef writes a step once, in any language. The app asks for the missing languages in the background; the server translates
+   through Brigade's existing translation service (ai-translate: Google Translate, model fallback). Structured numbers ({{line}},
+   {{y:portion_g}}) are protected before translating and checked after: a translation that loses or changes a number is returned
+   marked 'check', never silently. Nothing is saved here: the app stores the result in the draft (same background save). */
+const TR_URL = () => Deno.env.get('MRE_TRANSLATE_URL') ?? ((Deno.env.get('SUPABASE_URL') ?? '') + '/functions/v1/ai-translate')
+const TR_BEARER = () => Deno.env.get('MRE_TRANSLATE_BEARER') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+async function trCall(body: any) {
+  if (Deno.env.get('MRE_TRANSLATE_STUB') === '1') {             // bench only: a deterministic fake translator ("[en] text"), never used in production
+    if (body.targetLang === '__detect__') return { detected: E.langOf(body.text).lang }
+    return { translated: `[${body.targetLang}] ${body.text}` }
+  }
+  const r = await fetch(TR_URL(), { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TR_BEARER() }, body: JSON.stringify(body) })
+  if (!r.ok) throw new MreError(502, 'traduzione_non_disponibile')
+  return await r.json()
+}
+export async function mreTranslate(u: U, b: any) {
+  chef(u)
+  const items = (Array.isArray(b?.items) ? b.items : []).slice(0, 20)
+  const out = []
+  for (const it of items) {
+    const text = String(it?.text || '').slice(0, 4000); if (!text.trim()) continue
+    let from = ['it', 'en', 'es'].includes(it.from) ? it.from : null, sure = !!from
+    if (!from) { const g = E.langOf(text); from = g.lang; sure = g.sure
+      if (!sure) { try { const d = await trCall({ text: text.replace(/\{\{[^}]*\}\}/g, ''), targetLang: '__detect__' }); if (['it', 'en', 'es'].includes(d?.detected)) { from = d.detected; sure = true } } catch (_) { /* keep the local guess */ } } }
+    const res: any = {}
+    for (const to of (Array.isArray(it.to) ? it.to : ['it', 'en', 'es']).filter((x: string) => ['it', 'en', 'es'].includes(x) && x !== from)) {
+      const p = E.protectTokens(text)
+      try { const j = await trCall({ text: p.text, targetLang: to, literal: true }); res[to] = E.restoreTokens(j?.translated, p.map, p.text) }
+      catch (_) { res[to] = { text: null, ok: false, why: 'traduzione_non_disponibile' } }
+    }
+    out.push({ key: String(it.key || '').slice(0, 60), from, sure, out: res })
+  }
+  return { items: out }
 }

@@ -29,6 +29,10 @@ function lineName(d, ln) {
   return (I.lang === 'it' && f.name_it) || (I.lang === 'es' && f.name_es) || f.name || '?';
 }
 const stepText = (s) => (s && (s[I.lang] || s.it || s.en || s.es)) || '';
+/* R1.17: the step in the language of the screen; when that translation is missing or old, the original, marked (never another language silently) */
+const stepView = s => E().stepIn(s, I.lang);
+const LNAME = { it: 'Italiano', en: 'English', es: 'Español' };
+const hashOf = t => { let h = 5381; for (const c of String(t || '')) h = ((h << 5) + h + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
 const stepTitle = (s) => s && (s['title_' + I.lang] || s.title_it || s.title_en || '');
 
 /* ---------- names you can tap: ingredient → its card, sub-recipe → its recipe ---------- */
@@ -42,6 +46,14 @@ function navName(l, name, rid) {
 const Q = (key, n, u, extra, unit) => `<b class="mq" data-mq="${esc(key)}" data-u="${esc(unit != null ? unit : (u || ''))}"><span class="n">${esc(n)}</span>${u ? ' ' + esc(u) : ''}</b>${extra || ''}`;
 const UL = { 'porz.': 'u_portion', nidi: 'u_nest', pz: 'u_pz', case: 'u_case' };
 const uLabel = u => UL[u] ? T(UL[u]) : u;
+/* R1.17: "2 cups" of the Spinach Cup prep (its portion is called cup), "1 portion" / "2 portions" — never "2 portion" */
+function lineUnit(l, s, d) {
+  const k = E().normUnit(l.unit), one = Math.abs(Number(String(s.n).replace(',', '.')) - 1) < 1e-9;
+  const sub = l.kind === 'recipe' && d ? ((PREVIEW && d.draft_docs && d.draft_docs[l.ref]) || d.docs[l.ref]) : null, pu = sub && sub.yield && sub.yield.portion_unit;
+  if (sub && (k === 'portion' || (pu && k === E().normUnit(pu)))) return T('pu_' + (pu || 'portion') + (one ? '1' : ''));
+  if (k === 'portion') return T('pu_portion' + (one ? '1' : ''));
+  return uLabel(s.u);
+}
 const unitOf = (l, s) => E().dimOf(l.unit) === 'c' ? E().normUnit(l.unit) : s.u;
 
 /* ============ RENDER ============ */
@@ -49,13 +61,13 @@ const unitOf = (l, s) => E().dimOf(l.unit) === 'c' ? E().normUnit(l.unit) : s.u;
    itself, Edit → Preview → Save draft. Technical notes (source, lock, lab) only under "Technical info". Protections unchanged. */
 function mode(d, p) { return H.isChef() && p.edit && WORK[p.id] ? (p.pv ? 'preview' : 'edit') : 'view'; }
 function showsDraft(d, p) { return d.source === 'lab' || (H.isChef() && !!d.draft && p.view !== 'live'); }
-function shownDoc(d, p) { const m = mode(d, p); if (m !== 'view') return WORK[p.id]; return showsDraft(d, p) ? (d.draft || d.doc) : d.doc; }
+function shownDoc(d, p) { const m = mode(d, p); if (m !== 'view') return WORK[p.id]; return E().resolveDoc(showsDraft(d, p) ? (d.draft || d.doc) : d.doc); }   // R1.17: reading shows derived values (1 per cup → 15)
 function render(p) {
   const d = data(p.id);
   if (!d) return null;                                   // app shows the loading state
   if (!E()) return `<div class="mr"><p class="mr-muted">${T('loading_engine')}</p></div>`;
   // opened with "Edit" from any recipe card (B-25): start the editor on the open draft, or on the recipe in use
-  if (p.startEdit && H.isChef()) { WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.adv = false; p.panel = null; p.saved = !!d.draft; delete p.startEdit; }
+  if (p.startEdit && H.isChef()) { startWork(d, p); queueTr(p.id, 400); p.edit = true; p.pv = false; p.adv = false; p.panel = null; p.saved = !!d.draft; delete p.startEdit; }
   const chef = H.isChef(), m = mode(d, p), edit = m === 'edit', pv = m === 'preview';
   const doc = shownDoc(d, p), draftView = m === 'view' && showsDraft(d, p) && !!d.draft;
   const f = m !== 'view' ? 1 : (p.f > 0 ? p.f : 1);
@@ -77,26 +89,35 @@ function render(p) {
   if (chef && draftView) { const dv = (d.versions || []).find(v => v.state === 'bozza'); h += `<div class="mr-dstate">${T('draft_state', { v: d.draft._version, t: dv && dv.at ? dt(dv.at) : '' })}</div>`; }
   h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(I.dn(doc.title))}</h1>`;
   const parts = [];
-  if (edit) {      // R1.14 (Chef 21/10): a prep counted in pieces has its yield in portions; the weight is optional, never required
-    parts.push(`${T('yield')} ${Q('y:p', Number(y.portions) > 0 ? nf(y.portions, 1) : '—', '')} ${Number(y.portions) === 1 ? T('portion') : T('portions')}`);
-    parts.push(`<span class="mr-muted">${T('weight_opt')}</span> ${Q('y:g', Number(y.g) > 0 ? nf(y.g, 0) : '—', 'g')}`);
+  const pu = k => T('pu_' + (y.portion_unit || 'portion') + (k ? '1' : ''));      // what one portion is called: portion, cup, piece
+  if (edit) {      // R1.17 (Chef 21/10 "UN NUMERO"): expected yield + standard portion weight; the lot weight only when it is itself the standard
+    parts.push(`<span class="mr-ylab">${T('y_expected')}</span> ${Q('y:p', Number(y.portions) > 0 ? nf(y.portions, 1) : '—', '')} <select data-ms="pu" class="mr-sel">${['portion', 'cup', 'pz'].map(u => `<option value="${u}" ${(y.portion_unit || 'portion') === u ? 'selected' : ''}>${T('pu_' + u)}</option>`).join('')}</select>`);
+    parts.push(`<span class="mr-ylab">${T('y_portion_w')}</span> ${Q('y:pg', Number(y.portion_g) > 0 ? nf(y.portion_g, 1) : '—', 'g')} <span class="mr-muted">${T('y_cooked')}</span>`);
+    if (!(Number(y.portion_g) > 0)) parts.push(`<span class="mr-ylab">${T('y_lot_w')}</span> ${Q('y:g', Number(y.g) > 0 ? nf(y.g, 0) : '—', 'g')}`);
   } else {
-    if (Number(y.g) > 0) { const s = E().showMass(y.g * f, pref, loc()); parts.push(`${T('yield')} ${Q('y:g', s.n, s.u)}`); }
-    if (Number(y.portions) > 0) parts.push(`${Q('y:p', nf(y.portions * f, 1), '')} ${Math.abs(y.portions * f - 1) < 1e-9 ? T('portion') : T('portions')}`);
+    if (Number(y.portion_g) > 0 && Number(y.portions) > 0) parts.push(`${Q('y:p', nf(y.portions * f, 1), '')} ${Math.abs(y.portions * f - 1) < 1e-9 ? pu(1) : pu()} · <b>${nf(y.portion_g, 1)} g</b> ${T('y_each_cooked')}`);
+    else {
+      if (Number(y.g) > 0) { const s = E().showMass(y.g * f, pref, loc()); parts.push(`${T('yield')} ${Q('y:g', s.n, s.u)}`); }
+      if (Number(y.portions) > 0) parts.push(`${Q('y:p', nf(y.portions * f, 1), '')} ${Math.abs(y.portions * f - 1) < 1e-9 ? (y.portion_unit ? pu(1) : T('portion')) : (y.portion_unit ? pu() : T('portions'))}`);
+    }
   }
   if (m === 'view' && !(Number(y.portions) === 1 && !(Number(y.g) > 0))) parts.push(`${Q('y:l', nf(f, 2), '')} ${f === 1 ? T('batch') : T('batches')}`);   // a single dish has no "batch"
-  h += `<div class="mr-yield">${parts.join(' · ')}</div>`;
+  h += `<div class="mr-yield${edit ? ' mr-yedit' : ''}">${parts.join(edit ? '<br>' : ' · ')}</div>`;
+  if (edit) { const r = E().resolveDoc(doc), ry = r.yield || {}, packs = (r.lines || []).filter(l => l.per === 'portion');   // derived, never typed: lot weight and containers
+    const bits = []; if (ry.g_derived) bits.push(T('y_lot_derived', { w: nf(ry.g / 1000, 2) })); packs.forEach(l => bits.push(`${nf(l.qty, 1)} × ${esc(lineName(d, l))}`));
+    if (bits.length) h += `<div class="mr-meta mr-derived">${T('y_derived')}: ${bits.join(' · ')}</div>`;
+    h += `<div class="mr-meta mr-muted">${T('y_real_note')}</div>`; }
   if (ui(p.id).err && /^y:/.test(ui(p.id).err.key)) h += `<div class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</div>`;
-  if (edit) h += `<div class="mr-meta">${T('yield_label')}: <span contenteditable="true" data-mt="label" data-mred="1" class="mr-txt">${esc(y.label || '')}</span>${p.adv ? ` · ${T('stock')}: <select data-ms="has_stock" class="mr-sel"><option value="1" ${doc.has_stock ? 'selected' : ''}>${T('yes')}</option><option value="0" ${!doc.has_stock ? 'selected' : ''}>${T('no')}</option></select>` : ''}</div>`;
+  if (edit && p.adv) h += `<div class="mr-meta">${T('stock')}: <select data-ms="has_stock" class="mr-sel"><option value="1" ${doc.has_stock ? 'selected' : ''}>${T('yes')}</option><option value="0" ${!doc.has_stock ? 'selected' : ''}>${T('no')}</option></select></div>`;
   if (m === 'view' && f !== 1) {
     const rounded = (doc.lines || []).filter(l => E().dimOf(l.unit) === 'c').map(l => ({ l, s: E().showLine(l, f, ctx, pref, loc()) })).filter(x => x.s.theo);
     const fromParent = p.ref && p.ref.startsWith(T('from_parent', { t: '' }).trim());   // opened from a dish: "for Butter Spinach"
     h += `<div class="mr-scaled">${fromParent ? esc(p.ref[0].toUpperCase() + p.ref.slice(1)) : T('scaled_from', { ref: esc(p.ref || '') })}${rounded.map(x => ' · ' + T('rounded', { name: esc(lineName(d, x.l).toLowerCase()), v: x.s.theo })).join('')} · <button class="mr-link acc" data-m="reset">${T('reset')}</button></div>`;
   }
   if (chef && m === 'view') { const c = !PREVIEW && d.cost ? d.cost : E().cost(p.id, 1, ctx); const pp = c.per_portion;
-    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + T('portion')}</b> <span class="${c.complete ? 'mr-okc' : 'mr-bad'}">· ${c.complete ? T('fc_complete') : T('fc_partial')}</span>${c.pack ? ` <span class="mr-muted">· ${T('pack_plus', { v: usd(c.portions ? c.pack / c.portions : c.pack) })}</span>` : ''}</div>`;
+    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + (y.portion_unit ? pu(1) : T('portion'))}</b> <span class="${c.complete ? 'mr-okc' : 'mr-bad'}">· ${c.complete ? T('fc_complete') : T('fc_partial')}</span>${c.pack ? ` <span class="mr-muted">· ${T('pack_plus', { v: usd(c.portions ? c.pack / c.portions : c.pack) })}</span>` : ''}</div>`;
     const rv = d.recipe && d.recipe.review;
-    if (rv) h += `<div class="mr-ok">✓ ${T('verified_by', { by: esc(rv.by || ''), at: esc(dt(rv.at)) })}</div>`;
+    if (rv) h += `<div class="mr-ok">✓ ${T('verified_by', { by: esc(rv.by || ''), at: esc(dt(rv.at)) })} <span class="mr-muted">· ${T('rv_not_pub')}</span></div>`;
     h += issuesHtml(d, p.id, ctx, p.iss); }
   h += `</div>`;
   if (edit) h += approvedReminder(d);
@@ -107,7 +128,7 @@ function render(p) {
   for (const l of doc.lines || []) {
     const s = E().showLine(l, f, ctx, pref, loc()), name = lineName(d, l);
     const nameHtml = navName(l, name, p.id);
-    const qty = s.status === 'da_definire' ? `<span class="mr-muted">${T('to_define')}</span>` : pv ? `<b class="mq-ro">${esc(s.n)}${s.u ? ' ' + esc(uLabel(s.u)) : ''}</b>` : Q('l:' + l.id, s.n, uLabel(s.u), '', unitOf(l, s));
+    const qty = s.status === 'da_definire' ? `<span class="mr-muted">${T('to_define')}</span>` : pv ? `<b class="mq-ro">${esc(s.n)}${s.u ? ' ' + esc(lineUnit(l, s, d)) : ''}</b>` : Q('l:' + l.id, s.n, lineUnit(l, s, d), '', unitOf(l, s));
     const ie = ui(p.id).err && ui(p.id).err.key === 'l:' + l.id ? `<li class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</li>` : '';   // the message stays next to its line, never over the buttons
     if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${l.note ? `<span class="mr-note">${esc(l.note)}</span>` : ''}</span>${qty}</li>${ie}`; continue; }
     const units = ['g', 'kg', 'ml', 'l', 'pz', 'oz', 'lb', 'nests'], ucur = l.unit || '';
@@ -118,6 +139,7 @@ function render(p) {
         ${adv && !doc.has_stock ? `<span class="mr-note mr-adv">${T('role_sale')}</span>` : ''}${adv && doc.has_stock ? `<span class="mr-note mr-adv">${T('role')}: <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select></span>` : ''}${adv ? `
         <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : (l.note ? `<span class="mr-note">${esc(l.note)}</span>` : '')}
 </span>
+      ${l.per === 'portion' || l.role === 'imballo' || adv ? `<span class="mr-note">${T('per_q')} <select data-ms="per:${esc(l.id)}" class="mr-sel"><option value="" ${l.per !== 'portion' ? 'selected' : ''}>${T('per_lot')}</option><option value="portion" ${l.per === 'portion' ? 'selected' : ''}>${T('per_one', { u: T('pu_' + (y.portion_unit || 'portion') + '1') })}</option></select>${l.per === 'portion' && Number(y.portions) > 0 && l.qty != null ? ` = <b>${nf(l.qty * y.portions, 1)}</b> ${T('per_lot_n')}` : ''}</span>` : ''}
       <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option ${u === ucur ? 'selected' : ''}>${esc(u || '—')}</option>`).join('')}</select><button class="mr-x" data-m="del:${esc(l.id)}" aria-label="${esc(T('remove'))}" title="${esc(T('remove'))}">×</button></span></li>`;
   }
   h += `</ul>`;
@@ -126,16 +148,27 @@ function render(p) {
   const steps = doc.steps || [];
   if (!steps.length && !edit) h += `<p class="mr-muted">${chef ? T('no_steps_chef') : T('no_steps')}</p>`;
   h += `<ol class="mr-steps">`;
+  const tokHtml = (parts, ro) => parts.map(x => x.t === 'q' ? (ro || x.fixed || String(x.id).startsWith('y:') ? `<b class="mr-sv">${esc(x.v)}</b>` : `<b class="mq" data-mq="l:${esc(x.id)}" data-u="${esc((doc.lines.find(l => l.id === x.id) || {}).unit || '')}" data-intext="1"><span class="n">${esc(x.v)}</span></b>`) : esc(x.v)).join('');
+  const busyTr = TRB[p.id] || {};
   steps.forEach((s, i) => {
-    const txt = stepText(s), title = stepTitle(s);
-    const parts = E().stepParts(txt, doc, f, loc());
-    if (edit) {
+    const title = stepTitle(s);
+    if (edit) {      // R1.17: the Chef edits the ORIGINAL (in the language he wrote it); translations are shown and corrected apart
+      const src = s.src || I.lang, parts = E().stepParts(s[src] || '', doc, 1, loc()), tr = s.tr || {}, open = (ui(p.id).trOpen || {})[i];
       const inner = parts.map(x => x.t === 'q' ? `<b class="mr-tok" contenteditable="false" data-tok="${esc(x.id)}">${esc(x.v)}</b>` : esc(x.v)).join('');
-      h += `<li><p contenteditable="true" class="mr-txt" data-mt="step:${i}" data-mred="1">${inner}</p><button class="mr-link" data-m="delstep:${i}">${T('remove')}</button></li>`;
+      const chips = E().LANGS.filter(k => k !== src).map(k => `<span class="mr-trc ${busyTr[i] ? 'busy' : tr[k] || (String(s[k] || '').trim() ? 'imported' : 'none')}">${k.toUpperCase()} ${busyTr[i] ? '…' : T('trs_' + (tr[k] || (String(s[k] || '').trim() ? 'imported' : 'none')))}</span>`).join(' ');
+      if (i === 0 && TRE[p.id]) h += `<li class="mr-trerr">${T('tr_unavailable')} <button class="mr-link acc" data-m="trretry">${T('retry')}</button></li>`;
+      h += `<li class="mr-estep"><div class="mr-stephd"><span class="mr-lang">${LNAME[src] || src} · ${T('original')}</span><button class="mr-link" data-m="trs:${i}">${chips}</button></div>
+        <p contenteditable="true" class="mr-txt" data-mt="step:${i}" data-mred="1">${inner}</p>`;
+      if (open) h += `<div class="mr-trs">${E().LANGS.filter(k => k !== src).map(k => `<div class="mr-tr"><span class="mr-lang">${LNAME[k]}</span> <span class="mr-trc ${tr[k] || 'none'}">${T('trs_' + (tr[k] || (String(s[k] || '').trim() ? 'imported' : 'none')))}</span>
+          <p contenteditable="true" class="mr-txt" data-mt="tr:${i}:${k}" data-mred="1">${E().stepParts(s[k] || '', doc, 1, loc()).map(x => x.t === 'q' ? `<b class="mr-tok" contenteditable="false" data-tok="${esc(x.id)}">${esc(x.v)}</b>` : esc(x.v)).join('')}</p>
+          ${tr[k] && tr[k] !== 'chef' && String(s[k] || '').trim() ? `<button class="mr-link acc" data-m="trok:${i}:${k}">${T('tr_verify')}</button>` : ''}</div>`).join('')}</div>`;
+      h += `<button class="mr-link" data-m="delstep:${i}">${T('remove')}</button></li>`;
     } else {
-      const html = parts.map(x => x.t === 'q' ? (pv ? `<b>${esc(x.v)}</b>` : `<b class="mq" data-mq="l:${esc(x.id)}" data-u="${esc((doc.lines.find(l => l.id === x.id) || {}).unit || '')}" data-intext="1"><span class="n">${esc(x.v)}</span></b>`) : esc(x.v)).join('');
+      const v = stepView(s), parts = E().stepParts(v.text, doc, f, loc());
+      const html = tokHtml(parts, pv);
       const loose = f !== 1 && /\d\s?(g|kg|ml|l|oz|lb)\b/i.test(parts.filter(x => x.t === 'txt').map(x => x.v).join(' '));
-      h += `<li><p>${title ? `<b>${esc(title)}.</b> ` : ''}${html}${loose ? ` <span class="mr-muted">${T('loose_numbers')}</span>` : ''}</p></li>`;
+      const mark = v.kind === 'fallback' ? `<span class="mr-trmark">${T('tr_fallback', { l: LNAME[v.lang] || v.lang })}</span>` : v.kind === 'auto' ? `<span class="mr-trmark">${T('tr_auto')}</span>` : v.kind === 'check' ? `<span class="mr-trmark bad">${T('tr_check')}</span>` : '';
+      h += `<li><p>${title ? `<b>${esc(title)}.</b> ` : ''}${html}${loose ? ` <span class="mr-muted">${T('loose_numbers')}</span>` : ''}</p>${mark}</li>`;
     }
   });
   h += `</ol>${edit ? `<button class="mr-link acc" data-m="addstep">${T('add_step')}</button>` : ''}`;
@@ -245,6 +278,13 @@ function panelHtml(p, d, doc, ctx) {
       h += kv(`${esc(lineName(d, l))}<br><span class="mr-muted">${src}</span>`, b.missing ? `${b.cost ? usd(b.cost) + ' + ' : ''}<span class="mr-bad">${T('missing')}</span>` : usd(b.cost || 0));
     }
     if (c.pack) h += kv(T('packaging'), usd(c.pack));
+    const yy = doc.yield || {}, wv = ui(p.id);
+    if (Number(yy.portions) > 0 && c.food != null) {        // R1.17: a lot that gives 14 or 16 is normal — the actual cost uses the actual yield, the recipe stays
+      if (wv.realP === undefined) wv.realP = null;
+      const rp = wv.realP, unit = T('pu_' + (yy.portion_unit || 'portion') + '1');
+      h += kv(T('real_yield_q', { u: T('pu_' + (yy.portion_unit || 'portion')) }), `<b class="mq" data-mq="rp" data-u=""><span class="n">${rp ? nf(rp, 0) : '—'}</span></b>`)
+        + (rp ? kv(T('real_cost', { n: nf(rp, 0), u: unit }), `<b>${usd(c.food / rp)}</b> <span class="mr-muted">(${T('std_cost', { n: nf(yy.portions, 0), v: usd(c.food / yy.portions) })})</span>`) : '');
+    }
     h += `<p class="mr-muted">${T('cost_note')}${Math.abs((local.food || 0) - (c.food || 0)) > 0.001 ? ' ' + T('cost_mismatch') : ''}</p></div>`;
     return h;
   }
@@ -280,8 +320,9 @@ function panelHtml(p, d, doc, ctx) {
   if (p.panel === 'tech' && H.isChef()) {          // the only place for the technical notes (source, lab, lock)
     let h = `<div class="mr-panel">` + kv(T('t_source'), d.source === 'lab' ? T('src_lab') : T('src_official', { t: dt(d.read_at) }))
       + kv(T('t_draft'), d.draft ? T('t_draft_v', { v: d.draft._version, at: dt((d.versions || []).find(v => v.state === 'bozza')?.at) }) : T('t_none'))
+      + ((shownDoc(d, p).yield || {}).label_hist || (shownDoc(d, p).yield || {}).label ? kv(T('t_yield_hist'), esc([].concat((shownDoc(d, p).yield || {}).label_hist || [], (shownDoc(d, p).yield || {}).label || []).join(' · ')) + ` <span class="mr-muted">${T('t_yield_hist_note')}</span>`) : '')
       + kv(T('t_publish'), d.publish_locked ? T('t_locked') : T('t_test')) + kv(T('t_review'), d.recipe && d.recipe.review ? T('verified_by', { by: esc(d.recipe.review.by || ''), at: esc(dt(d.recipe.review.at)) }) : T('t_not_reviewed'));
-    return h + `<p class="mr-muted">${T('locked_note')} ${T('hist_official')}</p></div>`;
+    return h + `<p class="mr-muted"><b>${T('st_legend')}</b></p><p class="mr-muted">${T('locked_note')} ${T('hist_official')}</p></div>`;
   }
   if (p.panel === 'diffs' && H.isChef()) {
     let h = `<div class="mr-panel"><p class="mr-muted">${T('diffs_intro')}</p>`;
@@ -416,6 +457,64 @@ function paint() {
 /* the suggestions must never sit under the sticky bar at the bottom (iPhone): a tap there hit the bar, not the ingredient */
 function showAdd() { const a = document.querySelector('#main .mr-add'), f = document.querySelector('#main .mr-foot'), m = document.getElementById('main'); if (!a || !m) return;
   const lim = f ? f.getBoundingClientRect().top : m.getBoundingClientRect().bottom, over = a.getBoundingClientRect().bottom - lim + 12; if (over > 0) m.scrollTop += over; }
+/* R1.17: the original of a step is kept EXACTLY as written, in the language it is written in (detected, not the screen language).
+   When it changes, the other languages become 'stale' and are translated again in the background. */
+function setOriginal(st, text, doc) {
+  // when the words do not decide (a short line), the language the Chef uses in the other steps of this recipe — never simply the screen's
+  const others = ((doc && doc.steps) || []).filter(x => x !== st && x.src).map(x => x.src), most = others.sort((a, b) => others.filter(v => v === b).length - others.filter(v => v === a).length)[0];
+  const old = st.src || null, g = E().langOf(text), src = g.sure ? g.lang : (old || most || (g.score && g.score[g.lang] > 0 ? g.lang : I.lang));
+  const same = (x, y) => String(x || '').replace(/\s+/g, ' ').trim() === String(y || '').replace(/\s+/g, ' ').trim();
+  if (old === src && same(st[src], text)) return;                    // spaces only: the translations stay as they are
+  if (old && old !== src && st.tr && st.tr[old] !== 'chef') st[old] = '';           // the old slot held the same step in another language: it is re-translated
+  const back = PREV.get(st);
+  if (!back && old) PREV.set(st, { src: old, key: String(st[old] || '').replace(/\s+/g, ' ').trim(), tr: Object.assign({}, st.tr), h: st.h });   // what the translations were made from
+  st[src] = text; st.src = src; st.tr = Object.assign({}, st.tr);
+  const b = PREV.get(st);
+  if (b && b.src === src && b.key === String(text).replace(/\s+/g, ' ').trim()) { st.tr = Object.assign({}, b.tr); st.h = b.h; PREV.delete(st); return; }   // put back as it was: translations valid again
+  E().LANGS.forEach(k => { if (k !== src) st.tr[k] = 'stale'; }); delete st.tr[src]; st.h = null;
+}
+const PREV = new WeakMap();
+/** Steps saved before R1.17 (no src): the language really written is found once, the text is never changed. */
+function normalizeSteps(doc) {
+  for (const st of doc.steps || []) {
+    if (st.src) continue;
+    const filled = E().LANGS.filter(k => String(st[k] || '').trim());
+    if (!filled.length) continue;
+    if (filled.length === 1) { const k0 = filled[0], g = E().langOf(st[k0]); const src = g.sure ? g.lang : k0;
+      if (src !== k0) { st[src] = st[k0]; st[k0] = ''; }              // e.g. Italian written while the app was in English
+      st.src = src; st.tr = {}; E().LANGS.forEach(k => { if (k !== src) st.tr[k] = 'stale'; }); }
+    else { st.src = String(st.it || '').trim() ? 'it' : filled[0]; st.tr = {}; filled.forEach(k => { if (k !== st.src) st.tr[k] = 'imported'; }); }   // Brigade 1 translations: kept, marked
+  }
+}
+/** Start editing: the free yield note is kept as history only (never a number source again). */
+function startWork(d, p) {
+  const w = JSON.parse(JSON.stringify(d.draft || d.doc)), y = w.yield || (w.yield = {});
+  if (String(y.label || '').trim()) { y.label_hist = (y.label_hist || []).concat([y.label]); y.label = null; }
+  normalizeSteps(w); WORK[p.id] = w; return w;
+}
+
+/* ---- translations in the background (never blocks writing or saving) ---- */
+const TRB = {}, TRT = {}, TRE = {};
+function queueTr(id, ms) { clearTimeout(TRT[id]); TRT[id] = setTimeout(() => runTr(id), ms == null ? 1200 : ms); }
+async function runTr(id) {
+  const doc = WORK[id]; if (!doc) return;
+  const items = [];
+  (doc.steps || []).forEach((st, i) => { const src = st.src, txt = src && String(st[src] || '').trim(); if (!txt) return;
+    const to = E().LANGS.filter(k => k !== src && (st.tr || {})[k] === 'stale' || (k !== src && !String(st[k] || '').trim() && (st.tr || {})[k] !== 'chef'));
+    if (to.length) items.push({ key: i + ':' + hashOf(txt), text: txt, from: src, to }); });
+  if (!items.length) return;
+  items.forEach(x => { TRB[id] = Object.assign({}, TRB[id], { [x.key.split(':')[0]]: true }); }); paintTr(id);
+  let r = null; try { r = await API.call("mre_translate", { items }); } catch (e) { r = null; }
+  TRB[id] = {};
+  if (!r || !WORK[id]) { TRE[id] = true; paintTr(id); return; }
+  let changed = false; TRE[id] = false;
+  for (const it of r.items || []) { const [i, h] = it.key.split(':'), st = WORK[id].steps[+i]; if (!st || hashOf(String(st[st.src] || '').trim()) !== h) continue;   // the Chef changed it meanwhile: the next round translates the new text
+    for (const [k, o] of Object.entries(it.out || {})) { if (!o.text) { TRE[id] = true; continue; } /* not translated (service down): stays 'to update', the original is never copied */ st[k] = o.text; st.tr = Object.assign({}, st.tr, { [k]: o.ok ? 'auto' : 'check' }); changed = true; }
+    st.h = h; }
+  const p = entry(); if (changed && p && p.id === id) { touch(p); paint(); } else if (changed) { const s = sv(id); s.seq++; flush(id); } else paintTr(id);
+}
+function paintTr(id) { const p = entry(); if (p && p.id === id && WORK[id]) paint(); }
+
 /* text of a title / label / note / step into the working copy; true when it changed */
 function readText(t) {
   const p = entry(), doc = WORK[p && p.id]; if (!doc || !t.dataset.mt) return false;
@@ -423,7 +522,12 @@ function readText(t) {
   if (k === 'title') doc.title = t.textContent.trim() || doc.title;
   else if (k === 'label') doc.yield.label = t.textContent.trim() || null;
   else if (k === 'note') { const l = doc.lines.find(x => x.id === a); if (l) l.note = t.textContent.trim() || null; }
-  else if (k === 'step') { let s = ''; t.childNodes.forEach(n => { s += n.nodeType === 1 && n.dataset && n.dataset.tok ? `{{${n.dataset.tok}}}` : n.textContent; }); const st = doc.steps[+a]; if (st) st[I.lang] = s.trim(); }
+  else if (k === 'step' || k === 'tr') {
+    let s = ''; t.childNodes.forEach(n => { s += n.nodeType === 1 && n.dataset && n.dataset.tok ? `{{${n.dataset.tok}}}` : n.textContent; }); s = s.trim();
+    const st = doc.steps[+a]; if (!st) return false;
+    if (k === 'tr') { const lg = t.dataset.mt.split(':')[2]; if (st[lg] !== s) { st[lg] = s; st.tr = Object.assign({}, st.tr, { [lg]: 'chef' }); } }   // corrected by the Chef = verified
+    else setOriginal(st, s, doc);
+  }
   return JSON.stringify(doc) !== before;
 }
 
@@ -445,7 +549,7 @@ function onClick(ev) {
   else if (k === 'sub') { const src = shownDoc(d, p), l = src.lines.find(x => x.id === a1); if (!l) return; const sub = (PREVIEW && d.draft_docs && d.draft_docs[l.ref]) || d.docs[l.ref];
       const fr = sub && l.qty != null ? E().subFraction(l.qty * (p.edit ? 1 : (p.f || 1)), l.unit, sub) : { f: null }; H.openRecipe(l.ref, sub ? sub.title : '', fr.f || 1, T('from_parent', { t: src.title })); return; }
   else if (k === 'adv') p.adv = !p.adv;
-  else if (k === 'edit') { if (w.busy) return; SV[p.id] = null; delete SV[p.id]; WORK[p.id] = JSON.parse(JSON.stringify(d.draft || d.doc)); p.edit = true; p.pv = false; p.adv = false; p.panel = null; w.err = null; p.f = 1; p.saved = !!d.draft; w.sure = false; }
+  else if (k === 'edit') { if (w.busy) return; SV[p.id] = null; delete SV[p.id]; startWork(d, p); queueTr(p.id, 400); p.edit = true; p.pv = false; p.adv = false; p.panel = null; w.err = null; p.f = 1; p.saved = !!d.draft; w.sure = false; }
   else if (k === 'pv') { p.pv = a1 === '1'; w.sure = false; H.render(true); document.getElementById('main').scrollTop = 0; return; }
   else if (k === 'view') { p.view = a1; p.f = 1; p.ref = ''; w.prod = null; }
   else if (k === 'savedraft') { if (w.busy) return; w.busy = k; document.querySelectorAll('#main [data-m="savedraft"]').forEach(b => { b.disabled = true; b.textContent = T('saving') });   // the server can take a few seconds: say so
@@ -455,6 +559,10 @@ function onClick(ev) {
       const v = sv(p.id).ver || (d.draft && d.draft._version); delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft';
       flash(p.id, T('draft_saved_toast', { v })); API.get('mre_list', null, 0).catch(() => {}); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
   else if (k === 'retry') { flush(p.id); return; }
+  else if (k === 'trs') { const o = w.trOpen || (w.trOpen = {}); o[a1] = !o[a1]; paint(); return; }
+  else if (k === 'trok') { const st = work().steps[+a1]; if (st) { st.tr = Object.assign({}, st.tr, { [a2]: 'chef' }); touch(p); } paint(); return; }
+  else if (k === 'realp') return;
+  else if (k === 'trretry') { TRE[p.id] = false; runTr(p.id); paint(); return; }
   else if (k === 'cancel') { if (!w.sure) { w.sure = true; H.render(true); setTimeout(() => { w.sure = false; }, 4000); return; }   // second tap discards: never a browser dialog
       w.sure = false; if (w.busy) return; w.busy = k;
       (async () => { const s = sv(p.id); s.dead = true; clearTimeout(s.t); if (s.busy) await s.busy.catch(() => {});      // no save may arrive after the discard
@@ -527,13 +635,16 @@ function commit(b, text) {
   const v = parseFloat(String(text).replace(/\s/g, '').replace(',', '.'));
   const edit = H.isChef() && p.edit && WORK[p.id];
   w.err = null;
-  if (edit && key === 'y:g' && !(v > 0)) { WORK[p.id].yield.g = null; touch(p); H.render(true); return; }   // weight is optional: empty or 0 removes it
+  if (edit && key === 'y:g' && !(v > 0)) { WORK[p.id].yield.g = null; touch(p); H.render(true); return; }
+  if (edit && key === 'y:pg' && !(v > 0)) { delete WORK[p.id].yield.portion_g; touch(p); H.render(true); return; }
+  if (key === 'rp') { ui(p.id).realP = v > 0 ? v : null; H.render(true); return; }   // weight is optional: empty or 0 removes it
   if (!(v > 0) || String(text).trim() === String(b.dataset.orig || '').trim()) { H.render(true); return; }      // a tap without a new number changes nothing
   if (edit) {
     const doc = WORK[p.id];
     if (key.startsWith('l:')) { const l = doc.lines.find(x => x.id === key.slice(2)); if (l) l.qty = v; }
     else if (key === 'y:g') { const k = E().normUnit(u) || 'g'; doc.yield.g = v * ({ kg: 1000, oz: 28.3495, lb: 453.592 }[k] || 1); }
     else if (key === 'y:p') doc.yield.portions = v;
+    else if (key === 'y:pg') { doc.yield.portion_g = v; doc.yield.g = null; }        // one number: the lot weight is derived (portions × portion weight)
     touch(p); H.render(true); return;
   }
   const doc = shownDoc(d, p), ctx = ctxFor(d, p.id, doc, PREVIEW);
@@ -554,12 +665,18 @@ function onBlurText(ev) {
   const t = ev.target.closest && ev.target.closest('[data-mt]'); if (!t || !t.closest('.mr')) return;
   const p = entry(); if (!WORK[p && p.id]) return;
   if (readText(t)) touch(p);
+  const [k, a] = t.dataset.mt.split(':');
+  if (k === 'step') { const st = WORK[p.id].steps[+a]; if (st && st.src) { const lk = E().linkNumbers(st[st.src], WORK[p.id]);
+      if (lk !== st[st.src]) { st[st.src] = lk; touch(p); setTimeout(() => paint(), 0); } }
+    queueTr(p.id, 300); }
 }
 function onChange(ev) {
   const s = ev.target.closest && ev.target.closest('[data-ms]'); if (!s || !s.closest('.mr')) return;
   const p = entry(), doc = WORK[p && p.id]; if (!doc) return;
   const [k, a] = s.dataset.ms.split(':');
   if (k === 'has_stock') doc.has_stock = s.value === '1';
+  else if (k === 'pu') { if (s.value === 'portion') delete doc.yield.portion_unit; else doc.yield.portion_unit = s.value; }
+  else if (k === 'per') { const l = doc.lines.find(x => x.id === a); if (!l) return; if (s.value === 'portion') l.per = 'portion'; else delete l.per; }
   else { const l = doc.lines.find(x => x.id === a); if (!l) return; if (k === 'role') l.role = s.value; if (k === 'unit') l.unit = s.value === '—' ? null : s.value; }
   touch(p); paint();
 }
@@ -567,7 +684,7 @@ let qT;
 function onInput(ev) {
   const p = entry(); if (!p || !p.id) return;
   const mt = ev.target.closest && ev.target.closest('[data-mt]');
-  if (mt && mt.closest('.mr') && WORK[p.id]) { if (readText(mt)) touch(p); return; }
+  if (mt && mt.closest('.mr') && WORK[p.id]) { if (readText(mt)) { touch(p); if (/^step:/.test(mt.dataset.mt)) queueTr(p.id, 2500); } return; }
   if (ev.target.id === 'mrAdd') { const w = ui(p.id), q = ev.target.value; w.q = q; clearTimeout(qT);
     const hint = document.getElementById('mrSearching'); if (hint) hint.hidden = q.trim().length < 2;
     qT = setTimeout(async () => { if (q.trim().length < 2) { w.search = null; paint(); return; } const r = await call('mre_ingredients', { q });

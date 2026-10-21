@@ -13,7 +13,7 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 
-const BUILD = 'api-r1.15-match'
+const BUILD = 'api-r1.17-lab'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -343,6 +343,7 @@ Deno.serve(async (req: Request) => {
       case 'mre_review': out = await MRE.mreReview(u, body, svc); break
       case 'mre_purchase_match': out = await MRE.mrePurchaseMatch(u, body, svc); break
       case 'mre_match_decide': out = await MRE.mreMatchDecide(u, body, svc); break
+      case 'mre_translate': out = await MRE.mreTranslate(u, body); break
       default: throw bad('bad_op')
     }
     return new Response(JSON.stringify(out), { headers: H })

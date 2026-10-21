@@ -206,6 +206,32 @@ Deno.test('A10 produzione: solo simulata se non c\'è una versione del laborator
   assertEquals(await err(M.mreProduction(CHEF, { id: SPIN, factor: 1 })), 'produzione_solo_simulata')
 })
 
+Deno.test('D1 R1.17: la bozza conserva resa prevista, peso porzione, "1 per cup", vecchia nota (storico) e lingua originale degli step', async () => {
+  const o = await M.mreRecipe(CHEF, SPIN, svc), base = o.draft || o.doc
+  const doc = Object.assign(JSON.parse(JSON.stringify(base)), { yield: { g: null, portions: 15, portion_g: 80, portion_unit: 'cup', label: null, label_hist: ['15 contenitori =7,5 porzioni'] },
+    lines: base.lines.map((l: any) => l.id === 'b1756' ? Object.assign({}, l, { qty: 1, unit: 'each', per: 'portion' }) : l),
+    steps: [{ src: 'it', it: 'Mettere {{y:portion_g}} g di spinaci cotti in ogni contenitore.', en: 'Put {{y:portion_g}} g of cooked spinach in each container.', es: '', tr: { en: 'auto', es: 'stale', it: 'bogus' }, h: 'abc' }] })
+  await M.mreSaveDraft(CHEF, { id: SPIN, doc, base: o.recipe.current_version }, svc)
+  const d = (await M.mreRecipe(CHEF, SPIN, svc)).draft
+  assertEquals([d.yield.portions, d.yield.portion_g, d.yield.portion_unit, d.yield.g], [15, 80, 'cup', null])
+  assertEquals(d.yield.label_hist, ['15 contenitori =7,5 porzioni'])
+  assertEquals(d.lines.find((l: any) => l.id === 'b1756').per, 'portion')
+  assertEquals([d.steps[0].src, d.steps[0].tr, d.steps[0].h], ['it', { en: 'auto', es: 'stale' }, 'abc'])
+  const r = E.resolveDoc(d); assertEquals(r.lines.find((l: any) => l.id === 'b1756').qty, 15)
+  // a lot weight that contradicts 15 × 80 g is refused
+  const bad = Object.assign({}, doc, { yield: Object.assign({}, doc.yield, { g: 80 }) })
+  assert(String(await err(M.mreSaveDraft(CHEF, { id: SPIN, doc: bad }, svc))).includes('resa_doppia'))
+  await M.mreDiscard(CHEF, { id: SPIN })
+})
+
+Deno.test('D2 R1.17: traduzione in background — lingua riconosciuta, numeri collegati protetti, perdita di un numero segnalata', async () => {
+  const r = await M.mreTranslate(CHEF, { items: [{ key: '0:x', text: 'Mettere {{y:portion_g}} g di spinaci cotti in ogni contenitore, a 75 °C.', from: null, to: ['en', 'es', 'it'] }] })
+  const it = r.items[0]
+  assertEquals(it.from, 'it'); assertEquals(Object.keys(it.out).sort(), ['en', 'es'])
+  assert(it.out.en.ok && it.out.en.text.includes('{{y:portion_g}}') && it.out.en.text.includes('75'), JSON.stringify(it.out.en))
+  assertEquals(await err(M.mreTranslate(STAFF as any, { items: [] })), 'forbidden')
+})
+
 Deno.test('A11 nessuna scrittura sulle tabelle ufficiali', () => {
   assertEquals(writes, []); assertEquals(JSON.stringify(TABLES), official0)
 })

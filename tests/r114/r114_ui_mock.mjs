@@ -124,7 +124,7 @@ const st = await txt(pg, '.mr-panel'); ok(/Physical stock/i.test(st) && /Only fr
 // ===== 4. Edit: clean, Advanced closed, weight optional, cups do not ask a weight
 await pg.click('.mr-editbtn'); await pg.waitForTimeout(300); await shot(pg, 'a6_modifica_spinach_cup')
 ok(!(await pg.locator('.mr-adv').count()) && /Advanced$/.test((await txt(pg, '[data-m="adv"]')).trim()), 'Advanced chiuso all\'apertura')
-const ey = await txt(pg, '.mr-yield'); ok(/Yield 22 portions/.test(ey) && /weight \(optional\) — g/.test(ey), 'resa in modifica: porzioni + peso facoltativo — ' + ey)
+const ey = await txt(pg, '.mr-yield'); ok(/Expected yield 22/.test(ey) && /Portion weight — g/.test(ey), 'resa in modifica (R1.17): resa prevista + peso porzione, nessun peso obbligatorio — ' + ey)
 const cupsLine = await txt(pg, '.mr-eline:has-text("Alluminium Cups")'); ok(!/weight of one piece/i.test(cupsLine), 'Alluminium Cups 22 each: nessuna richiesta di peso — ' + cupsLine.slice(0, 80))
 const peppers = await txt(pg, '.mr-eline:has-text("White Pepper")'); ok(/no price/i.test(peppers), 'White Pepper: manca il prezzo (segnalato)')
 await pg.click('[data-m="adv"]'); await pg.waitForTimeout(200); ok(await pg.locator('select[data-ms^="role:"]').count() > 0, 'Advanced su richiesta: ruoli della prep')
