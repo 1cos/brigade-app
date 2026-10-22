@@ -30,8 +30,36 @@ const audit = (tx: any, u: U, op: string, recipe: string | null, detail: unknown
 const must = (r: any) => { if (r.error) throw r.error; return r.data || [] }
 /** Official recipes (and every sub-recipe below them), read fresh from Brigade with selects only, converted by the shared
  *  converter. Nothing is stored: this is the same number the bots, the food cost and Brigade 1 read. */
-async function readOfficial(svc: any, rootIds: string[], tx0?: any) {
+// C-62: lettura unica (una sola richiesta) se il database ha mre.official_bundle; altrimenti la strada di prima (REST, più richieste)
+// Prima di usarla si controlla che esista (una volta ogni 5 minuti): un errore dentro la transazione la bloccherebbe tutta.
+let bundleOk: boolean | null = null, bundleCheckedAt = 0
+async function readBundle(tx: any, rootIds: string[]) {
+  if (!tx) return null
+  if (bundleOk === null || Date.now() - bundleCheckedAt > 300_000) {
+    const [{ ok }] = await tx`select (to_regprocedure('mre.official_bundle(uuid[])') is not null and has_function_privilege(current_user, 'mre.official_bundle(uuid[])', 'execute')) as ok`
+    bundleOk = !!ok; bundleCheckedAt = Date.now()
+  }
+  if (!bundleOk) return null
+  const [{ b }] = await tx`select mre.official_bundle(string_to_array(${rootIds.join(',')}, ',')::uuid[]) as b`
+  return b
+}
+async function readOfficial(svc: any, rootIds: string[], tx0?: any, unica = false) {   // unica: solo per T.E.C. (C-62); Editor invariato
   const recipes: Record<string, any> = {}, bom: Record<string, any[]> = {}
+  const roots = [...new Set(rootIds)].filter(isUuid)
+  const B = unica && roots.length ? await readBundle(tx0, roots) : null
+  if (B) {
+    for (const r of B.recipes || []) { recipes[r.id] = r; bom[r.id] = [] }
+    const facts = B.facts || {}
+    ;(B.bom || []).slice().sort((a: any, b: any) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9) || a.bom_id - b.bom_id)
+      .forEach((b: any) => { if (bom[b.parent_recipe_id]) bom[b.parent_recipe_id].push(Object.assign({}, b, { policy: b.item_id && facts[b.item_id] ? facts[b.item_id].policy ?? null : null })) })
+    const ids = Object.keys(recipes), at = new Date().toISOString(), docs: Record<string, any> = {}, diffs: Record<string, any[]> = {}
+    for (const rid of ids) {
+      const out = buildLabDoc({ id: rid, r: recipes[rid], rows: bom[rid], stepRows: (B.steps || []).filter((x: any) => x.recipe_id === rid), prepRows: (B.preps || []).filter((x: any) => x.recipe_id === rid),
+                                y: (B.yields || []).find((x: any) => x.id === rid), byId: recipes, importedAt: at })
+      docs[rid] = Object.assign(out.doc, { id: rid, _source: 'official' }); diffs[rid] = out.diffs
+    }
+    return { docs, diffs, read_at: at, facts, measures: B.measures || {}, unica: true }
+  }
   let frontier = [...new Set(rootIds)].filter(isUuid)
   for (let depth = 0; depth < 8 && frontier.length; depth++) {
     const todo = frontier.filter(x => !(x in bom))
@@ -82,21 +110,34 @@ async function draftsOf(tx: any, ids: string[]) {
 }
 /** Every recipe below a root: official first, lab-only where Brigade has none. Drafts kept apart (Chef preview only).
  *  Plus the live facts of every ingredient. */
-async function tree(tx: any, svc: any, rootDoc: any, withDrafts: boolean) {
+async function tree(tx: any, svc: any, rootDoc: any, withDrafts: boolean, pre?: { docs: Record<string, any>; facts?: any; measures?: any; drafts?: Record<string, any> }) {
   const docs: Record<string, any> = { [rootDoc.id]: rootDoc }, draftDocs: Record<string, any> = {}
   let frontier = [rootDoc]
+  // C-62: bozze delle sottoricette già lette, prese tutte insieme (una richiesta invece di una per livello)
+  const preIds = pre ? Object.keys(pre.docs).filter(id => id !== rootDoc.id) : []
+  const draftCache: Record<string, any> | null = pre && withDrafts ? (pre.drafts ?? await draftsOf(tx, preIds)) : null
   for (let d = 0; d < 8 && frontier.length; d++) {
     const want = [...new Set(frontier.flatMap((x: any) => (x.lines || []).filter((l: any) => l.kind === 'recipe').map((l: any) => l.ref)))].filter(id => !docs[id]) as string[]
     if (!want.length) break
-    const off = (await readOfficial(svc, want, tx)).docs
+    const known = pre ? want.filter(id => pre.docs[id]) : [], other = want.filter(id => !known.includes(id))
+    const off = Object.assign(Object.fromEntries(known.map(id => [id, pre!.docs[id]])), other.length ? (await readOfficial(svc, other, tx)).docs : {})
     const missing = want.filter(x => !off[x]), lo = await labOnlyDocs(tx, missing)
     const got: Record<string, any> = Object.assign({}, off, lo)
     Object.assign(docs, got)
-    if (withDrafts) Object.assign(draftDocs, await draftsOf(tx, Object.keys(got)))
+    if (withDrafts) {
+      const ks = Object.keys(got), inCache = draftCache ? ks.filter(k => preIds.includes(k)) : [], fuori = ks.filter(k => !inCache.includes(k))
+      for (const k of inCache) if (draftCache![k]) draftDocs[k] = draftCache![k]
+      if (fuori.length) Object.assign(draftDocs, await draftsOf(tx, fuori))
+    }
     frontier = [...Object.values(got), ...Object.values(draftDocs).filter((x: any) => !frontier.includes(x))]
   }
   const all = [...Object.values(docs), ...Object.values(draftDocs)]
   const ing = [...new Set(all.flatMap((x: any) => (x.lines || []).filter((l: any) => l.kind === 'ingredient').map((l: any) => l.ref)))]
+  if (pre && pre.facts && pre.measures) {   // C-62: fatti e misure già letti; si chiedono solo gli ingredienti nuovi (righe aggiunte)
+    const manca = (ing as string[]).filter(id => !(id in pre.facts))
+    const extra = manca.length ? ((await tx`select mre.ingredient_facts(string_to_array(${manca.join(',')}, ',')::uuid[]) as f`)[0].f || {}) : {}
+    return { docs, draftDocs, facts: Object.assign({}, pre.facts, extra), measures: pre.measures }
+  }
   const [{ f }] = await tx`select mre.ingredient_facts(string_to_array(${(ing as string[]).join(',')}, ',')::uuid[]) as f`
   const [{ m }] = await tx`select mre.kitchen_measures() as m`
   return { docs, draftDocs, facts: f || {}, measures: m || {} }
@@ -631,16 +672,25 @@ export async function mreTranslate(u: U, b: any) {
 import * as TB from './tec_bozza.ts'
 const tecOk = (u: U) => { if ((u.role as string) !== 'assistente' && u.role !== 'chef') throw forbid() }
 async function tecBase(tx: any, svc: any, id: string) {
-  const off = await readOfficial(svc, [id], tx)
-  const [dr] = await tx`select version, doc from mre.versions where recipe_id = ${id} and state = 'bozza'`
+  const off: any = await readOfficial(svc, [id], tx, true)
+  // C-62: bozza della ricetta, collegamento e bozze delle sottoricette in UNA richiesta
+  const subIds = off.unica ? Object.keys(off.docs).filter((k: string) => k !== id) : []
+  const [st] = await tx`select (select jsonb_build_object('version', v.version, 'doc', v.doc) from mre.versions v where v.recipe_id = ${id} and v.state = 'bozza') as dr,
+                               exists (select 1 from mre.recipes where id = ${id}) as linked,
+                               (select coalesce(jsonb_object_agg(v.recipe_id, jsonb_build_object('version', v.version, 'doc', v.doc)), '{}'::jsonb) from mre.versions v
+                                 where v.state = 'bozza' and v.recipe_id = any(string_to_array(${subIds.join(',')}, ',')::uuid[])) as sub_drafts`
+  const dr = st?.dr
   let base: any = dr ? Object.assign({}, dr.doc) : off.docs[id], fonte = dr ? 'bozza' : 'ufficiale'
   if (!base) { base = (await labOnlyDocs(tx, [id]))[id]; fonte = 'proposta' }
   if (!base) throw new MreError(404, 'not_found')
   base = Object.assign({}, base); for (const k of ['_source', '_version', '_state']) delete base[k]; base.id = id
-  return { base, fonte, linked: !!(await tx`select 1 from mre.recipes where id = ${id}`).length, read_at: off.read_at }
+  const drafts: Record<string, any> = {}
+  for (const [k, v] of Object.entries((st?.sub_drafts || {}) as Record<string, any>)) drafts[k] = Object.assign({}, v.doc, { id: k, _source: 'draft', _version: v.version })
+  const pre = off.unica ? { docs: off.docs, facts: off.facts, measures: off.measures, drafts } : undefined
+  return { base, fonte, linked: !!st?.linked, read_at: off.read_at, pre }
 }
-async function tecNomi(tx: any, svc: any, doc: any) {
-  const t = await tree(tx, svc, doc, false), nomi: Record<string, string> = {}
+async function tecNomi(tx: any, svc: any, doc: any, pre?: any, withDrafts = false) {
+  const t = await tree(tx, svc, doc, withDrafts, pre), nomi: Record<string, string> = {}
   for (const l of doc.lines || []) nomi[l.ref] = l.kind === 'recipe' ? (t.docs[l.ref] || {}).title || '' : (t.facts[l.ref] || {}).name || ''
   return { t, nomi }
 }
@@ -657,27 +707,33 @@ const tecVista = (doc: any, nomi: Record<string, string>) => ({
 
 export async function tecLeggi(u: U, b: any, svc: any) {
   tecOk(u); const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
-  return await lab(async tx => { const { base, fonte } = await tecBase(tx, svc, id); const { nomi } = await tecNomi(tx, svc, base)
+  return await lab(async tx => { const { base, fonte, pre } = await tecBase(tx, svc, id); const { nomi } = await tecNomi(tx, svc, base, pre)
     return { ok: true, ricetta_id: id, fonte, impronta: await TB.impronta(base), ...tecVista(base, nomi) } })
 }
 async function tecApplica(tx: any, svc: any, u: U, b: any) {
   const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
-  const { base, fonte } = await tecBase(tx, svc, id)
+  const { base, fonte, pre } = await tecBase(tx, svc, id)
   const imp = await TB.impronta(base)
-  const { t, nomi } = await tecNomi(tx, svc, base)
+  // C-62: UN solo albero (con le bozze) per i nomi e per il controllo, costruito da quello che è già stato letto
+  const { t, nomi } = await tecNomi(tx, svc, base, pre, true)
   await tecNomiNuovi(tx, svc, b?.modifiche, nomi)
-  const r = TB.applica(base, b?.modifiche, nomi)
+  const mods = TB.risolviNomi(base, b?.modifiche, nomi)          // C-62: «nome» al posto di «riga» (una chiamata sola)
+  const r = TB.applica(base, mods.modifiche, nomi)
+  r.errori.unshift(...mods.errori)
   if (!r.errori.length) {
-    const t2 = await tree(tx, svc, r.doc, true)
+    const nuovi = (r.doc.lines || []).some((l: any) => l.kind === 'recipe' && !t.docs[l.ref]) || (r.doc.lines || []).some((l: any) => l.kind !== 'recipe' && !(l.ref in t.facts))
+    const t2 = nuovi ? await tree(tx, svc, r.doc, true, pre) : Object.assign({}, t, { docs: Object.assign({}, t.docs, { [r.doc.id]: r.doc }) })
     for (const e of E.validate(r.doc, ctxOf(t2, true), false)) r.errori.push('ricetta_non_valida: ' + e)
   }
   return { id, base, fonte, imp, nomi, r, t }
 }
 export async function tecProva(u: U, b: any, svc: any) {
   tecOk(u)
+  const t0 = performance.now()
   return await lab(async tx => { const x = await tecApplica(tx, svc, u, b)
     return { ok: x.r.errori.length === 0, a_secco: true, ricetta_id: x.id, fonte: x.fonte, impronta: x.imp,
-      impronta_cambiata: b?.impronta != null && b.impronta !== x.imp, frasi: x.r.frasi, avvisi: x.r.avvisi, errori: x.r.errori } })
+      impronta_cambiata: b?.impronta != null && b.impronta !== x.imp, frasi: x.r.frasi, avvisi: x.r.avvisi, errori: x.r.errori,
+      ricetta: tecVista(x.base, x.nomi), ms_server: Math.round(performance.now() - t0) } })
 }
 export async function tecSalvaBozza(u: U, b: any, svc: any) {
   tecOk(u)

@@ -129,3 +129,23 @@ export function confronta(prima: any, dopo: any, nomi: Record<string, string>): 
   }
   return out
 }
+
+/** C-62: per «cambia_quantita» T.E.C. può dare il NOME dell'ingrediente invece del codice della riga, così basta UNA chiamata.
+ *  Il nome deve indicare UNA sola riga (uguale, senza maiuscole/accenti/spazi; altrimenti «contiene»). Se ce ne sono di più → errore
+ *  «riga_da_scegliere» con i nomi possibili; se nessuna → «riga_non_trovata». Mai indovinare. */
+export const normNome = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+export function risolviNomi(base: any, modifiche: any[], nomi: Record<string, string>): { modifiche: any[]; errori: string[] } {
+  const righe = Array.isArray(base?.lines) ? base.lines : [], errori: string[] = []
+  const out = (Array.isArray(modifiche) ? modifiche : []).map((m: any, i: number) => {
+    if (!m || m.tipo !== 'cambia_quantita' || m.riga || typeof m.nome !== 'string') return m
+    const k = normNome(m.nome)
+    if (!k) { errori.push(`modifica ${i + 1}: riga_non_trovata (nome vuoto)`); return m }
+    let c = righe.filter((l: any) => normNome(nomi[l.ref]) === k)
+    if (!c.length) c = righe.filter((l: any) => { const n = normNome(nomi[l.ref]); return n && (n.includes(k) || k.includes(n)) })
+    if (c.length === 1) { const { nome: _n, ...resto } = m; return Object.assign(resto, { riga: c[0].id }) }
+    errori.push(c.length ? `modifica ${i + 1}: riga_da_scegliere («${m.nome}»: ${c.map((l: any) => `${nomi[l.ref]} ${fmt(l.qty, l.unit)} [${l.id}]`).join(' | ')})`
+                         : `modifica ${i + 1}: riga_non_trovata («${m.nome}»)`)
+    return m
+  })
+  return { modifiche: out, errori }
+}
