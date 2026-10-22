@@ -331,6 +331,7 @@ export async function mreSaveDraft(u: U, b: any, svc: any) {
     const ingIds: string[] = doc.lines.filter((l: any) => l.kind === 'ingredient').map((l: any) => l.ref), recIds: string[] = doc.lines.filter((l: any) => l.kind === 'recipe').map((l: any) => l.ref)
     const [{ f }] = await tx`select mre.ingredient_facts(string_to_array(${(ingIds as string[]).join(',')}, ',')::uuid[]) as f`
     if (ingIds.some((x: string) => !(f || {})[x])) throw bad('ingrediente_sconosciuto')
+    for (const l of doc.lines) l.unit = E.standardUnit(l.unit, l.kind === 'ingredient' ? (f || {})[l.ref] : null)   // MR-05: spoken units → standard; oz on a liquid → fl oz
     const t = await tree(tx, svc, doc, true)
     if (recIds.some((x: string) => !t.docs[x])) throw bad('sotto_ricetta_sconosciuta')
     const errs = E.validate(doc, ctxOf(t, true), false)
@@ -720,6 +721,13 @@ async function tecApplica(tx: any, svc: any, u: U, b: any) {
   const mods = TB.risolviNomi(base, b?.modifiche, nomi)          // C-62: «nome» al posto di «riga» (una chiamata sola)
   const r = TB.applica(base, mods.modifiche, nomi)
   r.errori.unshift(...mods.errori)
+  // MR-05 (Chef 22/10): «2 once di rum» → the standard unit, and on a liquid an ounce is a fluid ounce (same rule as the Editor)
+  const ingRefs = [...new Set((r.doc.lines || []).filter((l: any) => l.kind !== 'recipe').map((l: any) => l.ref))] as string[]
+  if (ingRefs.length) {
+    const [{ f: uf }] = await tx`select mre.ingredient_facts(string_to_array(${ingRefs.join(',')}, ',')::uuid[]) as f`
+    for (const l of r.doc.lines || []) { const nu = E.standardUnit(l.unit, l.kind !== 'recipe' ? (uf || {})[l.ref] : null)
+      if (nu !== l.unit) { r.avvisi.push(`${nomi[l.ref] || ''}: ${l.unit} → ${E.unitLabel(nu)}`); l.unit = nu } }
+  }
   if (!r.errori.length) {
     const nuovi = (r.doc.lines || []).some((l: any) => l.kind === 'recipe' && !t.docs[l.ref]) || (r.doc.lines || []).some((l: any) => l.kind !== 'recipe' && !(l.ref in t.facts))
     const t2 = nuovi ? await tree(tx, svc, r.doc, true, pre) : Object.assign({}, t, { docs: Object.assign({}, t.docs, { [r.doc.id]: r.doc }) })
@@ -791,6 +799,9 @@ export async function tecPropostaNuova(u: U, b: any, svc: any) {
     await tecNomiNuovi(tx, svc, modifiche, nomi)
     const r = TB.applica(vuoto, modifiche, nomi)
     if (r.errori.length) throw bad('non_valida: ' + r.errori.join(' | '))
+    { const refs = [...new Set(r.doc.lines.filter((l: any) => l.kind !== 'recipe').map((l: any) => l.ref))] as string[]          // MR-05: same unit rule
+      if (refs.length) { const [{ f: uf }] = await tx`select mre.ingredient_facts(string_to_array(${refs.join(',')}, ',')::uuid[]) as f`
+        for (const l of r.doc.lines) l.unit = E.standardUnit(l.unit, l.kind !== 'recipe' ? (uf || {})[l.ref] : null) } }
     const t2 = await tree(tx, svc, r.doc, true); const ev = E.validate(r.doc, ctxOf(t2, true), false)
     if (ev.length) throw bad('non_valida: ' + ev.join(','))
     await tx`insert into mre.recipes (id, pilot, current_version, source, diffs) values (${id}, false, 0, ${sql.json({ lab_only: true, kind: b?.prep ? 'prep' : 'menu', proposta_da: 'T.E.C.', per: 'Max' } as any)}, ${sql.json([])})`

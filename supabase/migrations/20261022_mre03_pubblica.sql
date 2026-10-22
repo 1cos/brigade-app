@@ -14,7 +14,7 @@
 
 begin;
 
-create table mre.publications (
+create table if not exists mre.publications (
   id bigserial primary key,
   recipe_id uuid not null,
   draft_version int,
@@ -29,7 +29,7 @@ create table mre.publications (
   restored_at timestamptz,
   restored_by bigint
 );
-create index on mre.publications (recipe_id, at desc);
+create index if not exists publications_recipe_at on mre.publications (recipe_id, at desc);
 alter table mre.publications enable row level security;
 revoke all on mre.publications from public, anon, authenticated;
 grant select on mre.publications to mre_app;

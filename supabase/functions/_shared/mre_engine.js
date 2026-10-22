@@ -29,6 +29,29 @@ const SYN = {
   nests: 'nest', nidi: 'nest', nido: 'nest', porzioni: 'portion', porzione: 'portion', portions: 'portion', porciones: 'portion', 'porz.': 'portion', porz: 'portion', 'porc.': 'portion', porción: 'portion',
   cs: 'case', fogli: 'foglio', sheet: 'foglio', sheets: 'foglio', pizzichi: 'pizzico',
 };
+// MR-05 (Chef Max 22/10 «unità libere»): the units as the Chef says them (it/es/en), always SAVED in the standard form that bots
+// and FC05 read (food_cost.unit_info). Only these words are rewritten: every other unit on an existing line stays as it is.
+export const UNIT_WORDS = {
+  once: 'oz', oncia: 'oz', onza: 'oz', onzas: 'oz', libbra: 'lb', libbre: 'lb', libra: 'lb', libras: 'lb',
+  chilo: 'kg', chili: 'kg', chilogrammo: 'kg', chilogrammi: 'kg', kilos: 'kg', kilogrammi: 'kg',
+  cucchiaio: 'tbsp', cucchiai: 'tbsp', cucharada: 'tbsp', cucharadas: 'tbsp', tablespoon: 'tbsp', tablespoons: 'tbsp',
+  cucchiaino: 'tsp', cucchiaini: 'tsp', cucharadita: 'tsp', cucharaditas: 'tsp', teaspoon: 'tsp', teaspoons: 'tsp',
+  tazza: 'cup', tazze: 'cup', taza: 'cup', tazas: 'cup',
+  'oncia fluida': 'fl_oz', 'once fluide': 'fl_oz', 'onza líquida': 'fl_oz', 'onzas líquidas': 'fl_oz', 'fl. oz': 'fl_oz', 'fl oz.': 'fl_oz',
+  millilitri: 'ml', millilitro: 'ml', mililitros: 'ml', litros: 'l', gramos: 'g', kilogramos: 'kg',
+};
+Object.assign(SYN, UNIT_WORDS);
+/** The unit to SAVE on a line: a spoken word becomes its standard form; on a liquid («liquido» approved by the Chef) an ounce is a
+ *  fluid ounce. Weight ↔ volume is never converted here: that needs a known density, and the engine says when it is missing. */
+export function standardUnit(u, facts) {
+  if (u == null) return u;
+  const s = String(u).trim(), w = UNIT_WORDS[s.toLowerCase()];
+  let out = w || s;
+  if (facts && facts.liquid && normUnit(out) === 'oz') out = 'fl_oz';
+  return out;
+}
+/** How a saved unit is written on screen (fl_oz → «fl oz»). */
+export const unitLabel = u => u === 'fl_oz' ? 'fl oz' : u;
 /* ---------------- R1.17: derived values (one number, one place) ---------------- */
 const RES = new WeakMap(), DONE = new WeakSet();
 /** The document as the engine reads it: per-portion lines become lot quantities (qty × expected portions) and, with a standard

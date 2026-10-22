@@ -57,6 +57,12 @@ try {
   for (const [id, f] of Object.entries(F.facts)) if (f) await a.query('insert into bench.facts values ($1, $2) on conflict do nothing', [id, f])
   await a.query('insert into bench.measures values ($1)', [F.measures || {}])
   await a.query(fs.readFileSync(`${ROOT}/supabase/migrations/20261022_mre03_pubblica.sql`, 'utf8'))
+  await a.query(fs.readFileSync(`${ROOT}/supabase/migrations/20261022_c62_lettura_unica.sql`, 'utf8'))      // T.E.C. single read (C-62, live)
+  await a.query(fs.readFileSync(`${ROOT}/supabase/migrations/20261022_mre04_liquidi.sql`, 'utf8'))         // MR-05 liquids (lab)
+  // the real function reads Brigade's food_cost helpers: in the bench the facts come from the snapshot, with the REAL liquids list
+  await a.query(`create or replace function mre.ingredient_facts(p_ids uuid[]) returns jsonb language sql stable security definer as $$
+      select coalesce(jsonb_object_agg(f.id, f.f || jsonb_build_object('active', i.active, 'liquid', exists (select 1 from mre.liquid_ingredients l where l.ingredient_id = f.id))), '{}'::jsonb)
+      from bench.facts f join public.ingredients i on i.id = f.id where f.id = any(p_ids) $$;`)
   const r = spawnSync('deno', ['test', '-A', '--no-check', `${ROOT}/tests/mr04/mr04_publish.test.ts`], { env: Object.assign({}, process.env, { SUPABASE_DB_URL: `postgres://postgres:prova@127.0.0.1:${PORT}/postgres`, DUMP }), encoding: 'utf8' })
   process.stdout.write(r.stdout); process.stderr.write(r.stderr.split('\n').filter(l => !/^(Download|Check)/.test(l)).join('\n'))
   code = r.status

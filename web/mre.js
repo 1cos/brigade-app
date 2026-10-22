@@ -151,7 +151,8 @@ function render(p) {
     const ie = ui(p.id).err && ui(p.id).err.key === 'l:' + l.id ? `<li class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</li>` : '';   // the message stays next to its line, never over the buttons
     const nt = noteOf(d, l); if (nt && !nt.same) nOther++;
     if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${nameFb(d, l)}${noteHtml(nt, p.notesO)}</span>${qty}</li>${ie}`; continue; }
-    const units = ['g', 'kg', 'ml', 'l', 'pz', 'oz', 'lb', 'nests'], ucur = l.unit || '';
+    const liq = l.kind !== 'recipe' && (d.facts[l.ref] || {}).liquid;      // MR-05: on a liquid the ounce is a fluid ounce
+    const units = liq ? ['ml', 'l', 'fl_oz', 'tbsp', 'tsp', 'cup', 'g', 'kg'] : ['g', 'kg', 'ml', 'l', 'pz', 'oz', 'lb', 'tbsp', 'tsp', 'cup', 'nests'], ucur = l.unit || '';
     // editor line: name, quantity and unit first; role and technical note only under Advanced (logic unchanged)
     const stx = statusOf(d, l), bad = /mr-bad/.test(stx), adv = p.adv;
     h += `<li class="mr-eline"><span class="mr-nm">${nameHtml}${nameFb(d, l)}${l.kind === 'recipe' ? ` <span class="mr-muted mr-kind">${T('sub_recipe')}</span>` : ''}
@@ -160,7 +161,7 @@ function render(p) {
         <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : noteHtml(nt, p.notesO)}${estHtml(d, l)}
 </span>
       ${l.per === 'portion' || l.role === 'imballo' || adv ? `<span class="mr-note">${T('per_q')} <select data-ms="per:${esc(l.id)}" class="mr-sel"><option value="" ${l.per !== 'portion' ? 'selected' : ''}>${T('per_lot')}</option><option value="portion" ${l.per === 'portion' ? 'selected' : ''}>${T('per_one', { u: T('pu_' + (y.portion_unit || 'portion') + '1') })}</option></select>${l.per === 'portion' && Number(y.portions) > 0 && l.qty != null ? ` = <b>${nf(l.qty * y.portions, 1)}</b> ${T('per_lot_n')}` : ''}</span>` : ''}
-      <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option ${u === ucur ? 'selected' : ''}>${esc(u || '—')}</option>`).join('')}</select><button class="mr-x" data-m="del:${esc(l.id)}" aria-label="${esc(T('remove'))}" title="${esc(T('remove'))}">×</button></span></li>`;
+      <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option value="${esc(u || '—')}" ${u === ucur ? 'selected' : ''}>${esc(E().unitLabel ? E().unitLabel(u || '—') : (u || '—'))}</option>`).join('')}</select><button class="mr-x" data-m="del:${esc(l.id)}" aria-label="${esc(T('remove'))}" title="${esc(T('remove'))}">×</button></span></li>`;
   }
   h += `</ul>`;
   if (nOther && !(edit && p.adv)) h += `<button class="mr-link mr-notesbtn" data-m="notesO">${p.notesO ? T('notes_hide') : T('notes_orig', { n: nOther })}</button>`;
@@ -753,7 +754,7 @@ function onChange(ev) {
   if (k === 'has_stock') doc.has_stock = s.value === '1';
   else if (k === 'pu') { if (s.value === 'portion') delete doc.yield.portion_unit; else doc.yield.portion_unit = s.value; }
   else if (k === 'per') { const l = doc.lines.find(x => x.id === a); if (!l) return; if (s.value === 'portion') l.per = 'portion'; else delete l.per; }
-  else { const l = doc.lines.find(x => x.id === a); if (!l) return; if (k === 'role') l.role = s.value; if (k === 'unit') l.unit = s.value === '—' ? null : s.value; }
+  else { const l = doc.lines.find(x => x.id === a); if (!l) return; if (k === 'role') l.role = s.value; if (k === 'unit') { const dd = H.peek('mre_recipe', { id: p.id }); l.unit = s.value === '—' ? null : (E().standardUnit ? E().standardUnit(s.value, l.kind !== 'recipe' && dd ? (dd.facts || {})[l.ref] : null) : s.value); } }
   touch(p); paint();
 }
 /* the three boxes of the "prezzo di fiducia" become one estimate on the line; an empty price removes it */
