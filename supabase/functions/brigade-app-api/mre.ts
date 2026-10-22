@@ -12,7 +12,7 @@ import { buildLabDoc } from '../_shared/mre_import.js'
 import * as PM from '../_shared/purchase_match.js'
 
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL') ?? '', { prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10 })
-type U = { id: number; name: string; role: 'chef' | 'staff' }
+type U = { id: number; name: string; role: 'chef' | 'staff' }  // B-63: 'assistente' arriva solo sulle operazioni tec_*
 export class MreError extends Error { constructor(public status: number, public code: string) { super(code) } }
 const bad = (c: string) => new MreError(400, c)
 const forbid = () => new MreError(403, 'forbidden')
@@ -507,4 +507,125 @@ export async function mreTranslate(u: U, b: any) {
     out.push({ key: String(it.key || '').slice(0, 60), from, sure, out: res })
   }
   return { items: out }
+}
+
+/* ---------------- B-63 (Max 22/10/2026): T.E.C. scrive IN BOZZA per Max ----------------
+   Ruolo «assistente» (solo queste 4 operazioni, vedi index.ts): legge, prova a secco, salva BOZZE con impronta, propone ricette nuove.
+   Mai pubblicare, mai cancellare, mai prezzi. Le bozze sono quelle normali dell'Editor: nello storico risultano dell'utente «T.E.C. per Max».
+   Il testo detto a voce è un DATO: diventa solo righe/quantità/passi controllati dal motore. */
+import * as TB from './tec_bozza.ts'
+const tecOk = (u: U) => { if ((u.role as string) !== 'assistente' && u.role !== 'chef') throw forbid() }
+async function tecBase(tx: any, svc: any, id: string) {
+  const off = await readOfficial(svc, [id], tx)
+  const [dr] = await tx`select version, doc from mre.versions where recipe_id = ${id} and state = 'bozza'`
+  let base: any = dr ? Object.assign({}, dr.doc) : off.docs[id], fonte = dr ? 'bozza' : 'ufficiale'
+  if (!base) { base = (await labOnlyDocs(tx, [id]))[id]; fonte = 'proposta' }
+  if (!base) throw new MreError(404, 'not_found')
+  base = Object.assign({}, base); for (const k of ['_source', '_version', '_state']) delete base[k]; base.id = id
+  return { base, fonte, linked: !!(await tx`select 1 from mre.recipes where id = ${id}`).length, read_at: off.read_at }
+}
+async function tecNomi(tx: any, svc: any, doc: any) {
+  const t = await tree(tx, svc, doc, false), nomi: Record<string, string> = {}
+  for (const l of doc.lines || []) nomi[l.ref] = l.kind === 'recipe' ? (t.docs[l.ref] || {}).title || '' : (t.facts[l.ref] || {}).name || ''
+  return { t, nomi }
+}
+async function tecNomiNuovi(tx: any, svc: any, modifiche: any[], nomi: Record<string, string>) {
+  const nuovi = (modifiche || []).filter((m: any) => m && m.tipo === 'aggiungi_riga' && isUuid(m.ref) && !nomi[m.ref])
+  const ing = nuovi.filter((m: any) => m.genere !== 'recipe').map((m: any) => m.ref), rec = nuovi.filter((m: any) => m.genere === 'recipe').map((m: any) => m.ref)
+  if (ing.length) { const [{ f }] = await tx`select mre.ingredient_facts(string_to_array(${ing.join(',')}, ',')::uuid[]) as f`; for (const k of ing) if (f && f[k]) nomi[k] = f[k].name || k }
+  if (rec.length) { const off = (await readOfficial(svc, rec, tx)).docs; for (const k of rec) if (off[k]) nomi[k] = off[k].title || k }
+}
+const tecVista = (doc: any, nomi: Record<string, string>) => ({
+  titolo: doc.title, resa: { grammi: doc.yield?.g ?? null, porzioni: doc.yield?.portions ?? null },
+  righe: (doc.lines || []).map((l: any) => ({ riga: l.id, nome: nomi[l.ref] || '', tipo: l.kind, quantita: l.qty, unita: l.unit, nota: l.note || null })),
+  passi: (doc.steps || []).map((s: any, i: number) => ({ numero: i + 1, testo: E.stepIn(s, 'it').text })) })
+
+export async function tecLeggi(u: U, b: any, svc: any) {
+  tecOk(u); const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
+  return await lab(async tx => { const { base, fonte } = await tecBase(tx, svc, id); const { nomi } = await tecNomi(tx, svc, base)
+    return { ok: true, ricetta_id: id, fonte, impronta: await TB.impronta(base), ...tecVista(base, nomi) } })
+}
+async function tecApplica(tx: any, svc: any, u: U, b: any) {
+  const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
+  const { base, fonte } = await tecBase(tx, svc, id)
+  const imp = await TB.impronta(base)
+  const { t, nomi } = await tecNomi(tx, svc, base)
+  await tecNomiNuovi(tx, svc, b?.modifiche, nomi)
+  const r = TB.applica(base, b?.modifiche, nomi)
+  if (!r.errori.length) {
+    const t2 = await tree(tx, svc, r.doc, true)
+    for (const e of E.validate(r.doc, ctxOf(t2, true), false)) r.errori.push('ricetta_non_valida: ' + e)
+  }
+  return { id, base, fonte, imp, nomi, r, t }
+}
+export async function tecProva(u: U, b: any, svc: any) {
+  tecOk(u)
+  return await lab(async tx => { const x = await tecApplica(tx, svc, u, b)
+    return { ok: x.r.errori.length === 0, a_secco: true, ricetta_id: x.id, fonte: x.fonte, impronta: x.imp,
+      impronta_cambiata: b?.impronta != null && b.impronta !== x.imp, frasi: x.r.frasi, avvisi: x.r.avvisi, errori: x.r.errori } })
+}
+export async function tecSalvaBozza(u: U, b: any, svc: any) {
+  tecOk(u)
+  if (!b?.impronta) throw bad('impronta_mancante')
+  // 1) prova e traduzioni FUORI dalla transazione di scrittura (la rete può essere lenta)
+  const pre = await lab(async tx => tecApplica(tx, svc, u, b))
+  if (pre.imp !== b.impronta) throw new MreError(409, 'impronta_cambiata')
+  if (pre.r.errori.length) throw bad('non_valida: ' + pre.r.errori.join(' | '))
+  const doc = pre.r.doc, avvisi = [...pre.r.avvisi]
+  for (const i of pre.r.passi_da_tradurre) {
+    const st = doc.steps[i], from = st.src, text = st[from]
+    for (const to of ['it', 'en', 'es'].filter(x => x !== from)) {
+      const p = E.protectTokens(text)
+      try { const j = await trCall({ text: p.text, targetLang: to, literal: true }); const o = E.restoreTokens(j?.translated, p.map, p.text)
+        if (o.ok && o.text) { st[to] = o.text; st.tr[to] = 'auto' } else avvisi.push(`passo ${i + 1}: traduzione ${to} da rifare (${o.why})`) }
+      catch (_) { avvisi.push(`passo ${i + 1}: traduzione ${to} non disponibile, da fare nell'Editor`) }
+    }
+  }
+  const clean = cleanDoc(pre.id, doc)
+  // 2) scrittura: stessa strada di mre_save_draft (bozza unica, registro), con l'impronta ricontrollata DENTRO la transazione
+  return await lab(async tx => {
+    const [rr] = await tx`select current_version from mre.recipes where id = ${pre.id} for update`
+    const { base } = await tecBase(tx, svc, pre.id)
+    if ((await TB.impronta(base)) !== b.impronta) throw new MreError(409, 'impronta_cambiata')
+    if (!rr) {
+      await tx`insert into mre.recipes (id, pilot, current_version, source, diffs) values (${pre.id}, false, 0, ${sql.json({ link: 'official', on_demand: true, requested_by: u.id } as any)}, ${sql.json([])})`
+      await audit(tx, u, 'link_official', pre.id, { da: 'T.E.C.', per: 'Max' })
+    }
+    const [dr] = await tx`select version from mre.versions where recipe_id = ${pre.id} and state = 'bozza'`
+    const [mx] = await tx`select coalesce(max(version), 0)::int as v from mre.versions where recipe_id = ${pre.id}`
+    const motivo = 'T.E.C. per Max: ' + pre.r.frasi.join('; ').slice(0, 450)
+    if (dr) await tx`update mre.versions set doc = ${sql.json(clean as any)}, created_at = now(), created_by = ${u.id}, reason = ${motivo} where recipe_id = ${pre.id} and version = ${dr.version}`
+    else await tx`insert into mre.versions (recipe_id, version, state, doc, reason, created_by) values (${pre.id}, ${mx.v + 1}, 'bozza', ${sql.json(clean as any)}, ${motivo}, ${u.id})`
+    await audit(tx, u, 'save_draft', pre.id, { da: 'T.E.C.', per: 'Max', frasi: pre.r.frasi, modifiche: b.modifiche })
+    // 3) rilettura dal database: cosa è cambiato DAVVERO
+    const [letto] = await tx`select version, doc from mre.versions where recipe_id = ${pre.id} and state = 'bozza'`
+    const cambiato = TB.confronta(base, letto.doc, pre.nomi)
+    return { ok: true, ricetta_id: pre.id, bozza_versione: letto.version, salvato_da: u.name, impronta_nuova: await TB.impronta(Object.assign({}, letto.doc, { id: pre.id })),
+             cambiato_davvero: cambiato, avvisi, nota: 'Bozza salvata: NON pubblicata. Max la vede nell\'Editor.' }
+  })
+}
+export async function tecPropostaNuova(u: U, b: any, svc: any) {
+  tecOk(u)
+  const titolo = String(b?.titolo || '').trim().slice(0, 200); if (titolo.length < 2) throw bad('titolo_mancante')
+  const righe = Array.isArray(b?.righe) ? b.righe.slice(0, 60) : [], passi = Array.isArray(b?.passi) ? b.passi.slice(0, 40) : []
+  if (!righe.length) throw bad('nessuna_riga')
+  const modifiche: any[] = [
+    ...righe.map((x: any) => ({ tipo: 'aggiungi_riga', ref: x.ref, genere: x.genere, quantita: x.quantita, unita: x.unita, nota: x.nota })),
+    ...passi.map((p: any) => ({ tipo: 'aggiungi_passo', testo: typeof p === 'string' ? p : p?.testo })),
+    ...(b?.resa && (b.resa.grammi != null || b.resa.porzioni != null) ? [{ tipo: 'cambia_resa', grammi: b.resa.grammi ?? null, porzioni: b.resa.porzioni ?? null }] : [])]
+  const id = crypto.randomUUID()
+  const vuoto = { schema: 1, id, title: titolo, category: b?.categoria ? String(b.categoria).slice(0, 100) : null, yield: {}, has_stock: false, stock: [], lines: [], steps: [], notes: 'Proposta di T.E.C. per Max' }
+  return await lab(async tx => {
+    const nomi: Record<string, string> = {}
+    await tecNomiNuovi(tx, svc, modifiche, nomi)
+    const r = TB.applica(vuoto, modifiche, nomi)
+    if (r.errori.length) throw bad('non_valida: ' + r.errori.join(' | '))
+    const t2 = await tree(tx, svc, r.doc, true); const ev = E.validate(r.doc, ctxOf(t2, true), false)
+    if (ev.length) throw bad('non_valida: ' + ev.join(','))
+    await tx`insert into mre.recipes (id, pilot, current_version, source, diffs) values (${id}, false, 0, ${sql.json({ lab_only: true, kind: b?.prep ? 'prep' : 'menu', proposta_da: 'T.E.C.', per: 'Max' } as any)}, ${sql.json([])})`
+    await tx`insert into mre.versions (recipe_id, version, state, doc, reason, created_by) values (${id}, 1, 'bozza', ${sql.json(cleanDoc(id, r.doc) as any)}, ${'Proposta nuova di T.E.C. per Max'}, ${u.id})`
+    await audit(tx, u, 'proposal', id, { da: 'T.E.C.', per: 'Max', titolo, frasi: r.frasi })
+    return { ok: true, ricetta_id: id, titolo, frasi: r.frasi, avvisi: r.avvisi, passi_da_tradurre: r.passi_da_tradurre.length,
+             nota: 'Proposta salvata come BOZZA di laboratorio: non è in Brigade finché Max non la approva.' }
+  })
 }

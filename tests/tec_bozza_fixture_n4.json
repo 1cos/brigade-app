@@ -1,0 +1,127 @@
+{
+ "doc": {
+  "schema": 1,
+  "id": "20ce4798-9d46-440a-988f-6efc6eecab56",
+  "title": "La N° 4",
+  "yield": {
+   "portions": 1
+  },
+  "lines": [
+   {
+    "id": "b2312",
+    "kind": "recipe",
+    "ref": "87cae4ee-aed0-4c20-886d-ecb6768f1c12",
+    "qty": 2.0,
+    "unit": "nests",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   },
+   {
+    "id": "b2313",
+    "kind": "ingredient",
+    "ref": "09fba249-9efd-4043-b123-976f79baf870",
+    "qty": 20.0,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   },
+   {
+    "id": "b2314",
+    "kind": "recipe",
+    "ref": "9a8dd743-b49b-4197-99f2-46faf946237e",
+    "qty": 60.0,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   },
+   {
+    "id": "b2315",
+    "kind": "recipe",
+    "ref": "27213a2e-e8fd-4100-9fb8-4ebf57cfab1e",
+    "qty": 20.0,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   },
+   {
+    "id": "b2316",
+    "kind": "ingredient",
+    "ref": "bb062d06-7db9-42ac-84da-5c3042b5e427",
+    "qty": 1.0,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   },
+   {
+    "id": "b2317",
+    "kind": "ingredient",
+    "ref": "a4e20c8f-70f9-413d-978d-e046ada7c0f0",
+    "qty": 3.0,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   },
+   {
+    "id": "b2318",
+    "kind": "ingredient",
+    "ref": "412b67a7-040b-4f3f-83f3-6b9f72c5c575",
+    "qty": 10.0,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   },
+   {
+    "id": "b2319",
+    "kind": "recipe",
+    "ref": "f3775587-3f33-4955-a338-436fa8b33787",
+    "qty": 10.0,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   },
+   {
+    "id": "b2320",
+    "kind": "ingredient",
+    "ref": "5aacff2a-8e16-45e4-8009-fc44dabf055c",
+    "qty": 20.0,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null
+   }
+  ],
+  "steps": [
+   {
+    "it": "Cuocere la pasta 3 minuti.",
+    "en": "Cook the pasta 3 minutes.",
+    "es": "Cocinar la pasta 3 minutos.",
+    "src": "it"
+   },
+   {
+    "it": "Saltare la pancetta.",
+    "en": "Sauté the pancetta.",
+    "es": "Saltear la panceta.",
+    "src": "it"
+   }
+  ]
+ },
+ "nomi": {
+  "87cae4ee-aed0-4c20-886d-ecb6768f1c12": "SPAGHETTI FRESH PASTA",
+  "09fba249-9efd-4043-b123-976f79baf870": "White Wine",
+  "9a8dd743-b49b-4197-99f2-46faf946237e": "Pancetta",
+  "27213a2e-e8fd-4100-9fb8-4ebf57cfab1e": "Grated Pecorino",
+  "bb062d06-7db9-42ac-84da-5c3042b5e427": "Black Pepper Whole",
+  "a4e20c8f-70f9-413d-978d-e046ada7c0f0": "Parsley",
+  "412b67a7-040b-4f3f-83f3-6b9f72c5c575": "Extra Virgin Olive Oil",
+  "f3775587-3f33-4955-a338-436fa8b33787": "Bacon Crumbs",
+  "5aacff2a-8e16-45e4-8009-fc44dabf055c": "Liquid egg whites"
+ }
+}

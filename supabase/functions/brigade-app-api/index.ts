@@ -23,7 +23,9 @@ const UNITS = ['kg', 'g', 'lb', 'oz', 'L', 'ml', 'qt', 'gal', 'each', 'pz', 'por
 
 const svc = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 
-type User = { id: number; name: string; lang: string | null; station: string | null; role: 'chef' | 'staff'; session_id: string }
+type User = { id: number; name: string; lang: string | null; station: string | null; role: 'chef' | 'staff'; session_id: string }   // B-63: nel database c'è anche 'assistente' (bloccato sotto)
+// B-63: il ruolo «assistente» (T.E.C. per Max) può usare SOLO queste operazioni. Tutto il resto: 403.
+const TEC_OPS = new Set(['me', 'tec_leggi', 'tec_prova', 'tec_salva_bozza', 'tec_proposta_nuova'])
 
 class HttpError extends Error { constructor(public status: number, public code: string) { super(code) } }
 const deny = (code = 'unauthorized') => new HttpError(401, code)
@@ -308,8 +310,13 @@ Deno.serve(async (req: Request) => {
     if (op === 'ping') return new Response(JSON.stringify({ ok: true, build: BUILD }), { headers: H })
     if (op === 'login') return new Response(JSON.stringify(await login(req, body)), { headers: H })
     const u = await auth(req)
+    if ((u.role as string) === 'assistente' && !TEC_OPS.has(op)) throw forbid()
     let out: unknown
     switch (op) {
+      case 'tec_leggi': out = await MRE.tecLeggi(u as any, body, svc); break
+      case 'tec_prova': out = await MRE.tecProva(u as any, body, svc); break
+      case 'tec_salva_bozza': out = await MRE.tecSalvaBozza(u as any, body, svc); break
+      case 'tec_proposta_nuova': out = await MRE.tecPropostaNuova(u as any, body, svc); break
       case 'me': out = { ok: true, user: pub(u), build: BUILD }; break
       case 'logout': await svc.from('app_sessions').update({ revoked_at: new Date().toISOString() }).eq('id', u.session_id); out = { ok: true }; break
       case 'shift': out = await shift(u); break
