@@ -1,0 +1,844 @@
+{
+ "engine": "mre-1.2",
+ "source": "official",
+ "read_at": "2026-10-22T04:26:09.703Z",
+ "publish_locked": true,
+ "recipe": {
+  "id": "5479387e-e4ad-4401-92ce-9cb785ef4a0d",
+  "pilot": true,
+  "current_version": 1,
+  "linked": true,
+  "review": null
+ },
+ "doc": {
+  "schema": 1,
+  "id": "5479387e-e4ad-4401-92ce-9cb785ef4a0d",
+  "title": "Wheel Pasta",
+  "category": "primi piatti",
+  "yield": {
+   "g": null,
+   "portions": 1,
+   "label": null,
+   "count": 2,
+   "count_unit": "nest"
+  },
+  "has_stock": false,
+  "stock": [],
+  "lines": [
+   {
+    "id": "b2173",
+    "kind": "recipe",
+    "ref": "02240420-efe1-4e6d-8708-f233d10c9ed1",
+    "qty": 20,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null,
+    "src": {
+     "bom_id": 2173,
+     "role_src": "predefinito"
+    }
+   },
+   {
+    "id": "b2174",
+    "kind": "recipe",
+    "ref": "87cae4ee-aed0-4c20-886d-ecb6768f1c12",
+    "qty": 2,
+    "unit": "nests",
+    "role": "produzione",
+    "note": null,
+    "group": null,
+    "src": {
+     "bom_id": 2174,
+     "role_src": "predefinito"
+    }
+   },
+   {
+    "id": "b2175",
+    "kind": "ingredient",
+    "ref": "14d71347-32d9-401d-8d48-4281a7ea662b",
+    "qty": 30,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null,
+    "src": {
+     "bom_id": 2175,
+     "role_src": "predefinito"
+    }
+   },
+   {
+    "id": "b2176",
+    "kind": "ingredient",
+    "ref": "bc105a2b-a9c4-4a67-abbd-37e2e8c1342d",
+    "qty": 100,
+    "unit": "g",
+    "role": "produzione",
+    "note": null,
+    "group": null,
+    "src": {
+     "bom_id": 2176,
+     "role_src": "predefinito"
+    }
+   },
+   {
+    "id": "b2177",
+    "kind": "ingredient",
+    "ref": "95c79c9f-80e9-4558-9f86-fc727019df89",
+    "qty": 3,
+    "unit": "g",
+    "role": "imballo",
+    "note": null,
+    "group": null,
+    "src": {
+     "bom_id": 2177,
+     "role_src": "ingredient_policy non_food"
+    }
+   }
+  ],
+  "steps": [],
+  "notes": null,
+  "_source": "official"
+ },
+ "docs": {
+  "5479387e-e4ad-4401-92ce-9cb785ef4a0d": {
+   "schema": 1,
+   "id": "5479387e-e4ad-4401-92ce-9cb785ef4a0d",
+   "title": "Wheel Pasta",
+   "category": "primi piatti",
+   "yield": {
+    "g": null,
+    "portions": 1,
+    "label": null,
+    "count": 2,
+    "count_unit": "nest"
+   },
+   "has_stock": false,
+   "stock": [],
+   "lines": [
+    {
+     "id": "b2173",
+     "kind": "recipe",
+     "ref": "02240420-efe1-4e6d-8708-f233d10c9ed1",
+     "qty": 20,
+     "unit": "g",
+     "role": "produzione",
+     "note": null,
+     "group": null,
+     "src": {
+      "bom_id": 2173,
+      "role_src": "predefinito"
+     }
+    },
+    {
+     "id": "b2174",
+     "kind": "recipe",
+     "ref": "87cae4ee-aed0-4c20-886d-ecb6768f1c12",
+     "qty": 2,
+     "unit": "nests",
+     "role": "produzione",
+     "note": null,
+     "group": null,
+     "src": {
+      "bom_id": 2174,
+      "role_src": "predefinito"
+     }
+    },
+    {
+     "id": "b2175",
+     "kind": "ingredient",
+     "ref": "14d71347-32d9-401d-8d48-4281a7ea662b",
+     "qty": 30,
+     "unit": "g",
+     "role": "produzione",
+     "note": null,
+     "group": null,
+     "src": {
+      "bom_id": 2175,
+      "role_src": "predefinito"
+     }
+    },
+    {
+     "id": "b2176",
+     "kind": "ingredient",
+     "ref": "bc105a2b-a9c4-4a67-abbd-37e2e8c1342d",
+     "qty": 100,
+     "unit": "g",
+     "role": "produzione",
+     "note": null,
+     "group": null,
+     "src": {
+      "bom_id": 2176,
+      "role_src": "predefinito"
+     }
+    },
+    {
+     "id": "b2177",
+     "kind": "ingredient",
+     "ref": "95c79c9f-80e9-4558-9f86-fc727019df89",
+     "qty": 3,
+     "unit": "g",
+     "role": "imballo",
+     "note": null,
+     "group": null,
+     "src": {
+      "bom_id": 2177,
+      "role_src": "ingredient_policy non_food"
+     }
+    }
+   ],
+   "steps": [],
+   "notes": null,
+   "_source": "official"
+  },
+  "02240420-efe1-4e6d-8708-f233d10c9ed1": {
+   "schema": 1,
+   "id": "02240420-efe1-4e6d-8708-f233d10c9ed1",
+   "title": "Diced Butter",
+   "category": "Bases|supporto",
+   "yield": {
+    "g": 454,
+    "portions": 19.73913043478261,
+    "label": null
+   },
+   "has_stock": true,
+   "stock": [
+    {
+     "prep_task_id": 292,
+     "name": "Diced butter",
+     "unit": "g"
+    }
+   ],
+   "lines": [
+    {
+     "id": "b1872",
+     "kind": "ingredient",
+     "ref": "fdf9aa4d-2bb0-4197-98ce-298fc7c1b52f",
+     "qty": 454,
+     "unit": "g",
+     "role": "produzione",
+     "note": "1 blocco da 1 lb → 20 cubetti uguali",
+     "group": null,
+     "src": {
+      "bom_id": 1872,
+      "role_src": "predefinito"
+     }
+    }
+   ],
+   "steps": [
+    {
+     "title_it": null,
+     "title_en": "Dice the butter",
+     "title_es": null,
+     "it": "Con il coltello da pasticceria dal manico bianco, taglia il blocco di burro freddo a metà nel senso della lunghezza. Ruota di 90° e taglia di nuovo a metà nel senso della lunghezza (ora hai 4 strisce lunghe). Taglia ogni striscia in 5 pezzi uguali nel senso della larghezza. Otterrai 20 cubetti di burro uguali. Tieni in frigorifero fino all'utilizzo.",
+     "en": "Using the white-handled pastry knife, cut the cold butter block in half lengthwise. Rotate 90° and cut in half lengthwise again (you now have 4 long strips). Cut each strip crosswise into 5 equal pieces. You will have 20 uniform butter cubes. Keep refrigerated until needed.",
+     "es": "Con el cuchillo de repostería de mango blanco, corta el bloque de mantequilla fría por la mitad a lo largo. Gira 90° y corta por la mitad a lo largo de nuevo (ahora tienes 4 tiras largas). Corta cada tira en 5 piezas iguales a lo ancho. Obtendrás 20 cubos de mantequilla uniformes. Mantener refrigerado hasta su uso."
+    }
+   ],
+   "notes": null,
+   "_source": "official"
+  },
+  "87cae4ee-aed0-4c20-886d-ecb6768f1c12": {
+   "schema": 1,
+   "id": "87cae4ee-aed0-4c20-886d-ecb6768f1c12",
+   "title": "SPAGHETTI FRESH PASTA",
+   "category": null,
+   "yield": {
+    "g": 3500,
+    "portions": 50,
+    "label": "50 nidi",
+    "count": 50,
+    "count_unit": "nest"
+   },
+   "has_stock": true,
+   "stock": [
+    {
+     "prep_task_id": 475,
+     "name": "Spaghetti fresh pasta",
+     "unit": "nests"
+    }
+   ],
+   "lines": [
+    {
+     "id": "b1717",
+     "kind": "ingredient",
+     "ref": "2fcc472b-c8b8-4e19-85d8-6554be983150",
+     "qty": 1,
+     "unit": "kg",
+     "role": "produzione",
+     "note": null,
+     "group": null,
+     "src": {
+      "bom_id": 1717,
+      "role_src": "predefinito"
+     }
+    },
+    {
+     "id": "b1718",
+     "kind": "ingredient",
+     "ref": "77e10d48-1cd5-47fa-8afb-44fd633bd0ff",
+     "qty": 200,
+     "unit": "g",
+     "role": "produzione",
+     "note": null,
+     "group": null,
+     "src": {
+      "bom_id": 1718,
+      "role_src": "predefinito"
+     }
+    },
+    {
+     "id": "b1719",
+     "kind": "ingredient",
+     "ref": "c1edaf27-bb8a-4619-bde1-321c31a64808",
+     "qty": 2.3,
+     "unit": "kg",
+     "role": "produzione",
+     "note": null,
+     "group": null,
+     "src": {
+      "bom_id": 1719,
+      "role_src": "predefinito"
+     }
+    }
+   ],
+   "steps": [],
+   "notes": null,
+   "_source": "official"
+  }
+ },
+ "draft_docs": {},
+ "facts": {
+  "14d71347-32d9-401d-8d48-4281a7ea662b": {
+   "id": "14d71347-32d9-401d-8d48-4281a7ea662b",
+   "name": "Rhum",
+   "price": null,
+   "active": true,
+   "policy": null,
+   "density": null,
+   "name_es": "Ron",
+   "name_it": "Rum",
+   "piece_g": null,
+   "category": "Beverages & Spirits",
+   "base_unit": "g"
+  },
+  "2fcc472b-c8b8-4e19-85d8-6554be983150": {
+   "id": "2fcc472b-c8b8-4e19-85d8-6554be983150",
+   "name": "Liquid Egg",
+   "price": {
+    "vendor": "Hardie's Fresh Foods / Dairyland Produce",
+    "warnings": [],
+    "basis_dim": "mass",
+    "conflicts": 0,
+    "cost_per_ml": null,
+    "price_class": "A",
+    "cost_per_base": 0.004408513965560827,
+    "cost_per_each": null,
+    "invoice_number": null,
+    "pack_description": "15/2#",
+    "last_invoice_date": "2026-10-21"
+   },
+   "active": true,
+   "policy": null,
+   "density": null,
+   "name_es": "Huevo Líquido",
+   "name_it": "Uovo Liquido",
+   "piece_g": null,
+   "category": "Dairy",
+   "base_unit": "g"
+  },
+  "77e10d48-1cd5-47fa-8afb-44fd633bd0ff": {
+   "id": "77e10d48-1cd5-47fa-8afb-44fd633bd0ff",
+   "name": "Caputo Flour",
+   "price": {
+    "vendor": "Ben E. Keith",
+    "warnings": [],
+    "basis_dim": "mass",
+    "conflicts": 0,
+    "cost_per_ml": null,
+    "price_class": "A",
+    "cost_per_base": 0.0020410813722865086,
+    "cost_per_each": null,
+    "invoice_number": "0003612469",
+    "pack_description": "1/ 55 LB",
+    "last_invoice_date": "2026-10-22"
+   },
+   "active": true,
+   "policy": null,
+   "density": null,
+   "name_es": "Harina Caputo",
+   "name_it": "Farina Caputo",
+   "piece_g": null,
+   "category": "Dry Goods",
+   "base_unit": "g"
+  },
+  "95c79c9f-80e9-4558-9f86-fc727019df89": {
+   "id": "95c79c9f-80e9-4558-9f86-fc727019df89",
+   "name": "Butane Can",
+   "price": null,
+   "active": true,
+   "policy": "non_food",
+   "density": null,
+   "name_es": "Cartucho de Butano",
+   "name_it": "Bomboletta di Butano",
+   "piece_g": null,
+   "category": "Supply",
+   "base_unit": "g"
+  },
+  "bc105a2b-a9c4-4a67-abbd-37e2e8c1342d": {
+   "id": "bc105a2b-a9c4-4a67-abbd-37e2e8c1342d",
+   "name": "Cheese Wheel",
+   "price": null,
+   "active": true,
+   "policy": null,
+   "density": null,
+   "name_es": "Rueda de Queso",
+   "name_it": "Forma di Formaggio",
+   "piece_g": null,
+   "category": "Dairy",
+   "base_unit": "g"
+  },
+  "c1edaf27-bb8a-4619-bde1-321c31a64808": {
+   "id": "c1edaf27-bb8a-4619-bde1-321c31a64808",
+   "name": "Semolina",
+   "price": {
+    "vendor": "Ben E. Keith",
+    "warnings": [],
+    "basis_dim": "mass",
+    "conflicts": 0,
+    "cost_per_ml": null,
+    "price_class": "A",
+    "cost_per_base": 0.0009911991393146264,
+    "cost_per_each": null,
+    "invoice_number": "0003612469",
+    "pack_description": "1/ 50 LB",
+    "last_invoice_date": "2026-10-22"
+   },
+   "active": true,
+   "policy": null,
+   "density": null,
+   "name_es": "Sémola",
+   "name_it": "Semola",
+   "piece_g": null,
+   "category": "Dry Goods",
+   "base_unit": "g"
+  },
+  "fdf9aa4d-2bb0-4197-98ce-298fc7c1b52f": {
+   "id": "fdf9aa4d-2bb0-4197-98ce-298fc7c1b52f",
+   "name": "Butter",
+   "price": {
+    "vendor": "Hardie's Fresh Foods / Dairyland Produce",
+    "warnings": [],
+    "basis_dim": "mass",
+    "conflicts": 0,
+    "cost_per_ml": null,
+    "price_class": "A",
+    "cost_per_base": 0.005265990385877861,
+    "cost_per_each": null,
+    "invoice_number": null,
+    "pack_description": "36/1#",
+    "last_invoice_date": "2026-10-16"
+   },
+   "active": true,
+   "policy": null,
+   "density": null,
+   "name_es": "Mantequilla",
+   "name_it": "Burro",
+   "piece_g": null,
+   "category": "Dairy",
+   "base_unit": "g"
+  },
+  "bb3717e0-3d2c-43ef-aac4-dc5df13f5d8a": {
+   "id": "bb3717e0-3d2c-43ef-aac4-dc5df13f5d8a",
+   "name": "Parmesan Flakes",
+   "price": {
+    "vendor": "Hardie's Fresh Foods / Dairyland Produce",
+    "warnings": [],
+    "basis_dim": "mass",
+    "conflicts": 0,
+    "cost_per_ml": null,
+    "price_class": "A",
+    "cost_per_base": 0.02987266089349019,
+    "cost_per_each": null,
+    "invoice_number": null,
+    "pack_description": "80#",
+    "last_invoice_date": "2026-10-19"
+   },
+   "active": false,
+   "policy": null,
+   "density": null,
+   "name_es": "Hojuelas de Parmesano",
+   "name_it": "Scaglie di Parmigiano",
+   "piece_g": null,
+   "category": "Dairy",
+   "base_unit": "g"
+  }
+ },
+ "measures": {
+  "drops": 0.05,
+  "pinch": 0.5,
+  "foglia": 1,
+  "foglio": 2,
+  "pizzico": 0.5,
+  "spicchi": 6
+ },
+ "versions": [
+  {
+   "version": 2,
+   "state": "bozza",
+   "reason": "Bozza: Cheese Wheel = Parmigiano Reggiano 24 mesi (Chef 20/10)",
+   "by": "Max",
+   "at": "2026-10-22T04:26:03.111Z"
+  },
+  {
+   "version": 1,
+   "state": "importata",
+   "reason": "Importata da Brigade (distinta + procedimento) il 15/10/2026",
+   "by": null,
+   "at": "2026-10-15T15:39:24.548Z"
+  }
+ ],
+ "productions": [],
+ "suggestions": [],
+ "draft": {
+  "id": "5479387e-e4ad-4401-92ce-9cb785ef4a0d",
+  "lines": [
+   {
+    "id": "b2173",
+    "qty": 20,
+    "ref": "02240420-efe1-4e6d-8708-f233d10c9ed1",
+    "src": {
+     "bom_id": 2173,
+     "role_src": "predefinito"
+    },
+    "kind": "recipe",
+    "note": null,
+    "role": "produzione",
+    "unit": "g",
+    "group": null
+   },
+   {
+    "id": "b2174",
+    "qty": 2,
+    "ref": "87cae4ee-aed0-4c20-886d-ecb6768f1c12",
+    "src": {
+     "bom_id": 2174,
+     "role_src": "predefinito"
+    },
+    "kind": "recipe",
+    "note": null,
+    "role": "produzione",
+    "unit": "nests",
+    "group": null
+   },
+   {
+    "id": "b2175",
+    "qty": 30,
+    "ref": "14d71347-32d9-401d-8d48-4281a7ea662b",
+    "src": {
+     "bom_id": 2175,
+     "role_src": "predefinito"
+    },
+    "kind": "ingredient",
+    "note": null,
+    "role": "produzione",
+    "unit": "g",
+    "group": null
+   },
+   {
+    "id": "b2176",
+    "qty": 100,
+    "ref": "bb3717e0-3d2c-43ef-aac4-dc5df13f5d8a",
+    "src": {
+     "bom_id": 2176,
+     "role_src": "predefinito"
+    },
+    "kind": "ingredient",
+    "note": "Parmigiano Reggiano 24 mesi — Chef's Warehouse SKU 00907 (fatture 01/06→19/10, cassa 80 lb). In Brigade questo articolo si chiama oggi \"Parmesan Flakes\". 100 g da verificare.",
+    "role": "produzione",
+    "unit": "g",
+    "group": null
+   },
+   {
+    "id": "b2177",
+    "qty": 3,
+    "ref": "95c79c9f-80e9-4558-9f86-fc727019df89",
+    "src": {
+     "bom_id": 2177,
+     "role_src": "ingredient_policy non_food"
+    },
+    "kind": "ingredient",
+    "note": null,
+    "role": "imballo",
+    "unit": "g",
+    "group": null
+   }
+  ],
+  "notes": "Bozza: la riga Cheese Wheel (ingrediente senza prezzo) collegata all'articolo che riceve la fattura del Parmigiano Reggiano 24 mesi. Rum: dati da verificare, nessun prezzo inserito.",
+  "steps": [
+   {
+    "en": "",
+    "es": "",
+    "it": "Cucina (per 2 porzioni) · Sciogli un cubetto di burro con un po' di acqua di cottura.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Cucina · Intanto cuoci gli spaghetti per 6 minuti.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Cucina · Scalda sotto la lampada i piatti dove servirai la pasta.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Cucina · Prepara un bricco con l'acqua calda di cottura da dare a chi fa il servizio in sala.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala (per 2 porzioni) · Metti circa 2 once di rum dentro la forma di formaggio e dagli fuoco (flambé).",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Mescola il fuoco e il rum con il cucchiaione finché l'alcol è evaporato e il fuoco è spento.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Raschia la forma, prima dai bordi e poi un po' dal centro, in modo molto fine.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Mentre raschi, dai al cliente 2 o 3 pezzettini da assaggiare in una ciotolina.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Raschia il formaggio: {{b2176}} a porzione.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Schiaccia il formaggio rimasto sul fondo con il dorso del cucchiaio, fino a farne una pasta fine, come parmigiano grattato a mano.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Chiama la pasta e aspetta che arrivi.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Quando arriva, buttala nella forma insieme al formaggio. Se è bollente, gira subito.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Prima gira la pasta a secco con il formaggio.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Sala · Poi aggiungi un po' alla volta l'acqua calda dalla ciotolina, fino a formare una crema.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Impiattamento · Metti le due porzioni nei piatti.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Impiattamento · Versa sopra tutta la cremina rimasta.",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   },
+   {
+    "en": "",
+    "es": "",
+    "it": "Impiattamento · Chiedi se vogliono il pepe e grattalo: prima il piatto della signora, poi gli altri (eventualmente bambini e uomini adulti).",
+    "tr": {
+     "it": "chef"
+    },
+    "src": "it",
+    "title_en": null,
+    "title_es": null,
+    "title_it": null
+   }
+  ],
+  "stock": [],
+  "title": "Wheel Pasta",
+  "yield": {
+   "g": null,
+   "count": 2,
+   "label": null,
+   "portions": 1,
+   "count_unit": "nest"
+  },
+  "schema": 1,
+  "category": "primi piatti",
+  "has_stock": false,
+  "_version": 2,
+  "_state": "bozza"
+ },
+ "diffs": [
+  {
+   "type": "testo_vuoto",
+   "note": "La ricetta scritta non ha ingredienti: oggi la scheda normale di Brigade non ne mostra nessuno. Base provvisoria: la distinta."
+  }
+ ],
+ "diffs_checked": null,
+ "cost": {
+  "food": 0.389179338135228,
+  "pack": 0,
+  "missing": 2,
+  "pack_missing": 1,
+  "estimated": 0,
+  "complete": false,
+  "state": "parziale",
+  "per_portion": 0.389179338135228,
+  "portions": 1,
+  "byLine": {
+   "b2173": {
+    "cost": 0.10531980771755722,
+    "missing": 0,
+    "status": "ok"
+   },
+   "b2174": {
+    "cost": 0.28385953041767076,
+    "missing": 0,
+    "status": "ok"
+   },
+   "b2175": {
+    "cost": 0,
+    "missing": 1,
+    "status": "prezzo_mancante"
+   },
+   "b2176": {
+    "cost": 0,
+    "missing": 1,
+    "status": "prezzo_mancante"
+   },
+   "b2177": {
+    "cost": 0,
+    "missing": 0,
+    "status": "ok"
+   }
+  }
+ }
+}

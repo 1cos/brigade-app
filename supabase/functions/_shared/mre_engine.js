@@ -215,7 +215,7 @@ function walk(doc, id, factor, path, keep, out, purpose, ctx) {
     const p = path.concat(ln.id);
     if (ln.kind === 'ingredient') {
       const a = ingredientAmount(Number(ln.qty) * factor, ln.unit, ctx.facts(ln.ref), ctx.measures);
-      out.push({ kind: 'ingredient', ref: ln.ref, line: ln.id, from: id, role: ln.role, dim: a.dim, g: a.g, ml: a.ml != null ? a.ml : (a.dim === 'v' ? a.val : null), count: a.dim === 'c' ? a.val : null, ckey: a.ckey, status: a.status, path: p });
+      out.push({ kind: 'ingredient', ref: ln.ref, line: ln.id, from: id, role: ln.role, dim: a.dim, g: a.g, ml: a.ml != null ? a.ml : (a.dim === 'v' ? a.val : null), count: a.dim === 'c' ? a.val : null, ckey: a.ckey, status: a.status, path: p, ...(ln.est ? { est: ln.est } : {}) });
       continue;
     }
     if (path.includes(ln.ref)) { out.push({ kind: 'error', ref: ln.ref, line: ln.id, from: id, status: 'ciclo', path: p }); continue; }
@@ -255,22 +255,47 @@ export function leafCost(leaf, facts) {
   return { cost: null, status: leaf.status !== 'ok' ? leaf.status : 'conversione_mancante' };
 }
 
+/** R1.19 (Chef 22/10, Wheel Pasta rum): "prezzo di fiducia" — a price the Chef estimates for an ingredient that has NO invoice price
+ *  (e.g. bought by the front of house). Stored on the recipe line only: { usd, qty, unit } = usd for qty unit. Used only when the
+ *  invoice price is missing, never over a real one, and always marked 'stima_chef' — an indication, not an invoice. */
+export function estPrice(est, facts, measures) {
+  if (!est || !(Number(est.usd) > 0) || !(Number(est.qty) > 0)) return null;
+  const a = ingredientAmount(Number(est.qty), est.unit, facts, measures), usd = Number(est.usd);
+  if (a.dim === 'm' && a.status === 'ok') return { basis_dim: 'mass', cost_per_base: usd / a.g, cost_per_ml: a.ml ? usd / a.ml : null };
+  if (a.dim === 'v') return { basis_dim: 'volume', cost_per_base: usd / a.ml, cost_per_ml: usd / a.ml };
+  if (a.dim === 'c') return { basis_dim: 'each', cost_per_base: usd / a.val, cost_per_each: usd / a.val };
+  return null;
+}
+/** leafCost with the Chef's estimated price when the invoice price is missing. status 'stima_chef' when the estimate was used. */
+export function leafCostEst(leaf, facts, measures) {
+  const c = leafCost(leaf, facts);
+  if (c.cost != null || !leaf.est || !facts || c.status !== 'prezzo_mancante') return c;
+  const p = estPrice(leaf.est, facts, measures);
+  if (!p) return { cost: null, status: 'stima_non_valida' };
+  const e = leafCost(leaf, Object.assign({}, facts, { policy: null, price: p }));
+  if (e.cost != null) return { cost: e.cost, status: 'stima_chef' };
+  // price per ml with the line in grams (or the reverse) and no verified density: said, never guessed
+  if ((leaf.dim === 'm' && p.basis_dim === 'volume') || (leaf.dim === 'v' && p.basis_dim === 'mass')) return { cost: null, status: 'densita_mancante' };
+  return e;
+}
+
 /** Food cost of one lot × factor. Per top line and total. Missing parts are counted, never treated as zero. */
 export function cost(rootId, factor, ctx) {
   const doc = D(ctx, rootId), leaves = explode(rootId, factor, 'costo', ctx);
-  const byLine = {}; let food = 0, pack = 0, missing = 0, estimated = 0, packMissing = 0;
+  const byLine = {}; let food = 0, pack = 0, missing = 0, estimated = 0, packMissing = 0, chefEst = 0;
   for (const lf of leaves) {
     const top = lf.path[1];
     const b = byLine[top] || (byLine[top] = { cost: 0, missing: 0, status: 'ok' });
     if (lf.kind !== 'ingredient') { b.missing++; b.status = lf.status; missing++; continue; }
-    const f = ctx.facts(lf.ref), c = leafCost(lf, f);
+    const f = ctx.facts(lf.ref), c = leafCostEst(lf, f, ctx.measures);
     const isPack = lf.role === 'imballo' || (f && f.policy === 'non_food');
     if (c.cost == null) { if (!isPack) { b.missing++; b.status = c.status; missing++; } else packMissing++; continue; }
     if (isPack) pack += c.cost; else { food += c.cost; b.cost += c.cost; }
     if (c.status === 'stima') { estimated++; if (b.status === 'ok') b.status = 'stima'; }
+    if (c.status === 'stima_chef') { chefEst++; b.status = 'stima_chef'; }
   }
   const portions = doc && Number(doc.yield && doc.yield.portions) > 0 ? doc.yield.portions * factor : null;
-  return { food, pack, missing, pack_missing: packMissing, estimated, complete: missing === 0, state: missing === 0 ? 'completo' : 'parziale', per_portion: portions ? food / portions : null, portions, byLine };
+  return { food, pack, missing, pack_missing: packMissing, estimated, chef_est: chefEst, complete: missing === 0, state: missing === 0 ? 'completo' : 'parziale', per_portion: portions ? food / portions : null, portions, byLine };
 }
 
 /* ---------------- one number for every module (B-49, Chef 20/10) ----------------
@@ -413,7 +438,8 @@ export function issues(rootId, ctx) {
   for (const lf of explode(rootId, 1, 'costo', ctx)) {
     const top = lf.path[1];
     if (lf.kind !== 'ingredient') { add({ code: 'conversione', status: lf.status, ref: lf.ref, line: top, sub: lf.from !== rootId ? lf.from : null }); continue; }
-    const f = ctx.facts(lf.ref), c = leafCost(lf, f), pack = lf.role === 'imballo' || (f && f.policy === 'non_food');
+    const f = ctx.facts(lf.ref), c = leafCostEst(lf, f, ctx.measures), pack = lf.role === 'imballo' || (f && f.policy === 'non_food');
+    if (c.status === 'stima_chef') { add({ code: 'prezzo_stima_chef', ref: lf.ref, line: top, sub: lf.from !== rootId ? lf.from : null }); continue; }
     if (c.cost != null) continue;
     const sub = lf.from !== rootId ? lf.from : null;
     if (pack) add({ code: 'imballo_senza_prezzo', ref: lf.ref, line: top, sub });
@@ -459,6 +485,7 @@ export function validate(doc, ctx, strict) {
     if (strict && dimOf(l.unit) == null) err.push('riga_unita:' + l.id);
     if (l.per != null && l.per !== 'portion') err.push('riga_per:' + l.id);
     if (l.per === 'portion' && !(Number(y.portions) > 0)) err.push('riga_per_senza_porzioni:' + l.id);
+    if (l.est != null && (l.kind !== 'ingredient' || !(Number(l.est.usd) > 0) || !(Number(l.est.qty) > 0) || !['m', 'v', 'c'].includes(dimOf(l.est.unit)))) err.push('riga_stima:' + l.id);
   }
   // R1.17: one number, one place — a lot weight typed next to a portion weight that says something else is refused
   if (Number(y.portion_g) > 0 && Number(y.g) > 0 && Number(y.portions) > 0 && Math.abs(y.portion_g * y.portions - y.g) > 0.02 * y.g) err.push('resa_doppia');
@@ -523,4 +550,4 @@ export function stepIn(st, lang) {
   return o ? { text: st[o], lang: o, kind: 'fallback' } : { text: '', lang: null, kind: 'none' };
 }
 
-export const MRE_ENGINE_VERSION = 'mre-1.2';
+export const MRE_ENGINE_VERSION = 'mre-1.3';

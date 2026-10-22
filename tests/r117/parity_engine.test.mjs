@@ -19,7 +19,9 @@ for (const id of Object.keys(DOC)) {
     lines: (d.lines || []).map(l => [E.showLine(l, 1.7, ctx, 'metric', 'it-IT'), E.showLine(l, 0.5, ctx, 'imperial', 'en-US'), E.factorFromLine(d, l.id, 3, l.unit, ctx)]),
     yl: [E.factorFromYield(d, 2, 'kg'), E.lotsFromPortions(d, 7)],
     steps: (d.steps || []).map(s => ['it', 'en', 'es'].map(k => E.stepParts(s[k], d, 2, 'it-IT'))) })
-  const a = J(runs(OLD)), b = J(runs(NEW)); n++
+  // R1.19: cost() also says how many lines use the Chef's estimated price — always 0 on official recipes (they have none)
+  const rn = runs(NEW); for (const k of ['cost', 'cost3']) { if (rn[k].chef_est !== 0) bad.push('chef_est≠0 ' + d.title); delete rn[k].chef_est }
+  const a = J(runs(OLD)), b = J(rn); n++
   if (a !== b) { diff++; bad.push(d.title) }
 }
 console.log(`ricette confrontate: ${n} · identiche: ${n - diff} · diverse: ${diff}${bad.length ? ' → ' + bad.slice(0, 10).join(', ') : ''}`)

@@ -102,6 +102,8 @@ async function tree(tx: any, svc: any, rootDoc: any, withDrafts: boolean) {
 const ctxOf = (t: any, drafts = false) => ({ doc: (id: string) => (drafts && t.draftDocs && t.draftDocs[id]) || t.docs[id], facts: (id: string) => t.facts[id], measures: t.measures })
 const LOCK = 'pubblicazione_bloccata'   // step A: nothing is ever published to the official recipes from here
 function stripPrices(facts: any) { const o: any = {}; for (const k of Object.keys(facts)) { const { price, ...rest } = facts[k]; o[k] = rest } return o }
+const stripEst = (doc: any) => doc && Array.isArray(doc.lines) && doc.lines.some((l: any) => l.est) ? Object.assign({}, doc, { lines: doc.lines.map((l: any) => { const { est, ...rest } = l; return rest }) }) : doc
+function stripEstDocs(docs: any) { const o: any = {}; for (const k of Object.keys(docs || {})) o[k] = stripEst(docs[k]); return o }
 
 /* ---------------- reads ---------------- */
 /** R1.13 (Chef 20/10 "una sola lista"): EVERY recipe once. Official recipes from Brigade (read only) + lab-only proposals.
@@ -185,7 +187,7 @@ export async function mreRecipe(u: U, id: string, svc: any) {
     const t = await tree(tx, svc, cur, isChef)
     const out: any = { engine: E.MRE_ENGINE_VERSION, source, read_at: off.read_at, publish_locked: !(r && r.is_test),
       recipe: { id, pilot: r ? r.pilot : false, current_version: r ? r.current_version : 0, linked: !!r, review: isChef && r && r.source && r.source.review ? r.source.review : null },
-      doc: cur, docs: t.docs, draft_docs: isChef ? t.draftDocs : {}, facts: isChef ? t.facts : stripPrices(t.facts), measures: t.measures }
+      doc: isChef ? cur : stripEst(cur), docs: isChef ? t.docs : stripEstDocs(t.docs), draft_docs: isChef ? t.draftDocs : {}, facts: isChef ? t.facts : stripPrices(t.facts), measures: t.measures }
     const vers = r ? await tx`select version, state, reason, created_by, created_at, published_by, published_at from mre.versions where recipe_id = ${id} order by version desc` : []
     const prods = r ? await tx`select id, version, factor, reference, yield_planned_g, yield_real_g, changed, note, user_id, created_at from mre.productions where recipe_id = ${id} ${isChef ? tx`` : tx`and user_id = ${u.id}`} order by created_at desc limit 20` : []
     const sugs = r ? await tx`select id, version, user_id, text, status, created_at, decided_by, decided_at, chef_note from mre.suggestions where recipe_id = ${id} ${isChef ? tx`` : tx`and user_id = ${u.id}`} order by created_at desc limit 50` : []
@@ -237,6 +239,11 @@ export async function mrePrepareEdit(u: U, body: any, svc: any) {
 }
 
 /* ---------------- Chef: draft, publish, restore ---------------- */
+// R1.19 (Chef 22/10): "prezzo di fiducia" on a recipe line — { usd, qty, unit, at } = usd for qty unit. Anything else is dropped.
+function estOf(e: any) {
+  if (!e || typeof e !== 'object' || !(Number(e.usd) > 0) || !(Number(e.qty) > 0) || !e.unit) return null
+  return { usd: Math.round(Number(e.usd) * 100) / 100, qty: Number(e.qty), unit: String(e.unit).slice(0, 20), at: e.at ? String(e.at).slice(0, 40) : null }
+}
 function cleanDoc(id: string, d: any) {
   if (!d || typeof d !== 'object') throw bad('bad_doc')
   const str = (x: any, n: number) => x == null ? null : String(x).slice(0, n)
@@ -245,7 +252,8 @@ function cleanDoc(id: string, d: any) {
     id: str(l.id, 40), kind: l.kind === 'recipe' ? 'recipe' : 'ingredient', ref: isUuid(l.ref) ? l.ref : (() => { throw bad('bad_ref') })(),
     qty: num(l.qty), unit: str(l.unit, 20), role: ['produzione', 'al_piatto', 'imballo'].includes(l.role) ? l.role : 'produzione',
     note: str(l.note, 300), group: str(l.group, 60), src: l.src && typeof l.src === 'object' ? l.src : null,
-    ...(l.per === 'portion' ? { per: 'portion' } : {}) }))      // R1.17: quantity per portion (1 container per cup)
+    ...(l.per === 'portion' ? { per: 'portion' } : {}),       // R1.17: quantity per portion (1 container per cup)
+    ...(estOf(l.est) ? { est: estOf(l.est) } : {}) }))           // R1.19: the Chef's estimated price ("prezzo di fiducia"), a stima, never an invoice
   const LG = ['it', 'en', 'es'], TRS = ['auto', 'chef', 'stale', 'check', 'imported']
   const steps = (Array.isArray(d.steps) ? d.steps : []).slice(0, 60).map((s: any) => {
     const o: any = { it: str(s.it, 4000) || '', en: str(s.en, 4000) || '', es: str(s.es, 4000) || '', title_it: str(s.title_it, 200), title_en: str(s.title_en, 200), title_es: str(s.title_es, 200) }

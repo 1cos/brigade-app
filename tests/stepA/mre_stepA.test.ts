@@ -240,6 +240,24 @@ Deno.test('D3 R1.18: elenco ricercabile per nome POS (cuoco e Chef), nomi POS se
     assert(L.recipes.filter((x: any) => !x.pos_names).every((x: any) => !String((S.recipes.find((y: any) => y.id === x.id) || {}).pos_name || '').trim()), 'ricette senza nome POS: nessun campo vuoto inventato')
   }
 })
+Deno.test('D4 R1.19: prezzo di fiducia salvato sulla riga, mai su una sotto-ricetta, mai al cuoco', async () => {
+  const o = await M.mreRecipe(CHEF, WHEEL, svc), base = JSON.parse(JSON.stringify(o.draft || o.doc)), cv = o.recipe.current_version
+  const rum = base.lines.find((l: any) => l.id === 'b2175'); assert(rum && !(o.facts[rum.ref] || {}).price, 'rum senza prezzo da fattura')
+  rum.est = { usd: 25, qty: 700, unit: 'g', at: 'x', junk: 'no' }
+  const s = await M.mreSaveDraft(CHEF, { id: WHEEL, doc: base, base: cv }, svc)
+  assertEquals(s.cost.chef_est, 1)
+  const o2 = await M.mreRecipe(CHEF, WHEEL, svc), e = o2.draft.lines.find((l: any) => l.id === 'b2175').est
+  assertEquals(e, { usd: 25, qty: 700, unit: 'g', at: 'x' })
+  assertEquals(o2.draft.lines.find((l: any) => l.id === 'b2176').qty, rum && base.lines.find((l: any) => l.id === 'b2176').qty, 'formaggio invariato')
+  const bad = JSON.parse(JSON.stringify(base)); bad.lines.find((l: any) => l.kind === 'recipe').est = { usd: 1, qty: 1, unit: 'g' }
+  let err = ''; try { await M.mreSaveDraft(CHEF, { id: WHEEL, doc: bad, base: cv }, svc) } catch (x) { err = String((x as any).message || x) }
+  assert(/riga_stima/.test(err), 'stima su una sotto-ricetta rifiutata: ' + err)
+  const zero = JSON.parse(JSON.stringify(base)); zero.lines.find((l: any) => l.id === 'b2175').est = { usd: 0, qty: 700, unit: 'g' }
+  await M.mreSaveDraft(CHEF, { id: WHEEL, doc: zero, base: cv }, svc)
+  assert(!(await M.mreRecipe(CHEF, WHEEL, svc)).draft.lines.find((l: any) => l.id === 'b2175').est, 'prezzo zero = nessuna stima')
+  const st = await M.mreRecipe(STAFF, WHEEL, svc)
+  assert(!st.draft && !JSON.stringify(st.doc).includes('"est"') && !JSON.stringify(st.docs).includes('"est"') && st.cost === undefined, 'cuoco: nessuna stima, nessun costo')
+})
 Deno.test('A11 nessuna scrittura sulle tabelle ufficiali', () => {
   assertEquals(writes, []); assertEquals(JSON.stringify(TABLES), official0)
 })

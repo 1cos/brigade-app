@@ -133,7 +133,7 @@ function render(p) {
     h += `<div class="mr-scaled">${fromParent ? esc(p.ref[0].toUpperCase() + p.ref.slice(1)) : T('scaled_from', { ref: esc(p.ref || '') })}${rounded.map(x => ' · ' + T('rounded', { name: esc(lineName(d, x.l).toLowerCase()), v: x.s.theo })).join('')} · <button class="mr-link acc" data-m="reset">${T('reset')}</button></div>`;
   }
   if (chef && m === 'view') { const c = !PREVIEW && d.cost ? d.cost : E().cost(p.id, 1, ctx); const pp = c.per_portion;
-    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + (y.portion_unit ? pu(1) : T('portion'))}</b> <span class="${c.complete ? 'mr-okc' : 'mr-bad'}">· ${c.complete ? T('fc_complete') : T('fc_partial')}</span>${c.pack ? ` <span class="mr-muted">· ${T('pack_plus', { v: usd(c.portions ? c.pack / c.portions : c.pack) })}</span>` : ''}</div>`;
+    h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + (y.portion_unit ? pu(1) : T('portion'))}</b> <span class="${c.complete ? 'mr-okc' : 'mr-bad'}">· ${c.complete ? T('fc_complete') : T('fc_partial')}</span>${c.chef_est ? ` <span class="mr-warnm">· ${T('est_with')}</span>` : ''}${c.pack ? ` <span class="mr-muted">· ${T('pack_plus', { v: usd(c.portions ? c.pack / c.portions : c.pack) })}</span>` : ''}</div>`;
     const rv = d.recipe && d.recipe.review;
     if (rv) h += `<div class="mr-ok">✓ ${T('verified_by', { by: esc(rv.by || ''), at: esc(dt(rv.at)) })} <span class="mr-muted">· ${T('rv_not_pub')}</span></div>`;
     h += issuesHtml(d, p.id, ctx, p.iss); }
@@ -157,7 +157,7 @@ function render(p) {
     h += `<li class="mr-eline"><span class="mr-nm">${nameHtml}${nameFb(d, l)}${l.kind === 'recipe' ? ` <span class="mr-muted mr-kind">${T('sub_recipe')}</span>` : ''}
         ${bad || adv ? `<span class="mr-note">${stx}</span>` : ''}
         ${adv && !doc.has_stock ? `<span class="mr-note mr-adv">${T('role_sale')}</span>` : ''}${adv && doc.has_stock ? `<span class="mr-note mr-adv">${T('role')}: <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select></span>` : ''}${adv ? `
-        <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : noteHtml(nt, p.notesO)}
+        <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : noteHtml(nt, p.notesO)}${estHtml(d, l)}
 </span>
       ${l.per === 'portion' || l.role === 'imballo' || adv ? `<span class="mr-note">${T('per_q')} <select data-ms="per:${esc(l.id)}" class="mr-sel"><option value="" ${l.per !== 'portion' ? 'selected' : ''}>${T('per_lot')}</option><option value="portion" ${l.per === 'portion' ? 'selected' : ''}>${T('per_one', { u: T('pu_' + (y.portion_unit || 'portion') + '1') })}</option></select>${l.per === 'portion' && Number(y.portions) > 0 && l.qty != null ? ` = <b>${nf(l.qty * y.portions, 1)}</b> ${T('per_lot_n')}` : ''}</span>` : ''}
       <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option ${u === ucur ? 'selected' : ''}>${esc(u || '—')}</option>`).join('')}</select><button class="mr-x" data-m="del:${esc(l.id)}" aria-label="${esc(T('remove'))}" title="${esc(T('remove'))}">×</button></span></li>`;
@@ -217,6 +217,13 @@ function render(p) {
 }
 const cat = c => { const x = String(c || '').split('|')[0].trim(); return x ? x[0].toUpperCase() + x.slice(1).toLowerCase() : ''; };
 
+/* R1.19 (Chef 22/10): "prezzo di fiducia" — only on an ingredient with NO invoice price; a stima for an indicative food cost, never an invoice */
+function estHtml(d, l) {
+  const f = d.facts[l.ref];
+  if (!H.isChef() || l.kind !== 'ingredient' || !f || f.price || f.policy === 'non_food' || f.policy === 'zero_cost' || l.role === 'imballo') return '';
+  const e = l.est || {}, u0 = e.unit || (/beverage|spirit|wine|liquor/i.test(f.category || '') ? 'ml' : 'g');
+  return `<span class="mr-note mr-est">${T('est_label')}: $ <input class="mr-estin" data-me="usd:${esc(l.id)}" data-mred="1" inputmode="decimal" size="6" value="${e.usd != null ? esc(String(e.usd)) : ''}" aria-label="${esc(T('est_label'))}"> ${T('est_per')} <input class="mr-estin" data-me="qty:${esc(l.id)}" data-mred="1" inputmode="decimal" size="5" value="${e.qty != null ? esc(String(e.qty)) : ''}" aria-label="${esc(T('est_qty'))}"> <select class="mr-sel" data-me="unit:${esc(l.id)}">${['g', 'kg', 'ml', 'l', 'fl oz', 'oz', 'lb', 'pz'].map(u => `<option ${u === u0 ? 'selected' : ''}>${u}</option>`).join('')}</select> <span class="mr-muted">${T('est_hint')}</span></span>`;
+}
 /* what a line still needs, from the SAME rule as the food cost (R1.14): a weight is asked only when the price is per gram */
 function statusOf(d, l) {
   if (l.kind === 'recipe') { const s = (PREVIEW && d.draft_docs && d.draft_docs[l.ref]) || d.docs[l.ref]; if (!s) return `<span class="mr-bad">${T('missing_sub')}</span>`;
@@ -225,10 +232,12 @@ function statusOf(d, l) {
   if (!f) return `<span class="mr-bad">${T('missing_product')}</span>`;
   const a = E().ingredientAmount(l.qty == null ? 0 : l.qty, l.unit, f, d.measures);
   if (a.status === 'da_definire' || a.status === 'unita_sconosciuta') return `<span class="mr-bad">${T('need_unit')}</span>`;
-  const c = E().leafCost({ dim: a.dim, g: a.g, ml: a.ml != null ? a.ml : (a.dim === 'v' ? a.val : null), count: a.dim === 'c' ? a.val : null, status: a.status }, f);
+  const c = E().leafCostEst({ dim: a.dim, g: a.g, ml: a.ml != null ? a.ml : (a.dim === 'v' ? a.val : null), count: a.dim === 'c' ? a.val : null, status: a.status, est: l.est || null }, f, d.measures);
   const pack = l.role === 'imballo' || f.policy === 'non_food';
   if (!H.isChef()) return a.status === 'densita_mancante' ? `<span class="mr-bad">${T('need_density')}</span>` : esc(T('ok'));
+  if (c.status === 'stima_chef') return `<span class="mr-warnm">${T('est_used')}</span>`;
   if (c.cost != null) return a.dim === 'c' && !(f.piece_g) ? esc(T('by_piece')) : esc(T('ok'));
+  if (l.est && c.status === 'densita_mancante') return `<span class="mr-bad">${T('est_density')}</span>`;
   if (pack) return `<span class="mr-warnm">${T('pack_no_price')}</span>`;
   if (c.status === 'prezzo_mancante') return `<span class="mr-bad">${T('no_price')}</span>`;
   if (c.status === 'peso_pezzo_mancante') return `<span class="mr-bad">${T('need_piece')}</span>`;
@@ -292,10 +301,10 @@ function panelHtml(p, d, doc, ctx) {
     const local = E().cost(p.id, 1, ctx), c = !PREVIEW && d.cost ? d.cost : local;
     const pp = c.per_portion;
     let h = `<div class="mr-panel">` + kv(T('lot_cost'), `<b>${usd(c.food)}</b>`) + kv(T('portion_cost', { n: doc.yield && doc.yield.portions ? nf(doc.yield.portions, 1) : '—' }), `<b>${pp == null ? '—' : usd(pp)}</b>`)
-      + kv(T('state'), c.complete ? T('complete') : T('incomplete', { n: c.missing }));
+      + kv(T('state'), c.complete ? (c.chef_est ? `<span class="mr-warnm">${T('complete_est', { n: c.chef_est })}</span>` : T('complete')) : T('incomplete', { n: c.missing }) + (c.chef_est ? ` · <span class="mr-warnm">${T('est_n', { n: c.chef_est })}</span>` : ''));
     for (const l of doc.lines) {
       const b = c.byLine[l.id] || {}, f = d.facts[l.ref] || {}, pr = f.price;
-      const src = l.kind === 'recipe' ? T('sub_recipe') : pr ? `${esc(pr.vendor || '')}${pr.last_invoice_date ? ' · ' + esc(pr.last_invoice_date) : ''}` : (f.policy === 'non_food' ? T('packaging') : T('no_price'));
+      const src = l.kind === 'recipe' ? T('sub_recipe') + (b.status === 'stima_chef' ? ' · ' + T('est_used') : '') : pr ? `${esc(pr.vendor || '')}${pr.last_invoice_date ? ' · ' + esc(pr.last_invoice_date) : ''}` : (f.policy === 'non_food' ? T('packaging') : l.est ? `<span class="mr-warnm">${T('est_src', { v: usd(l.est.usd), q: nf(l.est.qty, 2), u: esc(l.est.unit) })}</span>` : T('no_price'));
       h += kv(`${esc(lineName(d, l))}<br><span class="mr-muted">${src}</span>`, b.missing ? `${b.cost ? usd(b.cost) + ' + ' : ''}<span class="mr-bad">${T('missing')}</span>` : usd(b.cost || 0));
     }
     if (c.pack) h += kv(T('packaging'), usd(c.pack));
@@ -306,7 +315,7 @@ function panelHtml(p, d, doc, ctx) {
       h += kv(T('real_yield_q', { u: T('pu_' + (yy.portion_unit || 'portion')) }), `<b class="mq" data-mq="rp" data-u=""><span class="n">${rp ? nf(rp, 0) : '—'}</span></b>`)
         + (rp ? kv(T('real_cost', { n: nf(rp, 0), u: unit }), `<b>${usd(c.food / rp)}</b> <span class="mr-muted">(${T('std_cost', { n: nf(yy.portions, 0), v: usd(c.food / yy.portions) })})</span>`) : '');
     }
-    h += `<p class="mr-muted">${T('cost_note')}${Math.abs((local.food || 0) - (c.food || 0)) > 0.001 ? ' ' + T('cost_mismatch') : ''}</p></div>`;
+    h += `<p class="mr-muted">${T('cost_note')}${c.chef_est ? ' ' + T('est_note') : ''}${Math.abs((local.food || 0) - (c.food || 0)) > 0.001 ? ' ' + T('cost_mismatch') : ''}</p></div>`;
     return h;
   }
   if (p.panel === 'struct') {
@@ -693,6 +702,7 @@ function onBlurText(ev) {
     queueTr(p.id, 300); }
 }
 function onChange(ev) {
+  if (ev.target.dataset && ev.target.dataset.me) return onEst(ev.target);
   const s = ev.target.closest && ev.target.closest('[data-ms]'); if (!s || !s.closest('.mr')) return;
   const p = entry(), doc = WORK[p && p.id]; if (!doc) return;
   const [k, a] = s.dataset.ms.split(':');
@@ -701,6 +711,19 @@ function onChange(ev) {
   else if (k === 'per') { const l = doc.lines.find(x => x.id === a); if (!l) return; if (s.value === 'portion') l.per = 'portion'; else delete l.per; }
   else { const l = doc.lines.find(x => x.id === a); if (!l) return; if (k === 'role') l.role = s.value; if (k === 'unit') l.unit = s.value === '—' ? null : s.value; }
   touch(p); paint();
+}
+/* the three boxes of the "prezzo di fiducia" become one estimate on the line; an empty price removes it */
+function onEst(t) {
+  const p = entry(), doc = WORK[p && p.id]; if (!doc || !t.closest('.mr')) return;
+  const id = t.dataset.me.split(':').slice(1).join(':'), l = doc.lines.find(x => x.id === id); if (!l) return;
+  const box = t.closest('.mr-est'), val = k => { const x = box.querySelector(`[data-me^="${k}:"]`); return x ? x.value : ''; };
+  const num = v => { const n = Number(String(v).trim().replace(/[$\s]/g, '').replace(',', '.')); return String(v).trim() && isFinite(n) && n > 0 ? n : null; };
+  const usdV = num(val('usd')), qty = num(val('qty')), unit = val('unit');
+  const before = JSON.stringify(l.est || null);
+  if (usdV == null) delete l.est;
+  else if (qty != null) l.est = { usd: Math.round(usdV * 100) / 100, qty, unit, at: new Date().toISOString() };
+  else return;                                            // price typed, quantity not yet: wait for it
+  if (JSON.stringify(l.est || null) !== before) { touch(p); paint(); }
 }
 let qT;
 function onInput(ev) {

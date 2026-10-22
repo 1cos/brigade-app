@@ -553,3 +553,8 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .mr-langtag{display:inline-block;margin-left:6px;padding:0 4px;border:1px solid var(--line,#ccc);border-radius:4px;font-size:10px;font-weight:700;color:var(--txm);vertical-align:2px}
 .mr-noteo .mr-lang{font-size:10px;margin-right:4px}
 .mr-notesbtn{display:block;margin:6px 0 2px;font-size:13px}
+/* R1.19 — "prezzo di fiducia" (Chef's estimate, never an invoice) */
+.mr-est{display:block;margin-top:4px}
+.mr-estin{font:500 15px var(--fb);color:var(--tx);background:transparent;border:0;border-bottom:1px solid var(--line);padding:2px 0;width:4.5em;outline:none}
+.mr-estin:focus{border-bottom:2px solid var(--rest)}
+.mr-est .mr-muted{display:block}
