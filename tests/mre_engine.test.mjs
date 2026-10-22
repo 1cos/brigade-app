@@ -42,8 +42,9 @@ test('lotti frazionari, porzioni, resa: arrotondamento al pezzo con valore teori
   assert.equal(show(SPONGE.lines[1], 10), '2,1 kg')
   assert.equal(show(SPONGE.lines[1], 1, 'imperial'), '7,4 oz')
 })
-test('unità: g/kg/oz/lb/ml/L; il volume diventa peso solo con densità verificata', () => {
-  assert.equal(E.ingredientAmount(2, 'l', facts[MILK]).status, 'densita_mancante')
+test('unità: g/kg/oz/lb/ml/L; senza densità 1 ml = 1 g (Chef 22/10), con densità quella', () => {
+  assert.equal(E.ingredientAmount(2, 'l', facts[MILK]).g, 2000); assert.equal(E.ingredientAmount(2, 'l', facts[MILK]).d1, true)
+  assert.equal(E.ingredientAmount(2, 'l', facts[MILK], null, true).status, 'densita_mancante')   // strict reading (FC05 comparison)
   assert.equal(E.ingredientAmount(2, 'l', { density: { v: 1.03 } }).g, 2060)
   assert.equal(E.ingredientAmount(1, 'lb', facts[BUT]).g, 453.592)
   assert.equal(E.ingredientAmount(3, 'pz', facts[EGG]).g, 165)

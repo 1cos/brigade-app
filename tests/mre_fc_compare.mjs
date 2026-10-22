@@ -5,7 +5,8 @@ const D = process.argv[2]
 const rows = f => { const d = JSON.parse(fs.readFileSync(`${D}/${f}.json`)); return Array.isArray(d) ? d : d.rows }
 const docs = JSON.parse(fs.readFileSync(`${D}/mre_import_docs.json`)), byId = Object.fromEntries(docs.map(d => [d.id, d]))
 const fx = rows('facts')[0], facts = typeof fx.facts === 'string' ? JSON.parse(fx.facts) : fx.facts, measures = typeof fx.measures === 'string' ? JSON.parse(fx.measures) : fx.measures
-const ctx = { doc: id => byId[id], facts: id => facts[id], measures }
+// MR-05: FC05 does not know «1 ml = 1 g» yet → compared with the engine strict reading (the rule shows in tests/mr05)
+const ctx = { doc: id => byId[id], facts: id => facts[id], measures, strictDensity: true }
 const fc = Object.fromEntries(rows('fc_pilots').map(r => [r.id, typeof r.bd === 'string' ? JSON.parse(r.bd) : r.bd]))
 let same = 0
 for (const id of Object.keys(fc)) {

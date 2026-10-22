@@ -151,8 +151,7 @@ function render(p) {
     const ie = ui(p.id).err && ui(p.id).err.key === 'l:' + l.id ? `<li class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</li>` : '';   // the message stays next to its line, never over the buttons
     const nt = noteOf(d, l); if (nt && !nt.same) nOther++;
     if (!edit) { h += `<li><span class="mr-nm">${nameHtml}${nameFb(d, l)}${noteHtml(nt, p.notesO)}</span>${qty}</li>${ie}`; continue; }
-    const liq = l.kind !== 'recipe' && (d.facts[l.ref] || {}).liquid;      // MR-05: on a liquid the ounce is a fluid ounce
-    const units = liq ? ['ml', 'l', 'fl_oz', 'tbsp', 'tsp', 'cup', 'g', 'kg'] : ['g', 'kg', 'ml', 'l', 'pz', 'oz', 'lb', 'tbsp', 'tsp', 'cup', 'nests'], ucur = l.unit || '';
+    const units = ['g', 'kg', 'ml', 'l', 'pz', 'oz', 'lb', 'fl_oz', 'tbsp', 'tsp', 'cup', 'nests'], ucur = l.unit || '';   // MR-05: oz = weight; «fl oz» only when chosen
     // editor line: name, quantity and unit first; role and technical note only under Advanced (logic unchanged)
     const stx = statusOf(d, l), bad = /mr-bad/.test(stx), adv = p.adv;
     h += `<li class="mr-eline"><span class="mr-nm">${nameHtml}${nameFb(d, l)}${l.kind === 'recipe' ? ` <span class="mr-muted mr-kind">${T('sub_recipe')}</span>` : ''}
@@ -355,6 +354,8 @@ function panelHtml(p, d, doc, ctx) {
       + kv(T('t_draft'), d.draft ? T('t_draft_v', { v: d.draft._version, at: dt((d.versions || []).find(v => v.state === 'bozza')?.at) }) : T('t_none'))
       + ((shownDoc(d, p).yield || {}).label_hist || (shownDoc(d, p).yield || {}).label ? kv(T('t_yield_hist'), esc([].concat((shownDoc(d, p).yield || {}).label_hist || [], (shownDoc(d, p).yield || {}).label || []).join(' · ')) + ` <span class="mr-muted">${T('t_yield_hist_note')}</span>`) : '')
       + kv(T('t_publish'), d.publish_locked ? T('t_locked') : T('t_test')) + kv(T('t_review'), d.recipe && d.recipe.review ? T('verified_by', { by: esc(d.recipe.review.by || ''), at: esc(dt(d.recipe.review.at)) }) : T('t_not_reviewed'));
+    { const sd = shownDoc(d, p), cc = E().cost(p.id, 1, ctxFor(d, p.id, sd, showsDraft(d, p)))      // MR-05: 1 ml = 1 g only written here
+      if (cc.d1_lines && cc.d1_lines.length) h += kv(T('t_d1'), esc(cc.d1_lines.map(id => { const l = (sd.lines || []).find(x => x.id === id); return l ? lineName(d, l) : id }).join(', ')) + ` <span class="mr-muted">${T('t_d1_note')}</span>`); }
     return h + `<p class="mr-muted"><b>${T('st_legend')}</b></p><p class="mr-muted">${T('locked_note')} ${T('hist_official')}</p></div>`;
   }
   if (p.panel === 'diffs' && H.isChef()) {
@@ -754,7 +755,7 @@ function onChange(ev) {
   if (k === 'has_stock') doc.has_stock = s.value === '1';
   else if (k === 'pu') { if (s.value === 'portion') delete doc.yield.portion_unit; else doc.yield.portion_unit = s.value; }
   else if (k === 'per') { const l = doc.lines.find(x => x.id === a); if (!l) return; if (s.value === 'portion') l.per = 'portion'; else delete l.per; }
-  else { const l = doc.lines.find(x => x.id === a); if (!l) return; if (k === 'role') l.role = s.value; if (k === 'unit') { const dd = H.peek('mre_recipe', { id: p.id }); l.unit = s.value === '—' ? null : (E().standardUnit ? E().standardUnit(s.value, l.kind !== 'recipe' && dd ? (dd.facts || {})[l.ref] : null) : s.value); } }
+  else { const l = doc.lines.find(x => x.id === a); if (!l) return; if (k === 'role') l.role = s.value; if (k === 'unit') l.unit = s.value === '—' ? null : (E().standardUnit ? E().standardUnit(s.value) : s.value); }
   touch(p); paint();
 }
 /* the three boxes of the "prezzo di fiducia" become one estimate on the line; an empty price removes it */

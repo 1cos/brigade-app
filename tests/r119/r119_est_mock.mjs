@@ -95,8 +95,8 @@ await pg.locator('.mr-panel').scrollIntoViewIfNeeded(); await pg.screenshot({ pa
 /* 4. per ml with the line in grams: said, never guessed */
 await pg.click('.mr-editbtn'); await pg.waitForSelector('#mrAdd')
 await line(pg, RUM).locator('select[data-me^="unit:"]').selectOption('ml'); await idle(pg)
-ok(/serve la densità o la riga in ml/.test(await line(pg, RUM).innerText()), 'stima in ml, riga in g: "serve la densità o la riga in ml"')
-const fc2 = E.cost(ID, 1, ctx()); ok(fc2.chef_est === 0 && Math.abs(fc2.food - fc0.food) < 1e-9, 'e nessun numero inventato (costo come senza stima)')
+ok(!/serve la densità/.test(await line(pg, RUM).innerText()), 'stima in ml, riga in g: nessun blocco (Chef 22/10: 1 ml = 1 g)')
+const fc2 = E.cost(ID, 1, ctx()); ok(fc2.chef_est === 1 && (fc2.d1_lines || []).includes(RUM), 'e il costo c\'è, con 1 ml = 1 g segnato solo per le Info tecniche')
 await pg.screenshot({ path: OUT + '/4_densita.png', fullPage: true })
 
 /* 5. empty price → estimate removed */

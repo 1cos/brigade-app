@@ -10,9 +10,12 @@ const byId = Object.fromEntries(S.recipes.map(r => [r.id, r])), Y = Object.fromE
 for (const r of S.recipes) DOC[r.id] = Object.assign(buildLabDoc({ id: r.id, r, rows: S.bom.filter(b => b.parent_recipe_id === r.id), stepRows: S.steps.filter(s => s.recipe_id === r.id), prepRows: S.prep.filter(p => p.recipe_id === r.id && !p.archived), y: Y[r.id], byId, importedAt: 'x' }).doc, { id: r.id })
 const ctx = { doc: x => DOC[x], facts: x => S.facts[x], measures: S.measures }
 let n = 0, diff = 0; const bad = []
-const J = x => JSON.stringify(x, (k, v) => typeof v === 'number' ? Math.round(v * 1e9) / 1e9 : v)
+// MR-05 (Chef 22/10 «1 ml = 1 g»): the new engine is compared in its STRICT reading (no default density), which must equal the old one;
+// the recipes the default density changes are listed by tests/mr05/units.test.mjs. The d1 marks are information only.
+const J = x => JSON.stringify(x, (k, v) => k === 'd1' || k === 'd1_lines' ? undefined : typeof v === 'number' ? Math.round(v * 1e9) / 1e9 : v)
+const ctxS = Object.assign({}, ctx, { strictDensity: true })
 for (const id of Object.keys(DOC)) {
-  const d = DOC[id], runs = E => ({
+  const d = DOC[id], runs = (E, ctx) => ({
     cost: E.cost(id, 1, ctx), cost3: E.cost(id, 2.5, ctx), prod: E.explode(id, 1, 'produzione', ctx), sale: E.explode(id, 1, 'vendita', ctx),
     iss: E.issues(id, ctx), model: E.modelCheck(id, ctx, { sold: true }), val: E.validate(d, ctx, true),
     theo: Number(d.yield && d.yield.portions) > 0 ? E.theoretical(id, 1, ctx) : E.theoretical(id, null, ctx, 1),
@@ -20,8 +23,8 @@ for (const id of Object.keys(DOC)) {
     yl: [E.factorFromYield(d, 2, 'kg'), E.lotsFromPortions(d, 7)],
     steps: (d.steps || []).map(s => ['it', 'en', 'es'].map(k => E.stepParts(s[k], d, 2, 'it-IT'))) })
   // R1.19: cost() also says how many lines use the Chef's estimated price — always 0 on official recipes (they have none)
-  const rn = runs(NEW); for (const k of ['cost', 'cost3']) { if (rn[k].chef_est !== 0) bad.push('chef_est≠0 ' + d.title); delete rn[k].chef_est }
-  const a = J(runs(OLD)), b = J(rn); n++
+  const rn = runs(NEW, ctxS); for (const k of ['cost', 'cost3']) { if (rn[k].chef_est !== 0) bad.push('chef_est≠0 ' + d.title); delete rn[k].chef_est }
+  const a = J(runs(OLD, ctx)), b = J(rn); n++
   if (a !== b) { diff++; bad.push(d.title) }
 }
 console.log(`ricette confrontate: ${n} · identiche: ${n - diff} · diverse: ${diff}${bad.length ? ' → ' + bad.slice(0, 10).join(', ') : ''}`)

@@ -26,7 +26,7 @@ const r3 = x => Math.round(x * 1000) / 1000
 test('1 unità: massa, pezzi, confezioni, porzioni — nessuna conversione inventata', () => {
   assert.equal(E.ingredientAmount(4, 'lb', facts[CWSPIN]).g, 4 * 453.592)
   const cups = E.ingredientAmount(22, 'each', facts[CUPS]); assert.equal(cups.status, 'ok'); assert.equal(cups.count, 22); assert.equal(cups.g, null)   // 22 cups are 22 cups: no weight asked
-  assert.equal(E.ingredientAmount(1, 'l', {}).status, 'densita_mancante')                                                                                // volume → weight only with a verified density
+  assert.equal(E.ingredientAmount(1, 'l', {}).g, 1000); assert.equal(E.ingredientAmount(1, 'l', {}, null, true).status, 'densita_mancante')   // MR-05: 1 ml = 1 g; strict reading as before
   for (const [u, k] of [['porz.', 'portion'], ['porz', 'portion'], ['porzioni', 'portion'], ['portion', 'portion'], ['each', 'pz'], ['pz', 'pz'], ['nidi', 'nest'], ['cs', 'case'], ['#', 'lb']]) assert.equal(E.normUnit(u), k, u)
   assert.equal(E.subFraction(1, 'porz.', CUP).f, 1 / 22); assert.equal(E.subFraction(2, 'case', CUP).status, 'resa_mancante')   // a case of cups is not a portion: not invented
   assert.equal(E.subFraction(50, 'g', CUP).status, 'resa_mancante')                                                            // grams of a prep without cooked weight: unknown, never 54,5 g

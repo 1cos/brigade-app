@@ -1,23 +1,37 @@
-// MR-05 «unità libere» (Chef 22/10): spoken units → standard form; oz on a liquid → fl oz; NO existing unit is rewritten.
-// Usage: node tests/mr05/units.test.mjs <official_dump.json>
+// MR-05 «regola semplice» (Chef Max 22/10/2026 21:31Z): spoken units → standard form; «se scrivo grammi, sono grammi»;
+// «oz» stays a weight; weight ↔ volume without a density: 1 ml = 1 g, no block, listed only in the technical info.
+// Usage: node tests/mr05/units.test.mjs <official_dump.json> <dir with mre_recipe answers (mr01/data/r)>
 import fs from 'node:fs'
 import * as E from '../../supabase/functions/_shared/mre_engine.js'
-const D = JSON.parse(fs.readFileSync(process.argv[2]))
+const D = JSON.parse(fs.readFileSync(process.argv[2])), RDIR = process.argv[3]
 let pass = 0, fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fail++ }
-const L = { liquid: true }, S = { liquid: false }
-const cases = [['once', S, 'oz'], ['oncia', S, 'oz'], ['onza', S, 'oz'], ['libbre', S, 'lb'], ['chili', S, 'kg'], ['cucchiaio', S, 'tbsp'], ['cucchiaino', S, 'tsp'], ['tazza', S, 'cup'],
-  ['once', L, 'fl_oz'], ['oz', L, 'fl_oz'], ['ounces', L, 'fl_oz'], ['oz', S, 'oz'], ['Oncia fluida', S, 'fl_oz'], ['cucharadas', S, 'tbsp']]
-for (const [u, f, w] of cases) ok(E.standardUnit(u, f) === w, `«${u}»${f.liquid ? ' (liquido)' : ''} → ${w}`)
-ok(E.dimOf(E.standardUnit('once', L)) === 'v' && E.dimOf(E.standardUnit('once', S)) === 'm', 'oncia fluida = volume, oncia = peso')
-const am = E.ingredientAmount(2, E.standardUnit('once', L), { density: null }, {})
-ok(Math.abs(am.ml - 59.147) < 0.01 && am.status === 'densita_mancante', '2 once di rum = 59,1 ml; in grammi solo con la densità (qui manca: lo dice, non inventa)')
-// every unit written today on the 1,334 official lines stays exactly as it is (only the new words would change)
-let same = 0
-for (const b of D.bom) if (E.standardUnit(b.unit, S) === b.unit || b.unit == null) same++
-ok(same === D.bom.length, `righe ufficiali con l'unità invariata: ${same}/${D.bom.length}`)
-// the only official line that the liquid rule would change is the Bourbon (Chef 22/10: «sì, passa a fl oz»)
-const liqNames = new Set(['Bourbon', 'Rum', 'White Wine', 'Red Wine', 'Extra Virgin Olive Oil', 'Heavy Cream', 'Milk', 'Water'])
-const changed = D.bom.filter(b => b.component_type === 'ITEM' && liqNames.has(b.ing_name) && E.standardUnit(b.unit, L) !== b.unit).map(b => b.ing_name + ' ' + b.quantity + ' ' + b.unit)
-ok(changed.length === 1 && /^Bourbon 2 oz$/.test(changed[0]), 'regola dei liquidi sulle righe di oggi: cambia solo il Bourbon (2 oz → 2 fl oz) — ' + changed.join(', '))
-ok(E.unitLabel('fl_oz') === 'fl oz' && E.unitLabel('g') === 'g', 'sullo schermo: «fl oz»')
+for (const [u, w] of [['once', 'oz'], ['oncia', 'oz'], ['onza', 'oz'], ['libbre', 'lb'], ['chili', 'kg'], ['cucchiaio', 'tbsp'], ['cucchiaino', 'tsp'], ['tazza', 'cup'], ['cucharadas', 'tbsp'], ['Oncia fluida', 'fl_oz']])
+  ok(E.standardUnit(u) === w, `«${u}» → ${w}`)
+ok(E.standardUnit('oz') === 'oz' && E.dimOf('oz') === 'm', '«oz» resta peso (28,35 g), anche sul rum')
+ok(E.standardUnit('g') === 'g' && E.standardUnit('ml') === 'ml' && E.standardUnit('nests') === 'nests', 'se scrivo grammi sono grammi: le unità scritte non cambiano')
+let same = 0; for (const b of D.bom) if (E.standardUnit(b.unit) === b.unit || b.unit == null) same++
+ok(same === D.bom.length, `righe ufficiali con l'unità invariata: ${same}/${D.bom.length} (Bourbon e Tiramisu compresi)`)
+// 1 ml = 1 g without a density
+const a = E.ingredientAmount(30, 'ml', { density: null }, {}), s = E.ingredientAmount(30, 'ml', { density: null }, {}, true)
+ok(a.g === 30 && a.status === 'ok' && a.d1, '30 ml senza densità = 30 g, nessun blocco (segnato per le Info tecniche)')
+ok(s.g === null && s.status === 'densita_mancante', 'lettura rigorosa (solo per il confronto con FC05): come prima')
+const dn = E.ingredientAmount(100, 'ml', { density: { v: 0.92 } }, {})
+ok(Math.abs(dn.g - 92) < 1e-9 && !dn.d1, 'con una densità vera vale quella (100 ml d\'olio = 92 g)')
+// the Wheel Pasta rum: 30 ml on an article counted in grams, Chef's price 25 $ per 750 ml → it now gives a cost
+const facts = { name: 'Rum', base_unit: 'g', price: null, density: null }
+const leaf = { kind: 'ingredient', dim: 'v', g: 30, ml: 30, d1: true, status: 'ok', est: { usd: 25, qty: 750, unit: 'ml' } }
+const c = E.leafCostEst(leaf, facts, {})
+ok(c.status === 'stima_chef' && Math.abs(c.cost - 1) < 1e-9, 'rum 30 ml con prezzo di fiducia $25/750 ml = $1,00 (prima: «densità mancante»)')
+const leafG = { kind: 'ingredient', dim: 'm', g: 30, ml: 30, d1: true, status: 'ok', est: { usd: 25, qty: 750, unit: 'ml' } }
+ok(Math.abs(E.leafCostEst(leafG, facts, {}).cost - 1) < 1e-9, '«i 30 ml valgono 30 g»: la riga in grammi con prezzo a bottiglia dà lo stesso $1,00')
+// every official recipe: what changes with the rule (strict = the reading of today)
+const changed = [], d1 = []
+for (const f of fs.readdirSync(RDIR)) { const d = JSON.parse(fs.readFileSync(`${RDIR}/${f}`)); if (!d.doc || d.source === 'lab') continue
+  const id = f.replace('.json', ''), docs = Object.assign({}, d.docs, { [id]: d.doc }), ctx = { doc: x => docs[x], facts: x => d.facts[x], measures: d.measures }
+  const n = E.cost(id, 1, ctx), o = E.cost(id, 1, Object.assign({}, ctx, { strictDensity: true }))
+  if (Math.abs(n.food + n.pack - o.food - o.pack) > 1e-9 || n.missing !== o.missing) changed.push(`${d.doc.title}: $${(o.food + o.pack).toFixed(3)} (${o.missing} mancanti) → $${(n.food + n.pack).toFixed(3)} (${n.missing})`)
+  if (n.d1_lines) d1.push(d.doc.title) }
+fs.writeFileSync(process.env.OUT || 'mr05_changed.json', JSON.stringify({ changed, d1 }, null, 1))
+console.log('  ricette il cui food cost cambia con 1 ml = 1 g: ' + changed.length); for (const x of changed) console.log('   · ' + x)
+ok(changed.every(x => !/→ \$0\.000/.test(x)), 'nessun costo diventa zero')
 console.log(`\nTOTALE ${pass} PASS, ${fail} FAIL`)

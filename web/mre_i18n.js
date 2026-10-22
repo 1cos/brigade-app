@@ -127,6 +127,9 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   est_n: ['with the Chef\'s estimate', 'con la stima dello Chef', 'con la estimación del Chef'],
   est_note: ['Lines marked "Chef\'s estimated price" use the Chef\'s estimate: an indicative food cost, not from an invoice.', 'Le righe con "Prezzo di fiducia" usano la stima dello Chef: food cost indicativo, non da fattura.', 'Las líneas con "Precio estimado" usan la estimación del Chef: food cost indicativo, no de factura.'],
   s_stima_non_valida: ['estimate not valid', 'stima non valida', 'estimación no válida'], s_stima_chef: ['Chef\'s estimate', 'stima dello Chef', 'estimación del Chef'],
+  // MR-05 regola semplice: 1 ml = 1 g senza densità, scritto solo nelle Info tecniche
+  t_d1: ['Weight ↔ volume as 1 ml = 1 g', 'Peso ↔ volume con 1 ml = 1 g', 'Peso ↔ volumen con 1 ml = 1 g'],
+  t_d1_note: ['(no density for these lines: Chef\'s rule 22/10, the difference is minimal)', '(queste righe non hanno una densità: regola dello Chef 22/10, differenza minima)', '(estas líneas no tienen densidad: regla del Chef 22/10, diferencia mínima)'],
   // MR-04 «Pubblica ricetta per ricetta»
   pub_btn: ['Publish to Brigade…', 'Pubblica in Brigade…', 'Publicar en Brigade…'],
   pub_note: ['First I show you what changes. Nothing is written until you confirm.', 'Prima ti mostro cosa cambia. Niente viene scritto finché non confermi.', 'Primero te muestro qué cambia. No se escribe nada hasta que confirmes.'],

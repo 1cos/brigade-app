@@ -41,14 +41,12 @@ export const UNIT_WORDS = {
   millilitri: 'ml', millilitro: 'ml', mililitros: 'ml', litros: 'l', gramos: 'g', kilogramos: 'kg',
 };
 Object.assign(SYN, UNIT_WORDS);
-/** The unit to SAVE on a line: a spoken word becomes its standard form; on a liquid («liquido» approved by the Chef) an ounce is a
- *  fluid ounce. Weight ↔ volume is never converted here: that needs a known density, and the engine says when it is missing. */
-export function standardUnit(u, facts) {
+/** The unit to SAVE on a line: a spoken word becomes its standard form, nothing else changes («se scrivo grammi, sono grammi»).
+ *  Chef 22/10 21:31Z: «oz» stays a weight (28,35 g); the fluid ounce only when written «fl oz». */
+export function standardUnit(u) {
   if (u == null) return u;
   const s = String(u).trim(), w = UNIT_WORDS[s.toLowerCase()];
-  let out = w || s;
-  if (facts && facts.liquid && normUnit(out) === 'oz') out = 'fl_oz';
-  return out;
+  return w || s;
 }
 /** How a saved unit is written on screen (fl_oz → «fl oz»). */
 export const unitLabel = u => u === 'fl_oz' ? 'fl oz' : u;
@@ -93,14 +91,17 @@ export function dimOf(u) {
 
 /** Amount of an ingredient line in base units. Returns { dim, val, g, status }.
  *  dim m → val in g; v → val in ml; c → val in pieces. g = grams when derivable (density / piece weight / kitchen measure). */
-export function ingredientAmount(qty, unit, facts, measures) {
+// MR-05 (Chef Max 22/10/2026, regola semplice): «in cucina pesiamo tutto». Weight ↔ volume without a known density: 1 ml = 1 g,
+// no block and no «densità mancante» on screen — the line is marked d1 and listed only in the technical info.
+// strict = the old reading (no default density): used ONLY to compare with FC05, which does not know this rule yet.
+export function ingredientAmount(qty, unit, facts, measures, strict) {
   const k = normUnit(unit), q = Number(qty);
   if (k == null) return { dim: null, val: null, g: null, status: 'da_definire' };
   if (!isFinite(q)) return { dim: null, val: null, g: null, status: 'quantita_mancante' };
   const d = facts && facts.density && Number(facts.density.v) > 0 ? Number(facts.density.v) : null;
   const pg = facts && facts.piece_g && Number(facts.piece_g.v) > 0 ? Number(facts.piece_g.v) : null;
-  if (k in MASS) { const g = q * MASS[k]; return { dim: 'm', val: g, g, ml: d ? g / d : null, status: 'ok' }; }
-  if (k in VOL) { const ml = q * VOL[k]; return { dim: 'v', val: ml, ml, g: d ? ml * d : null, status: d ? 'ok' : 'densita_mancante' }; }
+  if (k in MASS) { const g = q * MASS[k]; return { dim: 'm', val: g, g, ml: d ? g / d : (strict ? null : g), d1: !d, status: 'ok' }; }
+  if (k in VOL) { const ml = q * VOL[k]; return { dim: 'v', val: ml, ml, g: d ? ml * d : (strict ? null : ml), d1: !d, status: d || !strict ? 'ok' : 'densita_mancante' }; }
   // R1.14 (Chef 21/10): a count is a complete amount (22 cups = 22 cups). Grams only when a piece weight is known; whether the
   // weight is NEEDED is decided where it is needed (the cost, when the price is per gram) — never asked for nothing.
   if (k in COUNT) return { dim: 'c', val: q, count: q, ckey: COUNT[k], g: pg && COUNT[k] === 'pz' ? q * pg : null, status: 'ok' };
@@ -110,7 +111,7 @@ export function ingredientAmount(qty, unit, facts, measures) {
 }
 
 /** Which part of a sub-recipe lot a line uses (0..n). null + status when it cannot be known. */
-export function subFraction(qty, unit, sub) {
+export function subFraction(qty, unit, sub, strict) {
   sub = resolveDoc(sub);
   const k = normUnit(unit), q = Number(qty), y = (sub && sub.yield) || {};
   if (k == null || !isFinite(q)) return { f: null, status: 'quantita_mancante' };
@@ -127,7 +128,7 @@ export function subFraction(qty, unit, sub) {
     if (k === 'pz' && Number(y.portions) > 0) return { f: q / Number(y.portions), status: 'pezzo_come_porzione' };
     return { f: null, status: 'resa_mancante' };
   }
-  if (k in VOL) return { f: null, status: 'densita_mancante' };
+  if (k in VOL) return !strict && Number(y.g) > 0 ? { f: q * VOL[k] / Number(y.g), status: 'ok', d1: true } : { f: null, status: 'densita_mancante' };   // MR-05: 1 ml = 1 g
   return { f: null, status: 'unita_sconosciuta' };
 }
 
@@ -237,15 +238,15 @@ function walk(doc, id, factor, path, keep, out, purpose, ctx) {
     if (!keep(ln)) continue;
     const p = path.concat(ln.id);
     if (ln.kind === 'ingredient') {
-      const a = ingredientAmount(Number(ln.qty) * factor, ln.unit, ctx.facts(ln.ref), ctx.measures);
-      out.push({ kind: 'ingredient', ref: ln.ref, line: ln.id, from: id, role: ln.role, dim: a.dim, g: a.g, ml: a.ml != null ? a.ml : (a.dim === 'v' ? a.val : null), count: a.dim === 'c' ? a.val : null, ckey: a.ckey, status: a.status, path: p, ...(ln.est ? { est: ln.est } : {}) });
+      const a = ingredientAmount(Number(ln.qty) * factor, ln.unit, ctx.facts(ln.ref), ctx.measures, ctx.strictDensity);
+      out.push({ kind: 'ingredient', ref: ln.ref, line: ln.id, from: id, role: ln.role, dim: a.dim, g: a.g, ml: a.ml != null ? a.ml : (a.dim === 'v' ? a.val : null), count: a.dim === 'c' ? a.val : null, ckey: a.ckey, status: a.status, path: p, ...(a.d1 ? { d1: true } : {}), ...(ln.est ? { est: ln.est } : {}) });
       continue;
     }
     if (path.includes(ln.ref)) { out.push({ kind: 'error', ref: ln.ref, line: ln.id, from: id, status: 'ciclo', path: p }); continue; }
     const sub = D(ctx, ln.ref);
     if (!sub) { out.push({ kind: 'error', ref: ln.ref, line: ln.id, from: id, status: 'sotto_ricetta_mancante', path: p }); continue; }
     if (!(sub.lines || []).length) { out.push({ kind: 'error', ref: ln.ref, line: ln.id, from: id, status: 'sotto_ricetta_vuota', path: p }); continue; }
-    const fr = subFraction(Number(ln.qty) * factor, ln.unit, sub);
+    const fr = subFraction(Number(ln.qty) * factor, ln.unit, sub, ctx.strictDensity);
     if (fr.f == null) { out.push({ kind: 'error', ref: ln.ref, line: ln.id, from: id, status: fr.status, path: p }); continue; }
     if (purpose !== 'costo' && sub.has_stock) {
       out.push({ kind: 'prep', ref: ln.ref, line: ln.id, from: id, fraction: fr.f, g: Number(sub.yield.g) > 0 ? fr.f * sub.yield.g : null, portions: Number(sub.yield.portions) > 0 ? fr.f * sub.yield.portions : null, status: 'ok', path: p });
@@ -268,8 +269,8 @@ export function leafCost(leaf, facts) {
   const perEach = N(p.cost_per_each) != null ? N(p.cost_per_each) : (p.basis_dim === 'each' || p.basis_dim === 'count' ? N(p.cost_per_base) : null);
   if (leaf.dim === 'c' && perEach != null && isFinite(perEach)) return { cost: leaf.count * perEach, status: 'ok' };
   if (leaf.dim === 'v' && perMl != null && isFinite(perMl)) return { cost: leaf.ml * perMl, status: 'ok' };
-  if (leaf.g != null && perG != null && isFinite(perG)) return { cost: leaf.g * perG, status: leaf.status === 'stima' ? 'stima' : 'ok' };
-  if (leaf.ml != null && perMl != null && isFinite(perMl)) return { cost: leaf.ml * perMl, status: 'ok' };
+  if (leaf.g != null && perG != null && isFinite(perG)) return Object.assign({ cost: leaf.g * perG, status: leaf.status === 'stima' ? 'stima' : 'ok' }, leaf.dim === 'v' && leaf.d1 ? { d1: true } : {});
+  if (leaf.ml != null && perMl != null && isFinite(perMl)) return Object.assign({ cost: leaf.ml * perMl, status: 'ok' }, leaf.dim === 'm' && leaf.d1 ? { d1: true } : {});
   const pg = facts.piece_g && Number(facts.piece_g.v);
   if (leaf.g != null && perEach != null && pg > 0) return { cost: leaf.g / pg * perEach, status: 'ok' };
   if (leaf.count != null && perG != null && pg > 0) return { cost: leaf.count * pg * perG, status: 'ok' };
@@ -296,8 +297,8 @@ export function leafCostEst(leaf, facts, measures) {
   const p = estPrice(leaf.est, facts, measures);
   if (!p) return { cost: null, status: 'stima_non_valida' };
   const e = leafCost(leaf, Object.assign({}, facts, { policy: null, price: p }));
-  if (e.cost != null) return { cost: e.cost, status: 'stima_chef' };
-  // price per ml with the line in grams (or the reverse) and no verified density: said, never guessed
+  if (e.cost != null) return Object.assign({ cost: e.cost, status: 'stima_chef' }, e.d1 ? { d1: true } : {});   // MR-05: «30 ml valgono 30 g»
+  // (strict reading only) price per ml with the line in grams, or the reverse, and no density
   if ((leaf.dim === 'm' && p.basis_dim === 'volume') || (leaf.dim === 'v' && p.basis_dim === 'mass')) return { cost: null, status: 'densita_mancante' };
   return e;
 }
@@ -305,7 +306,7 @@ export function leafCostEst(leaf, facts, measures) {
 /** Food cost of one lot × factor. Per top line and total. Missing parts are counted, never treated as zero. */
 export function cost(rootId, factor, ctx) {
   const doc = D(ctx, rootId), leaves = explode(rootId, factor, 'costo', ctx);
-  const byLine = {}; let food = 0, pack = 0, missing = 0, estimated = 0, packMissing = 0, chefEst = 0;
+  const byLine = {}, d1 = new Set(); let food = 0, pack = 0, missing = 0, estimated = 0, packMissing = 0, chefEst = 0;
   for (const lf of leaves) {
     const top = lf.path[1];
     const b = byLine[top] || (byLine[top] = { cost: 0, missing: 0, status: 'ok' });
@@ -316,9 +317,10 @@ export function cost(rootId, factor, ctx) {
     if (isPack) pack += c.cost; else { food += c.cost; b.cost += c.cost; }
     if (c.status === 'stima') { estimated++; if (b.status === 'ok') b.status = 'stima'; }
     if (c.status === 'stima_chef') { chefEst++; b.status = 'stima_chef'; }
+    if (c.d1) d1.add(top);
   }
   const portions = doc && Number(doc.yield && doc.yield.portions) > 0 ? doc.yield.portions * factor : null;
-  return { food, pack, missing, pack_missing: packMissing, estimated, chef_est: chefEst, complete: missing === 0, state: missing === 0 ? 'completo' : 'parziale', per_portion: portions ? food / portions : null, portions, byLine };
+  return { food, pack, missing, pack_missing: packMissing, estimated, chef_est: chefEst, ...(d1.size ? { d1_lines: [...d1] } : {}), complete: missing === 0, state: missing === 0 ? 'completo' : 'parziale', per_portion: portions ? food / portions : null, portions, byLine };
 }
 
 /* ---------------- one number for every module (B-49, Chef 20/10) ----------------

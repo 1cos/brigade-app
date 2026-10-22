@@ -26,16 +26,5 @@ try {
   await a.query(`insert into mre.publications (recipe_id, fp_before, before, plan) values (gen_random_uuid(), 'x', '{}', '{}')`)
   await a.query(MG('20261022_mre03_pubblica_rollback.sql'))
   ok(await fns() === 0 && await tbl(), 'ritorno indietro con copie di sicurezza dentro: funzioni tolte, copie TENUTE')
-  // MR-05 liquids: install over the production function, undo gives back EXACTLY the production function
-  await a.query(MG('20261022_mre03_pubblica.sql'))
-  await a.query(`create table if not exists public.ingredients (id uuid primary key, name text, name_it text, name_es text, category text, base_unit text, active boolean)`)
-  await a.query(fs.readFileSync(path.join(ROOT, '..', 'data', 'live_ingredient_facts.sql'), 'utf8'))
-  const def = async () => (await a.query(`select pg_get_functiondef('mre.ingredient_facts(uuid[])'::regprocedure) d`)).rows[0].d
-  const D0 = await def()
-  await a.query(MG('20261022_mre04_liquidi.sql'))
-  ok(/liquid_ingredients/.test(await def()) && (await a.query(`select to_regclass('mre.liquid_ingredients') is not null t`)).rows[0].t, 'liquidi: tabella + campo «liquid» nei fatti')
-  ok(!(await a.query(`select has_table_privilege('anon', 'mre.liquid_ingredients', 'select') x`)).rows[0].x, 'lista dei liquidi chiusa a anon')
-  await a.query(MG('20261022_mre04_liquidi_rollback.sql'))
-  ok((await def()) === D0 && !(await a.query(`select to_regclass('mre.liquid_ingredients') is not null t`)).rows[0].t, 'ritorno indietro: funzione IDENTICA a quella di produzione, lista tolta')
 } finally { await a.end(); await P.stop(); fs.rmSync(dir, { recursive: true, force: true }) }
 console.log(`\nTOTALE ${pass} PASS, ${fail} FAIL`)

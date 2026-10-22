@@ -71,10 +71,7 @@ export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = un
     const bid = l.src && l.src.bom_id != null && rowsById.has(Number(l.src.bom_id)) ? Number(l.src.bom_id) : null
     // an article the Chef puts on a line (new or changed) must be active in Brigade; untouched lines stay as the bots read them today
     if (ct === 'ITEM' && f.active === false && (bid == null || rowsById.get(bid).item_id !== l.ref)) refusals.push({ code: 'articolo_non_attivo', line: l.id, msg: `${nameOf(l)}: l'articolo è «non attivo» in Brigade` })
-    // volume on an article counted by weight (or the reverse) without a density: the stock deduction cannot convert it
-    const du = E.dimOf(l.unit), db = E.dimOf(f.base_unit), dens = f.density && Number(f.density.v) > 0
-    if (ct === 'ITEM' && du && db && ((du === 'v' && db === 'm') || (du === 'm' && db === 'v')) && !dens)
-      warnings.push({ code: 'scarico_senza_conversione', line: l.id, msg: `${nameOf(l)}: riga in ${l.unit}, l'articolo si conta in ${f.base_unit} e non ha la densità: lo scarico di magazzino non può convertirlo (il food cost no, se manca il prezzo)` })
+    // MR-05 (Chef 22/10): weight ↔ volume without a density is 1 ml = 1 g — not a problem, nothing shown here
     if (bid != null && !seen.has(bid)) {
       seen.add(bid)
       const row = rowsById.get(bid), set = {}

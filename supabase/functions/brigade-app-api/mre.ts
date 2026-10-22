@@ -331,7 +331,7 @@ export async function mreSaveDraft(u: U, b: any, svc: any) {
     const ingIds: string[] = doc.lines.filter((l: any) => l.kind === 'ingredient').map((l: any) => l.ref), recIds: string[] = doc.lines.filter((l: any) => l.kind === 'recipe').map((l: any) => l.ref)
     const [{ f }] = await tx`select mre.ingredient_facts(string_to_array(${(ingIds as string[]).join(',')}, ',')::uuid[]) as f`
     if (ingIds.some((x: string) => !(f || {})[x])) throw bad('ingrediente_sconosciuto')
-    for (const l of doc.lines) l.unit = E.standardUnit(l.unit, l.kind === 'ingredient' ? (f || {})[l.ref] : null)   // MR-05: spoken units → standard; oz on a liquid → fl oz
+    for (const l of doc.lines) l.unit = E.standardUnit(l.unit)   // MR-05: spoken units (once, chili, cucchiaio…) → standard; nothing else changes
     const t = await tree(tx, svc, doc, true)
     if (recIds.some((x: string) => !t.docs[x])) throw bad('sotto_ricetta_sconosciuta')
     const errs = E.validate(doc, ctxOf(t, true), false)
@@ -381,8 +381,11 @@ async function publishContext(id: string, svc: any) {
     const [{ fp }] = await tx`select mre.official_fp(${id}) as fp`
     const [{ fc }] = await tx`select mre.official_fc05(${id}) as fc`
     const cb = E.cost(id, 1, ctxOf(tBefore)), ca = E.cost(id, 1, ctxOf(tAfter))
+    // MR-05: FC05 does not know «1 ml = 1 g» yet: the check after writing compares FC05 with the engine's STRICT reading
+    const strict = (t: any) => Object.assign(ctxOf(t), { strictDensity: true })
+    const sb = E.cost(id, 1, strict(tBefore)), sa = E.cost(id, 1, strict(tAfter))
     const conseq = E.consequences(id, ctxOf(tBefore), ctxOf(tAfter))
-    return { doc, raw, byId, facts, plan, fp, fc05: fc, cost: { before: cb, after: ca }, conseq, draftVersion: st.dr.version, planHash: await hex(JSON.stringify(plan.changes)) }
+    return { doc, raw, byId, facts, plan, fp, fc05: fc, cost: { before: cb, after: ca }, strictCost: { before: sb, after: sa }, conseq, draftVersion: st.dr.version, planHash: await hex(JSON.stringify(plan.changes)) }
   })
 }
 export async function mrePublishPreview(u: U, b: any, svc: any) {
@@ -435,7 +438,7 @@ async function publishOfficial(u: U, id: string, b: any, reason: string | null, 
         .sort((a, b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9) || a.bom_id - b.bom_id)
       const diff = P.verifyPublished({ id, doc: c.doc, offAfter: { r: w.after.r, rows, stepRows: w.after.steps, prepRows: c.raw.prepRows, y: w.yield || {} }, facts: c.facts, byId: c.byId })
       const fb = fcLot(c.fc05), fa = fcLot(w.fc05)
-      const eb = c.cost.before.food + c.cost.before.pack, ea = c.cost.after.food + c.cost.after.pack
+      const eb = c.strictCost.before.food + c.strictCost.before.pack, ea = c.strictCost.after.food + c.strictCost.after.pack
       const fcOk = fb == null || fa == null ? fb == null && fa == null : Math.abs((fa - fb) - (ea - eb)) <= Math.max(0.01, 0.005 * Math.max(Math.abs(fa), 1))
       const checks = { rilettura: diff, fc05: { before: fb, after: fa }, motore: { before: eb, after: ea }, fc05_ok: fcOk }
       if (diff.length) throw new MreError(500, 'rilettura_diversa')          // same transaction: nothing stays written
@@ -721,13 +724,8 @@ async function tecApplica(tx: any, svc: any, u: U, b: any) {
   const mods = TB.risolviNomi(base, b?.modifiche, nomi)          // C-62: «nome» al posto di «riga» (una chiamata sola)
   const r = TB.applica(base, mods.modifiche, nomi)
   r.errori.unshift(...mods.errori)
-  // MR-05 (Chef 22/10): «2 once di rum» → the standard unit, and on a liquid an ounce is a fluid ounce (same rule as the Editor)
-  const ingRefs = [...new Set((r.doc.lines || []).filter((l: any) => l.kind !== 'recipe').map((l: any) => l.ref))] as string[]
-  if (ingRefs.length) {
-    const [{ f: uf }] = await tx`select mre.ingredient_facts(string_to_array(${ingRefs.join(',')}, ',')::uuid[]) as f`
-    for (const l of r.doc.lines || []) { const nu = E.standardUnit(l.unit, l.kind !== 'recipe' ? (uf || {})[l.ref] : null)
-      if (nu !== l.unit) { r.avvisi.push(`${nomi[l.ref] || ''}: ${l.unit} → ${E.unitLabel(nu)}`); l.unit = nu } }
-  }
+  // MR-05 (Chef 22/10): «2 once di rum» → 2 oz (the standard unit, a weight); nothing else changes
+  for (const l of r.doc.lines || []) { const nu = E.standardUnit(l.unit); if (nu !== l.unit) { r.avvisi.push(`${nomi[l.ref] || ''}: ${l.unit} → ${nu}`); l.unit = nu } }
   if (!r.errori.length) {
     const nuovi = (r.doc.lines || []).some((l: any) => l.kind === 'recipe' && !t.docs[l.ref]) || (r.doc.lines || []).some((l: any) => l.kind !== 'recipe' && !(l.ref in t.facts))
     const t2 = nuovi ? await tree(tx, svc, r.doc, true, pre) : Object.assign({}, t, { docs: Object.assign({}, t.docs, { [r.doc.id]: r.doc }) })
@@ -799,9 +797,7 @@ export async function tecPropostaNuova(u: U, b: any, svc: any) {
     await tecNomiNuovi(tx, svc, modifiche, nomi)
     const r = TB.applica(vuoto, modifiche, nomi)
     if (r.errori.length) throw bad('non_valida: ' + r.errori.join(' | '))
-    { const refs = [...new Set(r.doc.lines.filter((l: any) => l.kind !== 'recipe').map((l: any) => l.ref))] as string[]          // MR-05: same unit rule
-      if (refs.length) { const [{ f: uf }] = await tx`select mre.ingredient_facts(string_to_array(${refs.join(',')}, ',')::uuid[]) as f`
-        for (const l of r.doc.lines) l.unit = E.standardUnit(l.unit, l.kind !== 'recipe' ? (uf || {})[l.ref] : null) } }
+    for (const l of r.doc.lines) l.unit = E.standardUnit(l.unit)          // MR-05: same unit rule
     const t2 = await tree(tx, svc, r.doc, true); const ev = E.validate(r.doc, ctxOf(t2, true), false)
     if (ev.length) throw bad('non_valida: ' + ev.join(','))
     await tx`insert into mre.recipes (id, pilot, current_version, source, diffs) values (${id}, false, 0, ${sql.json({ lab_only: true, kind: b?.prep ? 'prep' : 'menu', proposta_da: 'T.E.C.', per: 'Max' } as any)}, ${sql.json([])})`

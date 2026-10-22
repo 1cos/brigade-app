@@ -179,28 +179,26 @@ Deno.test('P9 procedimento: passi scritti in Brigade (numeri per esteso, niente 
   assertEquals(await snapAll(), S0, 'passi, procedimento, scheda e distinta: identici a prima')
 })
 
-Deno.test('P11 unità libere dall\'Editor: «once» su un liquido → fl oz, su un solido → oz; il resto delle righe invariato', async () => {
-  const RHUM = '14d71347-32d9-401d-8d48-4281a7ea662b'
-  await db`insert into mre.liquid_ingredients (ingredient_id, approved_by) values (${RHUM}, 'prova banco') on conflict do nothing`
+Deno.test('P11 unità libere dall\'Editor: «once» → oz (peso), «chili» → kg; le unità scritte restano come sono', async () => {
   const o = await M.mreRecipe(CHEF, WHEEL, svc), doc = structuredClone(o.doc)
   doc.lines.find((l: any) => l.id === 'b2175').unit = 'once'; doc.lines.find((l: any) => l.id === 'b2175').qty = 1
   doc.lines.find((l: any) => l.id === 'b2173').unit = 'chili'; doc.lines.find((l: any) => l.id === 'b2173').qty = 0.01
   await M.mreSaveDraft(CHEF, { id: WHEEL, doc }, svc)
   const d = (await M.mreRecipe(CHEF, WHEEL, svc)).draft
-  assertEquals(d.lines.find((l: any) => l.id === 'b2175').unit, 'fl_oz', 'rum: once → fl oz')
+  assertEquals(d.lines.find((l: any) => l.id === 'b2175').unit, 'oz', 'rum: once → oz, un peso (Chef 22/10 21:31Z)')
   assertEquals(d.lines.find((l: any) => l.id === 'b2173').unit, 'kg', 'burro: chili → kg')
   assertEquals(d.lines.find((l: any) => l.id === 'b2174').unit, 'nests', 'le altre unità restano come sono')
 })
 
-Deno.test('P12 T.E.C.: «2 once di rum» diventa una riga valida (2 fl oz) e lo dice', async () => {
+Deno.test('P12 T.E.C.: «2 once di rum» diventa una riga valida (2 oz = 56,7 g) e lo dice', async () => {
   const L = await M.tecLeggi(CHEF, { id: WHEEL }, svc)
   const mods = [{ tipo: 'cambia_quantita', riga: 'b2175', quantita: 2, unita: 'once' }]
   const pr = await M.tecProva(CHEF, { id: WHEEL, modifiche: mods }, svc)
-  assertEquals(pr.ok, true, JSON.stringify(pr.errori)); assert(pr.avvisi.some((a: string) => /fl oz/.test(a)), JSON.stringify(pr.avvisi))
+  assertEquals(pr.ok, true, JSON.stringify(pr.errori)); assert(pr.avvisi.some((a: string) => /once → oz/.test(a)), JSON.stringify(pr.avvisi))
   const sv = await M.tecSalvaBozza(CHEF, { id: WHEEL, modifiche: mods, impronta: L.impronta }, svc)
   assertEquals(sv.ok, true)
   const d = (await M.mreRecipe(CHEF, WHEEL, svc)).draft
-  const rum = d.lines.find((l: any) => l.id === 'b2175'); assertEquals([rum.qty, rum.unit], [2, 'fl_oz'])
+  const rum = d.lines.find((l: any) => l.id === 'b2175'); assertEquals([rum.qty, rum.unit], [2, 'oz'])
 })
 
 Deno.test('P10 niente da pubblicare / ricetta solo di laboratorio', async () => {

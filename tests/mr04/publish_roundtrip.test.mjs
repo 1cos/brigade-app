@@ -73,7 +73,7 @@ ok(ver === tried && tried > 200, `modifica scritta e riletta uguale: ${ver}/${tr
   ok(e.ok && e.warnings.some(x => x.code === 'prezzo_di_fiducia_solo_lab'), 'prezzo di fiducia: si pubblica, resta solo nel Recipe Master (avviso)')
   const rum = planPublish({ id, doc: (() => { const d = JSON.parse(JSON.stringify(base)); d.lines[2].unit = 'ml'; return d })(), off, byId,
     facts: Object.assign({}, facts, { [base.lines[2].ref]: { name: 'Rhum', base_unit: 'g', density: null, active: true } }) })
-  ok(rum.ok && rum.warnings.some(x => x.code === 'scarico_senza_conversione'), 'rum in ml su articolo in g senza densità: si pubblica con avviso sullo scarico')
+  ok(rum.ok && !rum.warnings.some(x => x.code === 'scarico_senza_conversione'), 'rum in ml su articolo in g senza densità: si pubblica, nessun avviso (1 ml = 1 g, Chef 22/10)')
   const s = t(d => { d.steps = [{ it: 'Sciogli {{b2173}} g di burro.', en: '', es: '', src: 'it', tr: { it: 'chef' } }] })
   ok(s.changes.steps && s.changes.steps.rows[0].instruction_it === 'Sciogli 20 g di burro.' && s.changes.steps.rows[0].instruction_en === null, 'passo: numero scritto per esteso, nessuna traduzione inventata')
   ok(s.changes.recipe.procedure === 'Sciogli 20 g di burro.' && s.warnings.some(x => x.code === 'passi_senza_traduzione'), 'procedimento di Brigade 1 allineato + avviso lingue mancanti')
