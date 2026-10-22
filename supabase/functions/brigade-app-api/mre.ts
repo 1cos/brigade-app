@@ -10,6 +10,7 @@ import postgres from 'https://deno.land/x/postgresjs@v3.4.4/mod.js'
 import * as E from '../_shared/mre_engine.js'
 import { buildLabDoc } from '../_shared/mre_import.js'
 import * as PM from '../_shared/purchase_match.js'
+import * as P from '../_shared/mre_publish.js'
 
 const sql = postgres(Deno.env.get('SUPABASE_DB_URL') ?? '', { prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10 })
 type U = { id: number; name: string; role: 'chef' | 'staff' }
@@ -44,7 +45,7 @@ async function readOfficial(svc: any, rootIds: string[], tx0?: any) {
     frontier = [...new Set(bs.filter(b => b.component_type === 'RECIPE' && b.sub_recipe_id).map(b => b.sub_recipe_id))] as string[]
   }
   const ids = Object.keys(recipes)
-  if (!ids.length) return { docs: {} as Record<string, any>, diffs: {} as Record<string, any[]>, read_at: new Date().toISOString() }
+  if (!ids.length) return { docs: {} as Record<string, any>, diffs: {} as Record<string, any[]>, read_at: new Date().toISOString(), raw: {} as Record<string, any>, byId: {} as Record<string, any> }
   const itemIds = [...new Set(Object.values(bom).flat().filter((b: any) => b.item_id).map((b: any) => b.item_id))] as string[]
   const factsQ = async (tx: any) => { const [{ f }] = await tx`select mre.ingredient_facts(string_to_array(${itemIds.join(',')}, ',')::uuid[]) as f`; return f || {} }
   const facts = itemIds.length ? (tx0 ? await factsQ(tx0) : await lab<any>(factsQ)) : {}
@@ -54,12 +55,13 @@ async function readOfficial(svc: any, rootIds: string[], tx0?: any) {
     svc.from('prep_tasks').select('id,name,unit,recipe_id,prep_type,stock_role,archived').in('recipe_id', ids).not('archived', 'is', true).then(must),
     svc.from('recipe_yield').select('*').in('id', ids).then(must),
   ]) as any[][]
-  const at = new Date().toISOString(), docs: Record<string, any> = {}, diffs: Record<string, any[]> = {}
+  const at = new Date().toISOString(), docs: Record<string, any> = {}, diffs: Record<string, any[]> = {}, raw: Record<string, any> = {}
   for (const rid of ids) {
-    const out = buildLabDoc({ id: rid, r: recipes[rid], rows: bom[rid], stepRows: steps.filter(x => x.recipe_id === rid), prepRows: preps.filter(x => x.recipe_id === rid), y: yields.find(x => x.id === rid), byId: recipes, importedAt: at })
+    raw[rid] = { r: recipes[rid], rows: bom[rid], stepRows: steps.filter(x => x.recipe_id === rid), prepRows: preps.filter(x => x.recipe_id === rid), y: yields.find(x => x.id === rid) || {} }
+    const out = buildLabDoc({ id: rid, ...raw[rid], byId: recipes, importedAt: at })
     docs[rid] = Object.assign(out.doc, { id: rid, _source: 'official' }); diffs[rid] = out.diffs
   }
-  return { docs, diffs, read_at: at }
+  return { docs, diffs, read_at: at, raw, byId: recipes }
 }
 /** Lab-only recipes (never in Brigade: the Chef's test example, proposals like a new POS ITEM): their latest draft or version. */
 async function labOnlyDocs(tx: any, ids: string[]) {
@@ -101,6 +103,8 @@ async function tree(tx: any, svc: any, rootDoc: any, withDrafts: boolean) {
 }
 const ctxOf = (t: any, drafts = false) => ({ doc: (id: string) => (drafts && t.draftDocs && t.draftDocs[id]) || t.docs[id], facts: (id: string) => t.facts[id], measures: t.measures })
 const LOCK = 'pubblicazione_bloccata'   // step A: nothing is ever published to the official recipes from here
+// MR-04: «Pubblica» exists only when the switch is on (set at installation, Chef's GO). Off = everything exactly as before.
+const publishOn = () => Deno.env.get('MRE_PUBLISH') === 'on'
 function stripPrices(facts: any) { const o: any = {}; for (const k of Object.keys(facts)) { const { price, ...rest } = facts[k]; o[k] = rest } return o }
 const stripEst = (doc: any) => doc && Array.isArray(doc.lines) && doc.lines.some((l: any) => l.est) ? Object.assign({}, doc, { lines: doc.lines.map((l: any) => { const { est, ...rest } = l; return rest }) }) : doc
 function stripEstDocs(docs: any) { const o: any = {}; for (const k of Object.keys(docs || {})) o[k] = stripEst(docs[k]); return o }
@@ -144,7 +148,7 @@ export async function mreList(u: U, svc: any) {
   if (chefU) for (const l of labRows) if (l.lab_only && !l.is_test && l.draft_version != null)  // proposals: not in Brigade yet, Chef only
     out.push({ id: l.id, title: l.draft_title, category: l.draft_category, menu: l.source.kind !== 'prep', prep: l.source.kind === 'prep', archived: false, mre: true, lab_only: true, draft: true, draft_version: l.draft_version, review: review(l), pending: l.pending, pos_names: l.source.pos_names || null })
   out.sort((a, b) => String(a.draft_title || a.title || '').localeCompare(String(b.draft_title || b.title || ''), 'en', { sensitivity: 'base' }))
-  return { engine: E.MRE_ENGINE_VERSION, source: 'official', publish_locked: true, recipes: out, pending: chefU ? labRows.reduce((a: number, r: any) => a + r.pending, 0) : 0 }
+  return { engine: E.MRE_ENGINE_VERSION, source: 'official', publish_locked: !publishOn(), recipes: out, pending: chefU ? labRows.reduce((a: number, r: any) => a + r.pending, 0) : 0 }
 }
 
 /** Chef's review mark (R1.13): "verified by the Chef" — kept in the lab next to the recipe. It is NOT a publication and
@@ -185,7 +189,7 @@ export async function mreRecipe(u: U, id: string, svc: any) {
     const isChef = u.role === 'chef'
     if (source === 'lab' && !isChef && !(r && r.is_test)) throw new MreError(404, 'not_found')     // proposals are Chef work in progress
     const t = await tree(tx, svc, cur, isChef)
-    const out: any = { engine: E.MRE_ENGINE_VERSION, source, read_at: off.read_at, publish_locked: !(r && r.is_test),
+    const out: any = { engine: E.MRE_ENGINE_VERSION, source, read_at: off.read_at, publish_locked: !(r && r.is_test) && !(publishOn() && source === 'official'),
       recipe: { id, pilot: r ? r.pilot : false, current_version: r ? r.current_version : 0, linked: !!r, review: isChef && r && r.source && r.source.review ? r.source.review : null },
       doc: isChef ? cur : stripEst(cur), docs: isChef ? t.docs : stripEstDocs(t.docs), draft_docs: isChef ? t.draftDocs : {}, facts: isChef ? t.facts : stripPrices(t.facts), measures: t.measures }
     const vers = r ? await tx`select version, state, reason, created_by, created_at, published_by, published_at from mre.versions where recipe_id = ${id} order by version desc` : []
@@ -305,10 +309,58 @@ export async function mreDiscard(u: U, b: any) {
   return await lab(async tx => { await tx`delete from mre.versions where recipe_id = ${id} and state = 'bozza'`; await audit(tx, u, 'discard_draft', id, {}); return { ok: true } })
 }
 
-export async function mrePublish(u: U, b: any) {
+/* ---------------- MR-04 «Pubblica ricetta per ricetta» (Chef GO 22/10/2026: built in the LAB; installation = separate GO) ----------------
+   Preview (writes nothing): what would change in Brigade, food cost before/after (engine + FC05), what 1 portion sold and 1 lot
+   produced would deduct before/after, refusals and warnings. Publish: the Chef confirms THAT preview (fingerprint of the official
+   rows + fingerprint of the plan); one database step writes it with a backup; the rows are read back and must say what was approved,
+   and FC05 must move like the engine — otherwise everything is undone in the same transaction. Restore: one step back, exact. */
+const hex = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))).map(x => x.toString(16).padStart(2, '0')).join('').slice(0, 16)
+const fcLot = (bd: any) => bd && bd.semaforo && bd.semaforo.costo_noto != null ? Number(bd.semaforo.costo_noto) : null
+async function publishContext(id: string, svc: any) {
+  const st = await lab(async tx => {
+    const [r] = await tx`select source, is_test from mre.recipes where id = ${id}`
+    const [dr] = await tx`select version, doc, created_at from mre.versions where recipe_id = ${id} and state = 'bozza'`
+    return { r, dr }
+  })
+  if (!st.r || !st.dr) throw bad('nessuna_bozza')
+  if (st.r.is_test || (st.r.source && st.r.source.lab_only)) throw bad('solo_laboratorio')       // a proposal is not in Brigade yet
+  const review = st.r.source && st.r.source.review
+  if (!review || new Date(review.at).getTime() < new Date(st.dr.created_at).getTime()) throw new MreError(409, 'serve_verificata')
+  const off = await readOfficial(svc, [id])
+  const raw = off.raw[id]; if (!raw) throw new MreError(404, 'not_found')
+  const doc = Object.assign({}, st.dr.doc, { id })
+  const subIds = [...new Set((doc.lines || []).filter((l: any) => l.kind === 'recipe' && !off.byId[l.ref]).map((l: any) => l.ref))] as string[]
+  const more = subIds.length ? await readOfficial(svc, subIds) : { byId: {} }
+  const byId = Object.assign({}, more.byId, off.byId)
+  return await lab(async tx => {
+    const tBefore = await tree(tx, svc, off.docs[id], false), tAfter = await tree(tx, svc, doc, false)
+    const facts = Object.assign({}, tBefore.facts, tAfter.facts)
+    const plan = P.planPublish({ id, doc, off: raw, facts, byId })
+    const [{ fp }] = await tx`select mre.official_fp(${id}) as fp`
+    const [{ fc }] = await tx`select mre.official_fc05(${id}) as fc`
+    const cb = E.cost(id, 1, ctxOf(tBefore)), ca = E.cost(id, 1, ctxOf(tAfter))
+    const conseq = E.consequences(id, ctxOf(tBefore), ctxOf(tAfter))
+    return { doc, raw, byId, facts, plan, fp, fc05: fc, cost: { before: cb, after: ca }, conseq, draftVersion: st.dr.version, planHash: await hex(JSON.stringify(plan.changes)) }
+  })
+}
+export async function mrePublishPreview(u: U, b: any, svc: any) {
+  chef(u)
+  const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
+  if (!publishOn()) throw new MreError(423, LOCK)
+  const c = await publishContext(id, svc)
+  const cs = (x: any) => ({ food: x.food, pack: x.pack, per_portion: x.per_portion, state: x.state, missing: x.missing })
+  return { ok: c.plan.ok, empty: c.plan.empty, refusals: c.plan.refusals, warnings: c.plan.warnings, summary: c.plan.summary,
+    cost: { before: cs(c.cost.before), after: cs(c.cost.after) }, fc05_before: fcLot(c.fc05), consequences: c.conseq,
+    impronta: c.fp, piano: c.planHash, draft_version: c.draftVersion }
+}
+export async function mrePublish(u: U, b: any, svc?: any) {
   chef(u)
   const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
   const reason = String(b?.reason || '').trim().slice(0, 500) || null
+  if (publishOn() && svc) {
+    const isTest = await lab(async tx => { const [r] = await tx`select is_test from mre.recipes where id = ${id}`; return !!(r && r.is_test) })
+    if (!isTest) return await publishOfficial(u, id, b, reason, svc)
+  }
   // STEP A: the official recipes are the only source and are NOT written from here. Only the lab test example can be "published".
   // The refusal is written to the lab register in its own transaction (it must survive the refusal).
   const locked = await lab(async tx => { const [r] = await tx`select is_test from mre.recipes where id = ${id}`; if (!r) throw new MreError(404, 'not_found'); if (r.is_test) return false; await audit(tx, u, 'publish_refused', id, { reason: LOCK }); return true })
@@ -324,6 +376,61 @@ export async function mrePublish(u: U, b: any) {
     await audit(tx, u, 'publish', id, { version: dr.version, reason })
     return { ok: true, version: dr.version }
   })
+}
+
+async function publishOfficial(u: U, id: string, b: any, reason: string | null, svc: any) {
+  const c = await publishContext(id, svc)
+  if (c.plan.empty) throw bad('niente_da_pubblicare')
+  if (!c.plan.ok) throw new MreError(409, 'non_pubblicabile')
+  if (String(b?.impronta || '') !== c.fp) throw new MreError(409, 'ricetta_cambiata')          // Brigade changed after the preview
+  if (String(b?.piano || '') !== c.planHash) throw new MreError(409, 'piano_cambiato')         // the draft changed after the preview
+  try {
+    return await lab(async tx => {
+      const [{ w }] = await tx`select mre.publish_write(${id}, ${c.fp}, ${sql.json(c.plan as any)}, ${u.id}, ${c.draftVersion}) as w`
+      // read back what Brigade now holds and check it says what the Chef approved (same converter the app, bots' rules, FC05)
+      const f = (x: string) => c.facts[x] || {}
+      const rows = (w.after.bom as any[]).map(x => Object.assign({}, x, { ing_name: x.item_id ? f(x.item_id).name ?? null : null, policy: x.item_id ? f(x.item_id).policy ?? null : null }))
+        .sort((a, b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9) || a.bom_id - b.bom_id)
+      const diff = P.verifyPublished({ id, doc: c.doc, offAfter: { r: w.after.r, rows, stepRows: w.after.steps, prepRows: c.raw.prepRows, y: w.yield || {} }, facts: c.facts, byId: c.byId })
+      const fb = fcLot(c.fc05), fa = fcLot(w.fc05)
+      const eb = c.cost.before.food + c.cost.before.pack, ea = c.cost.after.food + c.cost.after.pack
+      const fcOk = fb == null || fa == null ? fb == null && fa == null : Math.abs((fa - fb) - (ea - eb)) <= Math.max(0.01, 0.005 * Math.max(Math.abs(fa), 1))
+      const checks = { rilettura: diff, fc05: { before: fb, after: fa }, motore: { before: eb, after: ea }, fc05_ok: fcOk }
+      if (diff.length) throw new MreError(500, 'rilettura_diversa')          // same transaction: nothing stays written
+      if (!fcOk) throw new MreError(500, 'controllo_fc05')
+      await tx`update mre.publications set checks = ${sql.json(checks as any)} where id = ${w.publication}`
+      const v = await tx`update mre.versions set state = 'pubblicata', published_by = ${u.id}, published_at = now(), reason = ${reason} where recipe_id = ${id} and version = ${c.draftVersion} and state = 'bozza' returning version`
+      if (v.length !== 1) throw new MreError(409, 'bozza_cambiata')
+      await tx`update mre.recipes set current_version = ${c.draftVersion} where id = ${id}`
+      await audit(tx, u, 'publish_official', id, { publication: w.publication, version: c.draftVersion, summary: c.plan.summary, warnings: c.plan.warnings, checks })
+      return { ok: true, publication: w.publication, version: c.draftVersion, summary: c.plan.summary, checks }
+    })
+  } catch (e: any) {
+    await lab(async tx => audit(tx, u, 'publish_failed', id, { code: e.code || String(e.message || e).slice(0, 200) })).catch(() => {})
+    const m = String(e.message || ''), k = /mr04:([a-z_]+)/.exec(m)
+    if (k) throw new MreError(409, k[1])
+    throw e
+  }
+}
+export async function mrePublications(u: U, b: any) {
+  chef(u)
+  const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
+  if (!publishOn()) return { items: [] }
+  return await lab(async tx => ({ items: await tx`select id, at, by_user, draft_version, restored_at, restored_by, plan->'summary' as summary, checks from mre.publications where recipe_id = ${id} order by at desc limit 20` }))
+}
+export async function mreRestoreOfficial(u: U, b: any) {
+  chef(u)
+  if (!publishOn()) throw new MreError(423, LOCK)
+  const pub = Number(b?.publication); if (!Number.isInteger(pub) || pub <= 0) throw bad('bad_args')
+  try {
+    return await lab(async tx => {
+      const [{ r }] = await tx`select mre.publish_restore(${pub}, ${u.id}) as r`
+      const [p] = await tx`select coalesce(max(draft_version), 0)::int as v from mre.publications where recipe_id = ${r.recipe} and restored_at is null`
+      await tx`update mre.recipes set current_version = ${p.v} where id = ${r.recipe}`
+      await audit(tx, u, 'restore_official', r.recipe, { publication: pub })
+      return { ok: true, recipe: r.recipe, publication: pub }
+    })
+  } catch (e: any) { const k = /mr04:([a-z_]+)/.exec(String(e.message || '')); if (k) throw new MreError(409, k[1]); throw e }
 }
 
 /** An old version from the history becomes the DRAFT again (step A: never a recipe in use). The test example keeps the old restore. */

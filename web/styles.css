@@ -558,3 +558,9 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .mr-estin{font:500 15px var(--fb);color:var(--tx);background:transparent;border:0;border-bottom:1px solid var(--line);padding:2px 0;width:4.5em;outline:none}
 .mr-estin:focus{border-bottom:2px solid var(--rest)}
 .mr-est .mr-muted{display:block}
+/* MR-04 «Pubblica ricetta per ricetta» */
+.mr-pubbox{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;gap:8px}
+.mr-pubbox h3{margin:0;font-size:16px}
+.mr-pubbox ul{margin:4px 0 0 18px;padding:0}
+.mr-pubbox .mr-acts{margin-top:4px}
+.mr-warnbox{color:var(--tx2)}

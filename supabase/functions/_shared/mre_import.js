@@ -20,14 +20,21 @@ const fmtq = (q, u) => `${q == null || q === '' ? '?' : Number(q)} ${u || ''}`.t
  * stepRows: its recipe_steps · prepRows: its non-archived prep_tasks · y: its recipe_yield row · byId: id → recipes row (sub-recipe names)
  * importedAt: ISO time written in the frozen source snapshot
  */
+/** The role of a Brigade BOM row, from the rules the bots use today (bot v9 lists + non-food policy + B-48).
+ *  MR-04: shared with «Pubblica», so a published line can only carry a role the bots will read the same way. */
+export function roleOf(id, b) {
+  let role = 'produzione', role_src = 'predefinito'
+  if (b.component_type === 'ITEM' && b.policy === 'non_food') { role = 'imballo'; role_src = 'ingredient_policy non_food' }
+  if (HYBRID.has(id) && b.component_type === 'RECIPE') { role = 'al_piatto'; role_src = 'HYBRID_PARENT_ALLOWLIST (bot v9)' }
+  if ((CAKE_GARNISH[id] || []).includes(b.sub_recipe_id)) { role = 'al_piatto'; role_src = 'CAKE_SLICE_GARNISH (bot v9)' }
+  if (id === MINT && b.component_type === 'ITEM' && /chocolate|cioccolat|fondente|meringue|meringa/i.test(b.ing_name || '')) { role = 'al_piatto'; role_src = 'B-48 Chef Max 15/10' }
+  return { role, role_src }
+}
+
 export function buildLabDoc({ id, r, rows, stepRows, prepRows, y, byId, importedAt }) {
   y = y || {}
   const lines = rows.map((b, i) => {
-    let role = 'produzione', role_src = 'predefinito'
-    if (b.component_type === 'ITEM' && b.policy === 'non_food') { role = 'imballo'; role_src = 'ingredient_policy non_food' }
-    if (HYBRID.has(id) && b.component_type === 'RECIPE') { role = 'al_piatto'; role_src = 'HYBRID_PARENT_ALLOWLIST (bot v9)' }
-    if ((CAKE_GARNISH[id] || []).includes(b.sub_recipe_id)) { role = 'al_piatto'; role_src = 'CAKE_SLICE_GARNISH (bot v9)' }
-    if (id === MINT && b.component_type === 'ITEM' && /chocolate|cioccolat|fondente|meringue|meringa/i.test(b.ing_name || '')) { role = 'al_piatto'; role_src = 'B-48 Chef Max 15/10' }
+    const { role, role_src } = roleOf(id, b)
     return { id: 'b' + b.bom_id, kind: b.component_type === 'RECIPE' ? 'recipe' : 'ingredient', ref: b.component_type === 'RECIPE' ? b.sub_recipe_id : b.item_id,
       qty: b.quantity == null ? null : Number(b.quantity), unit: b.unit || null, role, note: b.notes || null, group: null, src: { bom_id: b.bom_id, role_src } }
   })
