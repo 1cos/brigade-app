@@ -167,7 +167,7 @@ function rmRows(L, p) {
   const q = fold(p.q || ''), k = p.k || 'all', st = isChef() ? p.st || 'all' : 'all';
   return L.recipes.filter(r => (st === 'archived' ? r.archived : !r.archived)
     && (k === 'all' || (k === 'prep' ? r.prep : r.menu))
-    && (st === 'all' || st === 'archived' || (st === 'todo' ? !r.review : st === 'done' ? !!r.review : !!r.draft))
+    && (st === 'all' || st === 'archived' || (st === 'todo' ? !r.review : st === 'done' ? !!r.review : st === 'tec' ? !!r.da_tec : !!r.draft))
     && (!q || (r._s || (r._s = [r.title, r.draft_title, ...(r.pos_names || [])].filter(Boolean).map(fold).join(' | '))).includes(q)));
 }
 /* R1.18: found by its POS name → that name is shown in the row */
@@ -184,13 +184,13 @@ SCREENS.restaurant = { title: () => t('m_lab_title'), c: '--rest', render(p) {
   if (p.q && rows.length && rows.length <= 3) rows.forEach(r => { if (chefOrMre(r.id)) API.ahead('mre_recipe', { id: r.id }, 5 * 60000); });   // R1.18: few matches → read ahead, the tap opens at once
   const k = p.k || 'all', st = p.st || 'all';
   const seg = `<div class="seg rm-seg" role="tablist">${[['all', t('m_rm_all')], ['prep', 'Prep'], ['menu', 'Menu Item']].map(([v, l]) => `<button class="${k === v ? 'on' : ''}" data-a="rmFilter" data-f="k" data-v="${v}" role="tab" aria-selected="${k === v}">${l}</button>`).join('')}</div>`;
-  const nDone = live.filter(r => r.review).length, nDraft = live.filter(r => r.draft).length;
+  const nDone = live.filter(r => r.review).length, nDraft = live.filter(r => r.draft).length, nTec = live.filter(r => r.da_tec).length;
   // Chef review filters: tap again to show all again (no second "All")
-  const chips = chef ? `<div class="rm-chips">${[['todo', t('m_rm_todo')], ['done', t('m_rm_done')], ['draft', t('m_rm_drafts') + (nDraft ? ' · ' + nDraft : '')]].map(([v, l]) => `<button class="${st === v ? 'on' : ''}" data-a="rmFilter" data-f="st" data-v="${st === v ? 'all' : v}" aria-pressed="${st === v}">${l}</button>`).join('')}</div>` : '';
+  const chips = chef ? `<div class="rm-chips">${[['todo', t('m_rm_todo')], ['done', t('m_rm_done')], ['draft', t('m_rm_drafts') + (nDraft ? ' · ' + nDraft : '')], ...(nTec || st === 'tec' ? [['tec', t('m_rm_tec') + ' · ' + nTec]] : [])].map(([v, l]) => `<button class="${st === v ? 'on' : ''}" data-a="rmFilter" data-f="st" data-v="${st === v ? 'all' : v}" aria-pressed="${st === v}">${l}</button>`).join('')}</div>` : '';
   const prog = chef ? `<div class="rm-prog"><div class="rm-bar"><i style="width:${live.length ? Math.round(nDone / live.length * 1000) / 10 : 0}%"></i></div><span>${t('m_rm_progress', { n: nDone, t: live.length })}</span></div>` : '';
   const tag = r => [r.prep ? `<span class="rm-tag">Prep</span>` : '', r.menu ? `<span class="rm-tag menu">Menu Item</span>` : ''].join('');
   const row = r => `<button class="row rm-row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(rmName(r))}</div>
-      <div class="rm-meta">${tag(r)}${posHit(r, p.q)}${chef && r.draft ? `<span class="rm-draft">${t('m_rm_draft')}</span>` : ''}${chef && r.draft_title ? `<span class="rm-was">${esc(t('m_rm_in_use', { t: I.dn(r.title) }))}</span>` : ''}${chef && r.review && r.review.open ? `<span class="rm-open">⚠ ${r.review.open}</span>` : ''}</div></span>
+      <div class="rm-meta">${tag(r)}${posHit(r, p.q)}${chef && r.draft ? `<span class="rm-draft">${t('m_rm_draft')}</span>` : ''}${chef && r.da_tec ? `<span class="rm-tec">${t('m_rm_tec')}</span>` : ''}${chef && r.draft_title ? `<span class="rm-was">${esc(t('m_rm_in_use', { t: I.dn(r.title) }))}</span>` : ''}${chef && r.review && r.review.open ? `<span class="rm-open">⚠ ${r.review.open}</span>` : ''}</div></span>
       ${chef ? `<span class="rm-check${r.review ? ' on' : ''}" aria-label="${esc(r.review ? t('m_rm_done') : t('m_rm_todo'))}">${r.review ? '✓' : ''}</span>` : '<span class="chev">›</span>'}</button>`;
   // R1.14: a reviewed recipe can still have open problems — they stay visible in the list
   const nArch = L.recipes.length - live.length;

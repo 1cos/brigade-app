@@ -104,7 +104,9 @@ function render(p) {
   if (chef && m === 'view' && d.source !== 'lab' && d.draft) h += `<div class="mr-vs" role="tablist"><button class="${draftView ? 'on' : ''}" data-m="view:draft">${T('v_draft', { v: d.draft._version })}</button><button class="${!draftView ? 'on' : ''}" data-m="view:live">${T('v_live')}</button></div>`;
   else if (chef && d.source === 'lab' && m === 'view') h += `<div><span class="rm-draft">${T('v_new')}</span></div>`;
   if (m !== 'view') h += `<div class="mr-estate" data-sst="${esc(p.id)}" role="status" aria-live="polite">${statusInner(p.id, d)}</div>`;
-  if (chef && draftView) { const dv = (d.versions || []).find(v => v.state === 'bozza'); h += `<div class="mr-dstate">${T('draft_state', { v: d.draft._version, t: dv && dv.at ? dt(dv.at) : '' })}</div>`; }
+  if (chef && draftView) { const dv = (d.versions || []).find(v => v.state === 'bozza'); h += `<div class="mr-dstate">${T('draft_state', { v: d.draft._version, t: dv && dv.at ? dt(dv.at) : '' })}</div>`;
+    const tm = dv && /^(T\.E\.C\. per Max: |Proposta nuova di T\.E\.C\.)(.*)$/s.exec(dv.reason || '');            // MR-14: what T.E.C. wrote, so the Chef checks it before «Verificata»
+    if (tm) h += `<div class="mr-tecnote"><b>${T('tec_note')}</b>${tm[2] && tm[2].trim() ? ' ' + esc(tm[2].trim()) : ''}<br><span class="mr-muted">${T('tec_note_check')}</span></div>`; }
   h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(I.dn(doc.title))}</h1>`;
   const parts = [];
   const pu = k => T('pu_' + (y.portion_unit || 'portion') + (k ? '1' : ''));      // what one portion is called: portion, cup, piece

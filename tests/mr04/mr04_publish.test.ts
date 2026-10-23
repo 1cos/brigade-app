@@ -320,6 +320,62 @@ Deno.test('P18 RITIRA: rifiutato se in Brigade qualcosa la usa (una prep); poi l
   await db`delete from bench.fc05 where recipe_id = ${NEW_A}`
 })
 
+const TEC = { id: 41, name: 'T.E.C. per Max', role: 'assistente' as any }
+let TEC_NEW = ''
+Deno.test('P19 T.E.C. salva una bozza su una ricetta ufficiale: la lista dello Chef la segna «da T.E.C.», anche dopo che lo Chef la corregge', async () => {
+  S0 = await snapAll()
+  const o = await M.mreRecipe(CHEF, WHEEL, svc)
+  await M.mreSaveDraft(CHEF, { id: WHEEL, doc: o.doc }, svc)                // start: a Chef draft identical to Brigade (not from T.E.C.)
+  let row = (await M.mreList(CHEF, svc)).recipes.find((r: any) => r.id === WHEEL)
+  assertEquals(!!row.da_tec, false, 'bozza dello Chef: non «da T.E.C.»')
+  const L = await M.tecLeggi(TEC, { id: WHEEL }, svc)
+  const sv = await M.tecSalvaBozza(TEC, { id: WHEEL, impronta: L.impronta, modifiche: [{ tipo: 'cambia_quantita', riga: 'b2173', quantita: 12, unita: 'g' }] }, svc)
+  assertEquals(sv.ok, true)
+  row = (await M.mreList(CHEF, svc)).recipes.find((r: any) => r.id === WHEEL)
+  assertEquals(row.da_tec, true, 'dopo T.E.C.: «da T.E.C.»'); assertEquals(row.draft, true)
+  const staffRow = (await M.mreList(STAFF, svc)).recipes.find((r: any) => r.id === WHEEL)
+  assertEquals(staffRow.da_tec, undefined, 'il personale non vede le bozze')
+  const d = structuredClone((await M.mreRecipe(CHEF, WHEEL, svc)).draft)
+  assert(/^T\.E\.C\. per Max: /.test((await M.mreRecipe(CHEF, WHEEL, svc)).versions.find((v: any) => v.state === 'bozza').reason), 'nella scheda: cosa ha scritto T.E.C.')
+  d.lines.find((l: any) => l.id === 'b2173').qty = 10                        // the Chef corrects it
+  await M.mreSaveDraft(CHEF, { id: WHEEL, doc: d }, svc)
+  row = (await M.mreList(CHEF, svc)).recipes.find((r: any) => r.id === WHEEL)
+  assertEquals(row.da_tec, true, 'corretta dallo Chef: resta «da T.E.C.» finché non è pubblicata o scartata')
+  assertEquals(await snapAll(), S0, 'T.E.C. non scrive niente in Brigade')
+})
+
+Deno.test('P20 la bozza di T.E.C. si verifica e si pubblica come sempre; dopo, non è più «da T.E.C.»', async () => {
+  await M.mreReview(CHEF, { id: WHEEL }, svc)
+  const p = await M.mrePublishPreview(CHEF, { id: WHEEL }, svc)
+  assertEquals(p.ok, true, JSON.stringify(p.refusals)); assert(p.summary.some((x: string) => /Diced Butter: 20 → 10/.test(x)), p.summary.join(' | '))
+  const r = await M.mrePublish(CHEF, { id: WHEEL, impronta: p.impronta, piano: p.piano }, svc)
+  assertEquals(r.ok, true)
+  const row = (await M.mreList(CHEF, svc)).recipes.find((x: any) => x.id === WHEEL)
+  assertEquals(!!row.da_tec, false); assertEquals(!!row.draft, false)
+  await M.mreRestoreOfficial(CHEF, { publication: r.publication }); assertEquals(await snapAll(), S0)
+})
+
+Deno.test('P21 T.E.C. propone una ricetta NUOVA: compare nell\'elenco «da T.E.C.», lo Chef la verifica e la crea in Brigade; ritirata resta nell\'elenco', async () => {
+  const pr = await M.tecPropostaNuova(TEC, { titolo: 'Salsa Nuova di T.E.C.', righe: [{ ref: PARM, genere: 'ingredient', quantita: 200, unita: 'g' }], resa: { porzioni: 4 } }, svc)
+  assertEquals(pr.ok, true); TEC_NEW = pr.ricetta_id
+  let row = (await M.mreList(CHEF, svc)).recipes.find((r: any) => r.id === TEC_NEW)
+  assert(row && row.lab_only && row.da_tec, 'proposta di T.E.C. nell\'elenco dello Chef, segnata')
+  assertEquals((await M.mreList(STAFF, svc)).recipes.some((r: any) => r.id === TEC_NEW), false, 'il personale non la vede')
+  assertEquals(await err(M.mrePublish(TEC, { id: TEC_NEW }, svc)), 'forbidden')
+  await M.mreReview(CHEF, { id: TEC_NEW }, svc)
+  const p = await M.mrePublishPreview(CHEF, { id: TEC_NEW }, svc)
+  assertEquals(p.ok, true, JSON.stringify(p.refusals))
+  await db`insert into bench.fc05 values (${TEC_NEW}, null, ${p.cost.after.food + p.cost.after.pack}) on conflict (recipe_id) do update set after = excluded.after`
+  const r = await M.mrePublish(CHEF, { id: TEC_NEW, impronta: p.impronta, piano: p.piano }, svc)
+  assertEquals(r.ok, true)
+  assertEquals((await db`select title from public.recipes where id = ${TEC_NEW}`)[0].title, 'Salsa Nuova di T.E.C.')
+  const w = await M.mreRestoreOfficial(CHEF, { publication: r.publication }); assertEquals(w.withdrawn, true)
+  row = (await M.mreList(CHEF, svc)).recipes.find((x: any) => x.id === TEC_NEW)
+  assert(row && row.lab_only && row.title === 'Salsa Nuova di T.E.C.', 'ritirata: resta nell\'elenco come proposta (prima spariva)')
+  assertEquals(await snapAll(), S0)
+  await db`delete from bench.fc05 where recipe_id = ${TEC_NEW}`
+})
+
 Deno.test('P10 niente da pubblicare / ricetta solo di laboratorio', async () => {
   const o = await M.mreRecipe(CHEF, WHEEL, svc)
   await M.mreSaveDraft(CHEF, { id: WHEEL, doc: o.doc }, svc); await review()     // draft identical to the official recipe

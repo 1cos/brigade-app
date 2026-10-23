@@ -467,7 +467,7 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .scw-t td:last-child{color:var(--tx);font-weight:600}
 /* R1.13 Recipe Master — one list, Chef review (TRUST · EASY · CLEAN) */
 .rm .seg.rm-seg{margin-top:2px}
-.rm-chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+.rm-chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0}
 .rm-chips button{flex:0 0 auto;height:38px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--surf);font-weight:650;font-size:15px;color:var(--tx2)}
 .rm-chips button.on{background:var(--tx);border-color:var(--tx);color:var(--bg)}
 .rm-prog{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--txm);font-weight:600}
@@ -480,6 +480,8 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .rm-draft{font-size:13px;font-weight:700;color:var(--warn);display:inline-flex;align-items:center;gap:5px}
 .rm-draft::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
 .rm-was{font-size:13px;color:var(--txm)}
+.rm-tec{font-size:12px;font-weight:700;letter-spacing:.04em;color:#5b21b6;background:#ede9fe;border-radius:6px;padding:2px 7px}
+.mr-tecnote{margin:8px 0;padding:10px 12px;border-radius:12px;background:#f5f3ff;border:1px solid #ddd6fe;color:#3b0764;font-size:15px;line-height:1.4}
 .rm-check{flex:0 0 auto;width:30px;height:30px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-weight:800;font-size:16px;color:transparent}
 .rm-check.on{background:var(--ok);border-color:var(--ok);color:var(--surf)}
 .rm-foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:6px 2px 10px}
@@ -564,3 +566,5 @@ details.kfold>summary>.muted{margin-left:auto;font-weight:600;font-size:15px}
 .mr-pubbox ul{margin:4px 0 0 18px;padding:0}
 .mr-pubbox .mr-acts{margin-top:4px}
 .mr-warnbox{color:var(--tx2)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .rm-tec{color:#ddd6fe;background:#3b0764}:root:not([data-theme="light"]) .mr-tecnote{background:#2e1065;border-color:#5b21b6;color:#ede9fe}}
+:root[data-theme="dark"] .rm-tec{color:#ddd6fe;background:#3b0764}:root[data-theme="dark"] .mr-tecnote{background:#2e1065;border-color:#5b21b6;color:#ede9fe}

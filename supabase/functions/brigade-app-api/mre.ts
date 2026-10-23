@@ -165,13 +165,15 @@ export async function mreList(u: U, svc: any) {
   ]) as any[][]
   const prepSet = new Set(preps.filter((p: any) => p.archived !== true).map((p: any) => p.recipe_id)), subSet = new Set(subs.map((b: any) => b.sub_recipe_id))
   const labRows: any[] = await lab<any[]>(tx => tx`
-    select r.id, r.pilot, r.is_test, r.current_version, r.source, d.version as draft_version, d.doc->>'title' as draft_title, d.doc->>'category' as draft_category,
+    select r.id, r.pilot, r.is_test, r.current_version, r.source, d.version as draft_version, d.doc->>'title' as draft_title, d.doc->>'category' as draft_category, d.reason as draft_reason,
            (select count(*)::int from mre.suggestions s where s.recipe_id = r.id and s.status = 'in attesa') as pending,
            coalesce((r.source->>'lab_only')::boolean, false) as lab_only, coalesce((r.source->>'on_demand')::boolean, false) as on_demand
     from mre.recipes r left join mre.versions d on d.recipe_id = r.id and d.state = 'bozza'`)
   const L: Record<string, any> = Object.fromEntries(labRows.map((r: any) => [r.id, r]))
   const takenPos = new Set(labRows.filter((r: any) => r.lab_only && r.draft_version != null && r.source && r.source.takes_pos_from).map((r: any) => r.source.takes_pos_from))
   const review = (r: any) => r && r.source && r.source.review ? r.source.review : null
+  // MR-14: a draft T.E.C. wrote (or touched last) — its note stays while the Chef corrects it, until it is published or discarded
+  const daTec = (l: any) => !!(l && ((l.draft_version != null && /^(T\.E\.C\.|Proposta nuova di T\.E\.C\.)/.test(l.draft_reason || '')) || (l.lab_only && l.source && l.source.proposta_da === 'T.E.C.' && l.draft_version != null)))
   const out: any[] = []
   for (const r of recs) {
     const l = L[r.id], archived = /archiv/i.test(r.category || '')
@@ -183,11 +185,15 @@ export async function mreList(u: U, svc: any) {
       if (l && l.draft_version != null) { row.draft = true; row.draft_version = l.draft_version; if (l.draft_title && l.draft_title !== r.title) row.draft_title = l.draft_title }
       if (takenPos.has(r.id) && row.draft) row.menu = false                     // its POS names go to the proposal (CD-067)
       row.review = review(l); row.pending = l ? l.pending : 0
+      if (daTec(l)) row.da_tec = true
     }
     out.push(row)
   }
-  if (chefU) for (const l of labRows) if (l.lab_only && !l.is_test && l.draft_version != null)  // proposals: not in Brigade yet, Chef only
-    out.push({ id: l.id, title: l.draft_title, category: l.draft_category, menu: l.source.kind !== 'prep', prep: l.source.kind === 'prep', archived: false, mre: true, lab_only: true, draft: true, draft_version: l.draft_version, review: review(l), pending: l.pending, pos_names: l.source.pos_names || null })
+  // proposals: not in Brigade yet, Chef only (MR-14: also one withdrawn from Brigade, which has no open draft)
+  const withdrawn = labRows.filter((l: any) => l.lab_only && !l.is_test && l.draft_version == null && l.source && l.source.ritirata)
+  const wTitle: Record<string, any> = withdrawn.length ? Object.fromEntries((await lab<any[]>(tx => tx`select distinct on (recipe_id) recipe_id, doc->>'title' as t, doc->>'category' as c from mre.versions where recipe_id = any(string_to_array(${withdrawn.map((l: any) => l.id).join(',')}, ',')::uuid[]) order by recipe_id, version desc`)).map((x: any) => [x.recipe_id, x])) : {}
+  if (chefU) for (const l of labRows) if (l.lab_only && !l.is_test && (l.draft_version != null || wTitle[l.id]))
+    out.push({ id: l.id, title: l.draft_title || (wTitle[l.id] || {}).t, category: l.draft_category || (wTitle[l.id] || {}).c, menu: l.source.kind !== 'prep', prep: l.source.kind === 'prep', archived: false, mre: true, lab_only: true, draft: l.draft_version != null, draft_version: l.draft_version, review: review(l), pending: l.pending, pos_names: l.source.pos_names || null, ...(daTec(l) ? { da_tec: true } : {}) })
   out.sort((a, b) => String(a.draft_title || a.title || '').localeCompare(String(b.draft_title || b.title || ''), 'en', { sensitivity: 'base' }))
   return { engine: E.MRE_ENGINE_VERSION, source: 'official', publish_locked: !publishOn(), recipes: out, pending: chefU ? labRows.reduce((a: number, r: any) => a + r.pending, 0) : 0 }
 }
