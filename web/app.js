@@ -197,6 +197,10 @@ SCREENS.restaurant = { title: () => t('m_lab_title'), c: '--rest', render(p) {
   return `<div class="page rm" style="--c:var(--rest)">${top}
     <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: live.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
     ${seg}${chips}${prog}
+    ${chef && !L.publish_locked ? (p.newOpen ? `<div class="rm-new"><input id="rmNewT" class="search" type="text" maxlength="200" placeholder="${esc(t('m_rm_new_ph'))}" value="${esc(p.newT || '')}" autocomplete="off">
+      <div class="seg">${[['menu', 'Menu Item'], ['prep', 'Prep']].map(([v, l]) => `<button class="${(p.newK || 'menu') === v ? 'on' : ''}" data-a="rmNewKind" data-v="${v}">${l}</button>`).join('')}</div>
+      ${p.newErr ? `<p class="err">${esc(p.newErr)}</p>` : ''}<div class="mr-acts mr-between"><button class="mr-btn" data-a="rmNewOpen" data-v="0">${t('m_pub_cancel')}</button><button class="mr-btn dark" data-a="rmNewGo">${t('m_rm_new_go')}</button></div>
+      <p class="note">${t('m_rm_new_note')}</p></div>` : `<button class="mr-link acc rm-newbtn" data-a="rmNewOpen" data-v="1">${t('m_rm_new')}</button>`) : ''}
     ${rows.length ? `<div class="list">${rows.map(row).join('')}</div>` : `<p class="note">${esc(p.q ? t('nothing_for', { q: p.q }) : t('m_rm_none'))}</p>`}
     <div class="rm-foot">${chef ? `<button class="mr-link" data-a="rmFilter" data-f="st" data-v="${st === 'archived' ? 'all' : 'archived'}">${st === 'archived' ? t('m_rm_back') : t('m_rm_archived', { n: nArch })}</button>` : ''}<button class="mr-link" data-a="openIngs">${t('k_ings')} ›</button></div>
   </div>`;
@@ -478,6 +482,15 @@ const A = {
     openMre(id, name, 1, '', p.focus === 'photo' ? '' : p.focus || '', p.fix || '', true);
   },
   openMre(el) { openMre(el.dataset.r); },
+  /* MR-12: the Chef starts a NEW recipe here (an empty draft of Recipe Master; Brigade gets it only with «Pubblica … ricetta NUOVA») */
+  rmNewOpen(el) { const e = cur(); const i = $('rmNewT'); e.p = Object.assign({}, e.p, { newOpen: el.dataset.v === '1', newT: el.dataset.v === '1' && i ? i.value : '', newErr: '' }); render(true); if (e.p.newOpen) setTimeout(() => { const x = $('rmNewT'); if (x) x.focus(); }, 30); },
+  rmNewKind(el) { const e = cur(); const i = $('rmNewT'); e.p = Object.assign({}, e.p, { newK: el.dataset.v, newT: i ? i.value : e.p.newT }); render(true); },
+  async rmNewGo(el) { const e = cur(), i = $('rmNewT'), title = (i ? i.value : '').trim(); if (!isChef() || el.disabled) return;
+    if (title.length < 2) { e.p.newT = title; e.p.newErr = t('m_err_titolo_mancante'); render(true); return; }
+    el.disabled = true
+    try { const r = await API.call('mre_new', { title, prep: (e.p.newK || 'menu') === 'prep' }); e.p = Object.assign({}, e.p, { newOpen: false, newT: '', newErr: '' })
+      API.forget('mre_list'); API.get('mre_list', null, 0).catch(() => {}); openMre(r.id, r.title, 1, '', '', '', true) }
+    catch (x) { el.disabled = false; if (x.status === 401) return; const c = String(x.code || '').split(':')[0]; e.p.newT = title; e.p.newErr = t('m_err_' + c) !== 'm_err_' + c ? t('m_err_' + c) : errText(x); render(true) } },
   rmFilter(el) { const e = cur(); e.p = Object.assign({}, e.p, { [el.dataset.f]: el.dataset.v }); e.y = 0; render(true); $('main').scrollTop = 0; },
   openOffice(el) { const k = el.dataset.k, scope = el.dataset.scope || 'all'; openTab('office', k + ':' + scope, { s: k, p: { scope } }); },
   openIng(el) { openTab('ing', el.dataset.id, { s: 'ing', p: { id: el.dataset.id, from: el.dataset.from || '', line: el.dataset.line || '' } }); },

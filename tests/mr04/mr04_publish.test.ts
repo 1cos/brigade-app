@@ -151,6 +151,8 @@ Deno.test('P7 PUBBLICA: scrive solo le 2 righe cambiate, copia di sicurezza, ver
   assert(o.versions.some((v: any) => v.state === 'pubblicata'))
   assertEquals(o.doc.lines.find((l: any) => l.id === 'b2176').ref, PARM, 'la ricetta letta da Brigade è ora quella approvata')
   assert((await db`select 1 from mre.audit where op = 'publish_official'`).length === 1)
+  const h = await M.mrePublications(CHEF, { id: WHEEL })                       // RETTIFICA MR-04: the app sees the history and the checks are saved
+  assertEquals(h.items.length, 1); assertEquals(Number(h.items[0].id), Number(PUB)); assertEquals(h.items[0].checks.fc05_ok, true)
 })
 
 Deno.test('P8 Ripristina: rifiutato se dopo qualcuno ha cambiato la ricetta; poi rimette tutto ESATTAMENTE com\'era', async () => {
@@ -225,6 +227,97 @@ Deno.test('P13 prezzo mancante (CD-078): si pubblica con il food cost parziale, 
   assertEquals(r2.ok, true, 'con il prezzo di fiducia: pubblicata (era: ' + (r2 as any).code + ')')
   await M.mreRestoreOfficial(CHEF, { publication: (r2 as any).publication }); assertEquals(await snapAll(), S0)
   await db`delete from bench.fc05 where recipe_id = ${WHEEL}`
+})
+
+let NEW_A = '', NEW_B = '', PUB_A = 0
+const newDoc = async (id: string) => structuredClone((await M.mreRecipe(CHEF, id, svc)).draft)
+Deno.test('P14 «Nuova ricetta»: solo lo Chef; un nome che c\'è già in Brigade è rifiutato; poi una bozza vuota di laboratorio', async () => {
+  S0 = await snapAll()
+  assertEquals(await err(M.mreNew(STAFF, { title: 'Prova Nuova' }, svc)), 'forbidden')
+  assertEquals(await err(M.mreNew(CHEF, { title: '  wheel PASTA ' }, svc)), 'titolo_esistente')
+  assertEquals(await err(M.mreNew(CHEF, { title: 'x' }, svc)), 'titolo_mancante')
+  const r = await M.mreNew(CHEF, { title: 'Pasta Nuova del Banco' }, svc); NEW_A = r.id
+  const o = await M.mreRecipe(CHEF, NEW_A, svc)
+  assertEquals(o.source, 'lab'); assertEquals(o.publish_locked, false); assertEquals(o.draft.lines.length, 0)
+  assertEquals(await snapAll(), S0, 'niente scritto in Brigade')
+  assertEquals(await err(M.mrePublishPreview(CHEF, { id: NEW_A }, svc)), 'serve_verificata')
+  await M.mreReview(CHEF, { id: NEW_A }, svc)
+  const p = await M.mrePublishPreview(CHEF, { id: NEW_A }, svc)
+  assertEquals(p.ok, false); assert(p.refusals.some((x: any) => x.code === 'nessuna_riga'))
+})
+
+Deno.test('P15 ricetta nuova con ingredienti, sottoricetta, passo e porzioni: anteprima giusta, niente scritto', async () => {
+  const w = await M.mreRecipe(CHEF, WHEEL, svc), sub = w.doc.lines.find((l: any) => l.kind === 'recipe')
+  const d = await newDoc(NEW_A)
+  d.yield = { portions: 4 }
+  d.lines = [{ id: 'n1', kind: 'ingredient', ref: PARM, qty: 100, unit: 'g', per: 'lot', role: 'produzione' },
+             { id: 'n2', kind: 'recipe', ref: sub.ref, qty: 40, unit: 'g', per: 'lot', role: 'produzione' }]
+  d.steps = [{ it: 'Grattugia {{n1}} g di parmigiano.', en: '', es: '', src: 'it', tr: { it: 'chef' } }]
+  await M.mreSaveDraft(CHEF, { id: NEW_A, doc: d }, svc); await M.mreReview(CHEF, { id: NEW_A }, svc)
+  const p = await M.mrePublishPreview(CHEF, { id: NEW_A }, svc)
+  assertEquals(p.ok, true, JSON.stringify(p.refusals))
+  assert(/Ricetta NUOVA in Brigade: «Pasta Nuova del Banco»/.test(p.summary[0]), p.summary.join(' | '))
+  assert(p.warnings.some((x: any) => x.code === 'campi_ufficio_dopo'))
+  assertEquals(p.impronta, 'nuova:' + NEW_A); assertEquals(p.fc05_before, null)
+  assertEquals(await snapAll(), S0)
+  // a second new recipe that uses the first one, still in the lab → refused until the first is in Brigade
+  NEW_B = (await M.mreNew(CHEF, { title: 'Piatto con la Pasta Nuova' }, svc)).id
+  const db2 = await newDoc(NEW_B); db2.yield = { portions: 1 }; db2.lines = [{ id: 'm1', kind: 'recipe', ref: NEW_A, qty: 1, unit: 'pz', per: 'lot', role: 'produzione' }]
+  await M.mreSaveDraft(CHEF, { id: NEW_B, doc: db2 }, svc); await M.mreReview(CHEF, { id: NEW_B }, svc)
+  const pb = await M.mrePublishPreview(CHEF, { id: NEW_B }, svc)
+  assertEquals(pb.ok, false); assert(pb.refusals.some((x: any) => x.code === 'sottoricetta_non_in_brigade'), JSON.stringify(pb.refusals))
+})
+
+Deno.test('P16 FC05 non torna sulla ricetta nuova → tutto annullato: la ricetta NON esiste in Brigade', async () => {
+  const p = await M.mrePublishPreview(CHEF, { id: NEW_A }, svc)
+  await db`insert into bench.fc05 values (${NEW_A}, null, ${999}) on conflict (recipe_id) do update set before = excluded.before, after = excluded.after`
+  assertEquals(await err(M.mrePublish(CHEF, { id: NEW_A, impronta: p.impronta, piano: p.piano }, svc)), 'controllo_fc05')
+  assertEquals(await snapAll(), S0, 'niente creato')
+  assertEquals((await db`select count(*)::int n from public.recipes where id = ${NEW_A}`)[0].n, 0)
+})
+
+Deno.test('P17 PUBBLICA la ricetta nuova: riga ricetta + 2 righe di distinta + 1 passo, riletti uguali; diventa una ricetta di Brigade', async () => {
+  const p = await M.mrePublishPreview(CHEF, { id: NEW_A }, svc)
+  const strictAfter = p.cost.after.food + p.cost.after.pack
+  await db`update bench.fc05 set after = ${strictAfter} where recipe_id = ${NEW_A}`
+  assertEquals(await err(M.mrePublish(CHEF, { id: NEW_A, impronta: 'x', piano: p.piano }, svc)), 'ricetta_cambiata')
+  const r = await M.mrePublish(CHEF, { id: NEW_A, impronta: p.impronta, piano: p.piano, reason: 'prova banco' }, svc)
+  assertEquals(r.ok, true); PUB_A = r.publication
+  assertEquals(r.checks.rilettura.length, 0); assertEquals(r.checks.fc05_ok, true)
+  const [rec] = await db`select title, base_servings, procedure from public.recipes where id = ${NEW_A}`
+  assertEquals(rec.title, 'Pasta Nuova del Banco'); assertEquals(Number(rec.base_servings), 4); assertEquals(rec.procedure, 'Grattugia 100 g di parmigiano.')
+  const rows = await rowsOf(NEW_A)
+  assertEquals(rows.map((x: any) => [x.component_type, Number(x.quantity), x.unit]), [['ITEM', 100, 'g'], ['RECIPE', 40, 'g']])
+  assertEquals((await db`select count(*)::int n from public.recipe_steps where recipe_id = ${NEW_A}`)[0].n, 1)
+  const S1 = JSON.parse(await snapAll())[0], S0p = JSON.parse(S0)[0]
+  assertEquals(JSON.stringify(S1.b.filter((x: any) => x.parent_recipe_id !== NEW_A)), JSON.stringify(S0p.b), 'le altre distinte identiche')
+  assertEquals(JSON.stringify(S1.r.filter((x: any) => x.id !== NEW_A)), JSON.stringify(S0p.r), 'le altre ricette identiche')
+  const o = await M.mreRecipe(CHEF, NEW_A, svc)
+  assertEquals(o.source, 'official'); assertEquals(o.draft, null)
+  assert((await M.mreList(CHEF, svc)).recipes.some((x: any) => x.id === NEW_A && !x.lab_only))
+  assertEquals((await M.mrePublications(CHEF, { id: NEW_A })).items[0].created, true)
+  // the second recipe can now use it
+  const pb = await M.mrePublishPreview(CHEF, { id: NEW_B }, svc)
+  assert(!pb.refusals.some((x: any) => x.code === 'sottoricetta_non_in_brigade'), JSON.stringify(pb.refusals))
+  // the same name a second time → refused by the database too
+  assertEquals(await err(M.mreNew(CHEF, { title: 'pasta nuova del banco' }, svc)), 'titolo_esistente')
+})
+
+Deno.test('P18 RITIRA: rifiutato se in Brigade qualcosa la usa (una prep); poi la cancella con distinta e passi, il resto identico', async () => {
+  await db`insert into public.prep_tasks (id, name, unit, recipe_id) values (990001, 'Prep della pasta nuova', 'g', ${NEW_A})`
+  const e1 = await err(M.mreRestoreOfficial(CHEF, { publication: PUB_A }))
+  assertEquals(e1, 'gia_usata')
+  await db`delete from public.prep_tasks where id = 990001`
+  await db`update public.recipe_bom set quantity = 101 where parent_recipe_id = ${NEW_A} and component_type = 'ITEM'`
+  assertEquals(await err(M.mreRestoreOfficial(CHEF, { publication: PUB_A })), 'cambiata_dopo_la_pubblicazione')
+  await db`update public.recipe_bom set quantity = 100 where parent_recipe_id = ${NEW_A} and component_type = 'ITEM'`
+  const r = await M.mreRestoreOfficial(CHEF, { publication: PUB_A })
+  assertEquals(r.withdrawn, true)
+  assertEquals(await snapAll(), S0, 'Brigade identica a prima della ricetta nuova')
+  const o = await M.mreRecipe(CHEF, NEW_A, svc)
+  assertEquals(o.source, 'lab', 'torna una proposta del laboratorio')
+  assertEquals(await err(M.mreRestoreOfficial(CHEF, { publication: PUB_A })), 'gia_ripristinata')
+  await db`delete from bench.fc05 where recipe_id = ${NEW_A}`
 })
 
 Deno.test('P10 niente da pubblicare / ricetta solo di laboratorio', async () => {

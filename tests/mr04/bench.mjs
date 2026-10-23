@@ -58,6 +58,7 @@ try {
   await a.query('insert into bench.measures values ($1)', [F.measures || {}])
   await a.query(fs.readFileSync(`${ROOT}/supabase/migrations/20261022_mre03_pubblica.sql`, 'utf8'))
   await a.query(fs.readFileSync(`${ROOT}/supabase/migrations/20261022_c62_lettura_unica.sql`, 'utf8'))      // T.E.C. single read (C-62, live)
+  await a.query(fs.readFileSync(`${ROOT}/supabase/migrations/20261023_mr12_ricetta_nuova.sql`, 'utf8'))     // MR-12 «Pubblica una ricetta nuova»
   // C-62 replaced the facts helper with the production one: in the bench the facts come again from the snapshot
   await a.query(`create or replace function mre.ingredient_facts(p_ids uuid[]) returns jsonb language sql stable security definer as $$
       select coalesce(jsonb_object_agg(f.id, f.f || jsonb_build_object('active', i.active)), '{}'::jsonb) from bench.facts f join public.ingredients i on i.id = f.id where f.id = any(p_ids) $$;`)

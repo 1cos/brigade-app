@@ -345,6 +345,7 @@ Deno.serve(async (req: Request) => {
       case 'mre_publish_preview': out = await MRE.mrePublishPreview(u, body, svc); break     // MR-04: only with the switch on
       case 'mre_publications': out = await MRE.mrePublications(u, body); break
       case 'mre_restore_official': out = await MRE.mreRestoreOfficial(u, body); break
+      case 'mre_new': out = await MRE.mreNew(u, body, svc); break                         // MR-12: a new recipe starts as a lab draft
       case 'mre_restore': out = await MRE.mreRestore(u, body); break
       case 'mre_check_diffs': out = await MRE.mreCheckDiffs(u, body); break
       case 'mre_production': out = await MRE.mreProduction(u, body); break
