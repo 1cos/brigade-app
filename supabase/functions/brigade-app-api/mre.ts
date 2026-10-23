@@ -835,7 +835,7 @@ export async function tecSalvaBozza(u: U, b: any, svc: any) {
     const [letto] = await tx`select version, doc from mre.versions where recipe_id = ${pre.id} and state = 'bozza'`
     const cambiato = TB.confronta(base, letto.doc, pre.nomi)
     return { ok: true, ricetta_id: pre.id, bozza_versione: letto.version, salvato_da: u.name, impronta_nuova: await TB.impronta(Object.assign({}, letto.doc, { id: pre.id })),
-             cambiato_davvero: cambiato, avvisi, nota: 'Bozza salvata: NON pubblicata. Max la vede nell\'Editor.' }
+             cambiato_davvero: cambiato, avvisi, nota: 'Bozza salvata: NON pubblicata. Max la trova in Recipe Master → Ricette, segnata «da T.E.C.»: la controlla, la segna «Verificata» e la pubblica lui.' }
   })
 }
 export async function tecPropostaNuova(u: U, b: any, svc: any) {
@@ -861,6 +861,6 @@ export async function tecPropostaNuova(u: U, b: any, svc: any) {
     await tx`insert into mre.versions (recipe_id, version, state, doc, reason, created_by) values (${id}, 1, 'bozza', ${sql.json(cleanDoc(id, r.doc) as any)}, ${'Proposta nuova di T.E.C. per Max'}, ${u.id})`
     await audit(tx, u, 'proposal', id, { da: 'T.E.C.', per: 'Max', titolo, frasi: r.frasi })
     return { ok: true, ricetta_id: id, titolo, frasi: r.frasi, avvisi: r.avvisi, passi_da_tradurre: r.passi_da_tradurre.length,
-             nota: 'Proposta salvata come BOZZA di laboratorio: non è in Brigade finché Max non la approva.' }
+             nota: 'Proposta salvata come BOZZA: non è in Brigade. Max la trova in Recipe Master → Ricette, segnata «da T.E.C.»: la controlla, la segna «Verificata» e la crea lui con «Pubblica in Brigade come ricetta NUOVA».' }
   })
 }
