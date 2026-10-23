@@ -382,9 +382,12 @@ async function publishContext(id: string, svc: any) {
     const [{ fc }] = await tx`select mre.official_fc05(${id}) as fc`
     const cb = E.cost(id, 1, ctxOf(tBefore)), ca = E.cost(id, 1, ctxOf(tAfter))
     // MR-05: FC05 does not know «1 ml = 1 g» yet: the check after writing compares FC05 with the engine's STRICT reading
-    const strict = (t: any) => Object.assign(ctxOf(t), { strictDensity: true })
+    // CD-078: and FC05 counts only invoice prices — the Chef's trust price never enters the check (a missing price never blocks)
+    const strict = (t: any) => Object.assign(ctxOf(t), { strictDensity: true, invoiceOnly: true })
     const sb = E.cost(id, 1, strict(tBefore)), sa = E.cost(id, 1, strict(tAfter))
     const conseq = E.consequences(id, ctxOf(tBefore), ctxOf(tAfter))
+    // CD-078 (Chef 22/10): a missing price NEVER blocks the publication — it is only flagged, and completed later (invoice or trust price)
+    if (ca.missing > 0) plan.warnings.push({ code: 'food_cost_parziale', msg: `Food cost parziale: ${ca.missing} ${ca.missing === 1 ? 'riga' : 'righe'} senza prezzo. Si pubblica lo stesso; il prezzo si completa dopo, con una fattura o con il prezzo di fiducia` })
     return { doc, raw, byId, facts, plan, fp, fc05: fc, cost: { before: cb, after: ca }, strictCost: { before: sb, after: sa }, conseq, draftVersion: st.dr.version, planHash: await hex(JSON.stringify(plan.changes)) }
   })
 }

@@ -311,7 +311,7 @@ export function cost(rootId, factor, ctx) {
     const top = lf.path[1];
     const b = byLine[top] || (byLine[top] = { cost: 0, missing: 0, status: 'ok' });
     if (lf.kind !== 'ingredient') { b.missing++; b.status = lf.status; missing++; continue; }
-    const f = ctx.facts(lf.ref), c = leafCostEst(lf, f, ctx.measures);
+    const f = ctx.facts(lf.ref), c = ctx.invoiceOnly ? leafCost(lf, f) : leafCostEst(lf, f, ctx.measures);   // invoiceOnly: FC05's reading, no Chef estimate
     const isPack = lf.role === 'imballo' || (f && f.policy === 'non_food');
     if (c.cost == null) { if (!isPack) { b.missing++; b.status = c.status; missing++; } else packMissing++; continue; }
     if (isPack) pack += c.cost; else { food += c.cost; b.cost += c.cost; }

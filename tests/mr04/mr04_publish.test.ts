@@ -201,6 +201,32 @@ Deno.test('P12 T.E.C.: «2 once di rum» diventa una riga valida (2 oz = 56,7 g)
   const rum = d.lines.find((l: any) => l.id === 'b2175'); assertEquals([rum.qty, rum.unit], [2, 'oz'])
 })
 
+Deno.test('P13 prezzo mancante (CD-078): si pubblica con il food cost parziale, anche con il prezzo di fiducia sul rum', async () => {
+  S0 = await snapAll()
+  // the Wheel Pasta as the Chef wrote it: burro 10 g, parmigiano, rum 30 ml WITHOUT an invoice price
+  const o = await M.mreRecipe(CHEF, WHEEL, svc), doc = structuredClone(o.official || o.doc)
+  doc.lines.find((l: any) => l.id === 'b2173').qty = 10; doc.lines.find((l: any) => l.id === 'b2176').ref = PARM
+  const rum = doc.lines.find((l: any) => l.id === 'b2175'); rum.qty = 30; rum.unit = 'ml'; delete rum.est
+  await M.mreSaveDraft(CHEF, { id: WHEEL, doc }, svc); await review()
+  const p = await M.mrePublishPreview(CHEF, { id: WHEEL }, svc)
+  assertEquals(p.ok, true, JSON.stringify(p.refusals)); assert(p.cost.after.missing > 0 && p.warnings.some((w: any) => w.code === 'food_cost_parziale'), 'food cost parziale: segnalato, non bloccato')
+  // FC05 counts only invoice prices: it moves by what the engine moves WITHOUT the Chef's estimate
+  const B = 7, dFc = (p.cost.after.food + p.cost.after.pack) - (p.cost.before.food + p.cost.before.pack)
+  await db`insert into bench.fc05 values (${WHEEL}, ${B}, ${B + dFc}) on conflict (recipe_id) do update set before = excluded.before, after = excluded.after`
+  const r1 = await M.mrePublish(CHEF, { id: WHEEL, impronta: p.impronta, piano: p.piano }, svc)
+  assertEquals(r1.ok, true, 'senza prezzo del rum: pubblicata')
+  await M.mreRestoreOfficial(CHEF, { publication: r1.publication }); assertEquals(await snapAll(), S0)
+  // same recipe + the Chef's trust price on the rum: still published, FC05 still moves only by the invoice prices
+  rum.est = { usd: 25, qty: 750, unit: 'ml' }
+  await new Promise(r => setTimeout(r, 20)); await M.mreSaveDraft(CHEF, { id: WHEEL, doc }, svc); await review()
+  const p2 = await M.mrePublishPreview(CHEF, { id: WHEEL }, svc)
+  assertEquals(p2.ok, true); assert(p2.warnings.some((w: any) => w.code === 'prezzo_di_fiducia_solo_lab'))
+  const r2 = await M.mrePublish(CHEF, { id: WHEEL, impronta: p2.impronta, piano: p2.piano }, svc).catch((e: any) => ({ ok: false, code: e.code }))
+  assertEquals(r2.ok, true, 'con il prezzo di fiducia: pubblicata (era: ' + (r2 as any).code + ')')
+  await M.mreRestoreOfficial(CHEF, { publication: (r2 as any).publication }); assertEquals(await snapAll(), S0)
+  await db`delete from bench.fc05 where recipe_id = ${WHEEL}`
+})
+
 Deno.test('P10 niente da pubblicare / ricetta solo di laboratorio', async () => {
   const o = await M.mreRecipe(CHEF, WHEEL, svc)
   await M.mreSaveDraft(CHEF, { id: WHEEL, doc: o.doc }, svc); await review()     // draft identical to the official recipe
