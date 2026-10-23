@@ -609,6 +609,9 @@ function signedIn(user) {
   ME = user;
   if (!I.hasChoice() && ['en', 'it', 'es'].includes(user.lang)) I.set(user.lang, false);   // the person's Brigade language, unless chosen on this phone
   loadUi(); hideLogin(); render();
+  // MR-11: Brigade 1 «Modifica in Recipe Master» opens ?ricetta=<id> — the recipe opens in the Recipe Master card, once
+  const q = new URLSearchParams(location.search), rid = q.get('ricetta');
+  if (rid && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rid)) { q.delete('ricetta'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); openMre(rid.toLowerCase()); }
 }
 function signedOut(msg) { ME = null; wipeLocal(); $('main').innerHTML = ''; $('main')._h = null; $('tabs').innerHTML = ''; $('worlds').innerHTML = ''; $('worlds').dataset.h = ''; $('who').textContent = ''; $('switch').hidden = true; closeSheet(); pinBuf = ''; showLogin(msg || ''); }
 window.addEventListener('app-signed-out', () => { API.clearToken(); if (ME) toast(t('signed_out')); signedOut(); });
