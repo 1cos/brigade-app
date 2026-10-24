@@ -96,7 +96,7 @@ function render(p) {
   const fl = ui(p.id).flash; if (fl && Date.now() - fl.at < 8000) h += `<div class="mr-flash${fl.bad ? ' bad' : ''}" role="status">${esc(fl.msg)}</div>`;
 
   // editor bar: Edit | Preview, and Save draft — the whole path on one line
-  if (m !== 'view') h += `<div class="mr-ebar"><div class="mr-vs" role="tablist"><button class="${edit ? 'on' : ''}" data-m="pv:0" role="tab" aria-selected="${edit}">${T('tab_edit')}</button><button class="${pv ? 'on' : ''}" data-m="pv:1" role="tab" aria-selected="${pv}">${T('tab_preview')}</button></div><button class="mr-btn dark" data-m="savedraft">${T('save_draft')}</button></div>`;
+  if (m !== 'view') h += `<div class="mr-ebar"><div class="mr-vs" role="tablist"><button class="${edit ? 'on' : ''}" data-m="pv:0" role="tab" aria-selected="${edit}">${T('tab_edit')}</button><button class="${pv ? 'on' : ''}" data-m="pv:1" role="tab" aria-selected="${pv}">${T('tab_preview')}</button></div>${saveBtn(p.id)}</div>`;
 
   // head
   const tags = [row && row.prep ? `<span class="rm-tag">Prep</span>` : '', row && row.menu ? `<span class="rm-tag menu">Menu Item</span>` : '', `<span class="mr-cat">${esc(cat(doc.category))}</span>`].join('');
@@ -406,7 +406,7 @@ function changeBox(p, d, doc) {
 }
 function pvFoot(p, d, doc) {
   const errs = E().validate(doc, ctxFor(d, p.id, doc, true), true);
-  return `<div class="mr-foot"><div class="mr-acts mr-between">${discardBtn(p)}<button class="mr-btn dark" data-m="savedraft">${T('save_draft')}</button></div>
+  return `<div class="mr-foot"><div class="mr-acts mr-between">${discardBtn(p)}${saveBtn(p.id)}</div>
       <div class="mr-pubrow">${d.publish_locked ? `<button class="mr-pub" data-m="publish" disabled aria-disabled="true">${T('publish_word')}</button><span class="mr-muted">${T('publish_off')}</span>`
         : d.source === 'official' || d.recipe.lab_only ? `<span class="mr-muted">${T('pub_editor_hint')}</span>`          // MR-04: official recipes publish from the recipe, after «Verificata»
         : `<button class="mr-pub" data-m="publish" ${errs.length ? 'disabled' : ''}>${T('publish', { v: d.recipe.current_version + 1 })}</button>`}</div></div>`;
@@ -506,7 +506,11 @@ function statusInner(id, d) {
   if (s.state === 'saved') return `<span class="mr-sst ok">${T('st_saved', { v, t: dt(s.at) })}</span>`;
   return `<span class="mr-sst">${T('st_start', { v })}</span>`;
 }
-function paintStatus(id) { document.querySelectorAll('#main [data-sst]').forEach(e => { if (e.dataset.sst === id) e.innerHTML = statusInner(id); }); }
+function paintStatus(id) { document.querySelectorAll('#main [data-sst]').forEach(e => { if (e.dataset.sst === id) e.innerHTML = statusInner(id); });
+  document.querySelectorAll('#main [data-m="savedraft"]').forEach(b => { if (!b.disabled) b.outerHTML = saveBtn(id); }); }
+/* MR-18 (Chef 24/10): «Salva bozza» only after a change in this editing; untouched, the same place just closes the editor (nothing saved, no empty draft) */
+const changed = id => { const s = SV[id]; return !!(s && s.seq > 0); };
+const saveBtn = id => changed(id) ? `<button class="mr-btn dark" data-m="savedraft">${T('save_draft')}</button>` : `<button class="mr-btn" data-m="savedraft">${T('close_editor')}</button>`;
 const pending = () => Object.keys(SV).filter(id => SV[id].seq !== SV[id].done || SV[id].busy);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pending().forEach(id => flush(id)); });   // the phone is put away: send now
 
@@ -623,7 +627,8 @@ function onClick(ev) {
   else if (k === 'view') { p.view = a1; p.f = 1; p.ref = ''; w.prod = null; }
   else if (k === 'savedraft') { if (w.busy) return; w.busy = k; document.querySelectorAll('#main [data-m="savedraft"]').forEach(b => { b.disabled = true; b.textContent = T('saving') });   // the server can take a few seconds: say so
       const a = document.activeElement; if (a && a.dataset && a.dataset.mt && readText(a)) sv(p.id).seq++;
-      const s = sv(p.id); if (!d.draft && !s.done) s.seq++;            // first save of an untouched recipe still creates the draft
+      const s = sv(p.id);
+      if (!s.seq) { delete WORK[p.id]; delete SV[p.id]; w.busy = null; p.edit = false; p.pv = false; p.saved = false; p.view = d.draft ? 'draft' : 'live'; H.render(true); document.getElementById('main').scrollTop = 0; return; }   // MR-18: nothing changed → just close, nothing written
       (async () => { const ok = await flush(p.id); w.busy = null; if (!ok) { paint(); return; }
       const v = sv(p.id).ver || (d.draft && d.draft._version); delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft';
       flash(p.id, T('draft_saved_toast', { v })); API.get('mre_list', null, 0).catch(() => {}); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }

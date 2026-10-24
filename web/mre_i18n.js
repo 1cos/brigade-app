@@ -189,7 +189,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   pack_plus: ['+ packaging {v}', '+ imballo {v}', '+ empaque {v}'], pack_portion: ['Packaging per portion', 'Imballo a porzione', 'Empaque por porción'],
   saving: ['Saving…', 'Salvo…', 'Guardando…'],
   saved_word: ['saved', 'salvata', 'guardado'],
-  tab_edit: ['Edit', 'Modifica', 'Editar'], tab_preview: ['Preview', 'Anteprima', 'Vista previa'], save_draft: ['Save draft', 'Salva bozza', 'Guardar borrador'],
+  tab_edit: ['Edit', 'Modifica', 'Editar'], tab_preview: ['Preview', 'Anteprima', 'Vista previa'], save_draft: ['Save draft', 'Salva bozza', 'Guardar borrador'], close_editor: ['Close', 'Chiudi', 'Cerrar'],
   v_draft: ['Draft v{v}', 'Bozza v{v}', 'Borrador v{v}'], v_live: ['In use', 'In uso', 'En uso'], v_new: ['Draft · new recipe', 'Bozza · nuova ricetta', 'Borrador · receta nueva'],
   editing2: ['Draft v{v}', 'Bozza v{v}', 'Borrador v{v}'], missing_prices: ['{n} price missing', '{n} prezzo mancante', '{n} precio faltante'],
   verified_by: ['Reviewed by {by} · {at}', 'Revisionata da {by} · {at}', 'Revisada por {by} · {at}'], unreview: ['Remove review mark', 'Togli revisione', 'Quitar revisión'],
