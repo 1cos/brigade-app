@@ -122,7 +122,7 @@ export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = un
   const sv = stepsView(doc), sb = stepsView(base)
   if (JSON.stringify(sv) !== JSON.stringify(sb)) {
     const join = k => { const a = sv.map(s => s[k]).filter(Boolean); return a.length ? a.join('\n\n') : null }
-    steps = { rows: sv.map((s, i) => ({ recipe_id: id, step_number: i + 1, title: s.title_en, title_it: s.title_it, title_es: s.title_es, instruction_it: s.it, instruction_en: s.en, instruction_es: s.es, timer_seconds: ((off.stepRows || [])[i] || {}).timer_seconds ?? null })) }
+    steps = { rows: sv.map((s, i) => ({ recipe_id: id, step_number: i + 1, title: s.title_en || '', title_it: s.title_it, title_es: s.title_es, instruction_it: s.it, instruction_en: s.en, instruction_es: s.es, timer_seconds: ((off.stepRows || [])[i] || {}).timer_seconds ?? null })) }
     recipe.procedure = join('it') || ''; recipe.procedure_en = join('en'); recipe.procedure_es = join('es')
     const miss = LG.filter(k => sv.length && sv.some(s => !s[k]))
     if (miss.length) warnings.push({ code: 'passi_senza_traduzione', msg: `Passi senza testo in ${miss.join(', ').toUpperCase()}: in quella lingua Brigade 1 traduce da sé o mostra l'originale; niente traduzione inventata` })
