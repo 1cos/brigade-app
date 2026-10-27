@@ -131,6 +131,11 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   t_d1: ['Weight ↔ volume as 1 ml = 1 g', 'Peso ↔ volume con 1 ml = 1 g', 'Peso ↔ volumen con 1 ml = 1 g'],
   t_d1_note: ['(no density for these lines: Chef\'s rule 22/10, the difference is minimal)', '(queste righe non hanno una densità: regola dello Chef 22/10, differenza minima)', '(estas líneas no tienen densidad: regla del Chef 22/10, diferencia mínima)'],
   // MR-04 «Pubblica ricetta per ricetta»
+  one_btn: ['Save and publish', 'Salva e pubblica', 'Guardar y publicar'], one_btn_new: ['Save and publish as a NEW recipe', 'Salva e pubblica come ricetta NUOVA', 'Guardar y publicar como receta NUEVA'],
+  one_note: ['First I show you what changes in Brigade; nothing is written until you confirm. «Verified» is recorded on its own.', 'Prima ti mostro cosa cambia in Brigade; niente viene scritto finché non confermi. «Verificata» resta registrata a parte.', 'Primero te muestro qué cambia en Brigade; no se escribe nada hasta que confirmes. «Verificada» queda registrada aparte.'],
+  one_wait: ['One moment…', 'Un momento…', 'Un momento…'], one_back: ['Back', 'Indietro', 'Atrás'],
+  one_go: ['Confirm: publish to Brigade', 'Conferma: pubblica in Brigade', 'Confirmar: publicar en Brigade'], one_go_new: ['Confirm: create it in Brigade', 'Conferma: crea in Brigade', 'Confirmar: crear en Brigade'],
+  one_fix: ['Fix what is listed above in the recipe, then tap «Save and publish» again.', 'Sistema nella ricetta quello che è scritto sopra, poi tocca di nuovo «Salva e pubblica».', 'Arregla en la receta lo que está escrito arriba y toca otra vez «Guardar y publicar».'],
   pub_btn: ['Publish to Brigade…', 'Pubblica in Brigade…', 'Publicar en Brigade…'],
   pub_note: ['First I show you what changes. Nothing is written until you confirm.', 'Prima ti mostro cosa cambia. Niente viene scritto finché non confermi.', 'Primero te muestro qué cambia. No se escribe nada hasta que confirmes.'],
   pub_title: ['What changes in Brigade (bots, FC05, Brigade 1)', 'Cosa cambia in Brigade (bot, FC05, Brigade 1)', 'Qué cambia en Brigade (bots, FC05, Brigade 1)'],

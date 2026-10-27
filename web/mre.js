@@ -201,9 +201,10 @@ function render(p) {
   if (m === 'view') {
     // the Chef's review: one tap marks the recipe as verified and opens the next one (not a publication)
     if (chef) { const rv = d.recipe && d.recipe.review, nx = H.next ? H.next(p.id) : null;
-      h += `<div class="mr-review">${rv ? `<button class="mr-link" data-m="unreview">${T('unreview')}</button>${nx ? `<button class="mr-btn dark grow" data-m="next">${T('next')} ›</button>` : ''}`
-        : `<button class="mr-btn pri grow" data-m="review">✓ ${nx ? T('verify_next') : T('verify')}</button>${nx ? `<button class="mr-btn" data-m="next">${T('skip')} ›</button>` : ''}`}</div>`;
-      if (!d.publish_locked && (d.source === 'official' || d.recipe.lab_only) && d.draft) h += pubHtml(p, d); }      // MR-12: a lab proposal publishes as a NEW recipe
+      // MR-26 (Chef 27/10): with a draft to publish there is ONE button, «Salva e pubblica» (it records «Verificata», then shows what changes)
+      if (!d.publish_locked && (d.source === 'official' || d.recipe.lab_only) && d.draft) h += pubHtml(p, d);      // MR-12: a lab proposal publishes as a NEW recipe
+      else h += `<div class="mr-review">${rv ? `<button class="mr-link" data-m="unreview">${T('unreview')}</button>${nx ? `<button class="mr-btn dark grow" data-m="next">${T('next')} ›</button>` : ''}`
+        : `<button class="mr-btn pri grow" data-m="review">✓ ${nx ? T('verify_next') : T('verify')}</button>${nx ? `<button class="mr-btn" data-m="next">${T('skip')} ›</button>` : ''}`}</div>`; }
     const links = [];
     if (chef) links.push(['cost', T('food_cost')]);
     links.push(['struct', T('structure')], ['hist', T('history')]);
@@ -408,7 +409,7 @@ function pvFoot(p, d, doc) {
   const errs = E().validate(doc, ctxFor(d, p.id, doc, true), true);
   return `<div class="mr-foot"><div class="mr-acts mr-between">${discardBtn(p)}${saveBtn(p.id)}</div>
       <div class="mr-pubrow">${d.publish_locked ? `<button class="mr-pub" data-m="publish" disabled aria-disabled="true">${T('publish_word')}</button><span class="mr-muted">${T('publish_off')}</span>`
-        : d.source === 'official' || d.recipe.lab_only ? `<span class="mr-muted">${T('pub_editor_hint')}</span>`          // MR-04: official recipes publish from the recipe, after «Verificata»
+        : d.source === 'official' || d.recipe.lab_only ? `<button class="mr-pub mr-one" data-m="savepub">${T(d.recipe.lab_only ? 'one_btn_new' : 'one_btn')}</button>`          // MR-26: save, close the editor and open the same «Salva e pubblica» step
         : `<button class="mr-pub" data-m="publish" ${errs.length ? 'disabled' : ''}>${T('publish', { v: d.recipe.current_version + 1 })}</button>`}</div></div>`;
 }
 // B-49 one number: what the change does to every module BEFORE publishing (same engine as the deductions)
@@ -435,7 +436,7 @@ const forget = id => { const e = entry(), rid = id || (e && e.id); if (rid) API.
 function pubHtml(p, d) {
   const w = ui(p.id), v = w.pub;
   const nw = !!(d.recipe && d.recipe.lab_only);                                   // MR-12: not in Brigade yet → a NEW recipe
-  if (!v) return `<div class="mr-pubbox"><button class="mr-btn dark grow" data-m="pubprev">${T(nw ? 'pub_btn_new' : 'pub_btn')}</button><p class="mr-muted">${T('pub_note')}</p></div>`;
+  if (!v) return `<div class="mr-onebar"><button class="mr-pub mr-one" data-m="pubprev" ${w.busy === 'pubprev' ? 'disabled' : ''}>${w.busy === 'pubprev' ? T('one_wait') : T(nw ? 'one_btn_new' : 'one_btn')}</button></div><p class="mr-muted mr-onenote">${T('one_note')}</p>`;
   const li = a => a.length ? `<ul>${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
   const sale = v.consequences && v.consequences.sale ? v.consequences.sale.length : 0;
   let h = `<div class="mr-pubbox"><h3>${T('pub_title')}</h3>`;
@@ -447,8 +448,9 @@ function pubHtml(p, d) {
   }
   if ((v.refusals || []).length) h += `<div class="mr-bad"><b>${T('pub_refusals')}</b>${li(v.refusals.map(x => x.msg))}</div>`;
   if ((v.warnings || []).length) h += `<div class="mr-warnbox"><b>${T('pub_warnings')}</b>${li(v.warnings.map(x => x.msg))}</div>`;
-  h += `<div class="mr-acts mr-between"><button class="mr-btn" data-m="pubno">${T('pub_cancel')}</button>`
-    + (v.ok ? `<button class="mr-pub" data-m="pubgo">${w.pubSure ? T(nw ? 'pub_sure_new' : 'pub_sure') : T(nw ? 'pub_go_new' : 'pub_go')}</button>` : '') + `</div></div>`;
+  if ((v.refusals || []).length) h += `<p class="mr-muted">${T('one_fix')}</p>`;
+  h += `<div class="mr-acts mr-between"><button class="mr-btn" data-m="pubno">${T('one_back')}</button>`
+    + (v.ok ? `<button class="mr-pub mr-one" data-m="pubgo" ${w.busy === 'pubgo' ? 'disabled' : ''}>${T(nw ? 'one_go_new' : 'one_go')}</button>` : '') + `</div></div>`;
   return h;
 }
 function pubHist(p, d) {
@@ -632,6 +634,11 @@ function onClick(ev) {
       (async () => { const ok = await flush(p.id); w.busy = null; if (!ok) { paint(); return; }
       const v = sv(p.id).ver || (d.draft && d.draft._version); delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft';
       flash(p.id, T('draft_saved_toast', { v })); API.get('mre_list', null, 0).catch(() => {}); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
+  else if (k === 'savepub') { if (w.busy) return; w.busy = k; el.disabled = true; el.textContent = T('saving');
+      (async () => { const s = sv(p.id); if (s.seq) { const ok = await flush(p.id); if (!ok) { w.busy = null; paint(); return; } }
+      delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft'; w.busy = null;
+      API.forget('mre_recipe'); await API.get('mre_recipe', { id: p.id }, 0).catch(() => {}); API.get('mre_list', null, 0).catch(() => {});
+      H.render(true); const b = document.querySelector('#main [data-m="pubprev"]'); if (b) { b.scrollIntoView({ block: 'center' }); b.click(); } })(); return; }
   else if (k === 'retry') { flush(p.id); return; }
   else if (k === 'trs') { const o = w.trOpen || (w.trOpen = {}); o[a1] = !o[a1]; paint(); return; }
   else if (k === 'trok') { const st = work().steps[+a1]; if (st) { st.tr = Object.assign({}, st.tr, { [a2]: 'chef' }); touch(p); } paint(); return; }
@@ -650,11 +657,14 @@ function onClick(ev) {
   else if (k === 'publish') { (async () => { if (!(await flush(p.id))) return;
       const r = await call('mre_publish', { id: p.id, reason: w.reason || '', base: d.recipe.current_version }); if (!r) return;
       flash(p.id, T('published', { v: r.version })); delete WORK[p.id]; p.edit = false; p.saved = false; p.f = 1; w.reason = ''; forget(); H.render(true); })(); return; }
-  else if (k === 'pubprev') { if (w.busy) return; w.busy = k; (async () => { const r = await call('mre_publish_preview', { id: p.id }); w.busy = null; if (r) { w.pub = r; w.pubSure = false; } H.render(true); })(); return; }
+  else if (k === 'pubprev') { if (w.busy) return; w.busy = k; H.render(true); (async () => {
+      if (!(d.recipe && d.recipe.review)) { const rv = await call('mre_review', { id: p.id, verified: true }); if (!rv) { w.busy = null; H.render(true); return; } if (d.recipe) d.recipe.review = rv.review || null; }   // MR-26: «Verificata» is recorded on its own, then the preview
+      const r = await call('mre_publish_preview', { id: p.id }); w.busy = null; if (r) { w.pub = r; w.pubSure = false; } H.render(true);
+      const bx = document.querySelector('#main .mr-pubbox'); if (bx) bx.scrollIntoView({ block: 'start' }); })(); return; }
   else if (k === 'pubno') { w.pub = null; w.pubSure = false; H.render(true); return; }
   else if (k === 'pubgo') { if (!w.pub || w.busy) return;
-      if (!w.pubSure) { w.pubSure = true; H.render(true); setTimeout(() => { if (w.pubSure) { w.pubSure = false; H.render(true); } }, 5000); return; }   // two taps, never a browser dialog
-      w.pubSure = false; w.busy = k; (async () => { const r = await call('mre_publish', { id: p.id, impronta: w.pub.impronta, piano: w.pub.piano }); w.busy = null; w.pub = null;
+      w.pubSure = false; w.busy = k; H.render(true);   // MR-26: the two taps are «Salva e pubblica» (shows what changes) and «Conferma»
+      (async () => { const r = await call('mre_publish', { id: p.id, impronta: w.pub.impronta, piano: w.pub.piano }); w.busy = null; w.pub = null;
         if (r) { flash(p.id, T(d && d.recipe && d.recipe.lab_only ? 'pub_done_new' : 'pub_done', { n: r.publication })); w.pubsAsked = false; API.forget('mre_recipe'); forget(p.id); }
         H.render(true); })(); return; }
   else if (k === 'pubrestore') { if (w.busy) return; const n = +a1;

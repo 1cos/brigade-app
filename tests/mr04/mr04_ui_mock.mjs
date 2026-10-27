@@ -62,26 +62,22 @@ let { pg, c } = await page()
 ok(await pg.locator('#main [data-m="pubprev"]').count() === 0, 'interruttore spento: nessun «Pubblica in Brigade»')
 await c.close()
 
-/* 2. switch on, Chef: button under «Verificata»; not verified → the card says so; nothing written */
+/* 2-3. MR-26: ONE button «Salva e pubblica» (no separate «Verificata» button) → records Verificata, shows what changes → «Conferma» publishes */
 locked = false; review = null
 ;({ pg, c } = await page())
-ok(await pg.locator('#main [data-m="pubprev"]').count() === 1, 'pulsante «Pubblica in Brigade…» nella ricetta')
-ok(/Prima ti mostro cosa cambia/.test(await pg.locator('#main .mr-pubbox').innerText()), 'spiega che prima mostra cosa cambia')
-await pg.click('#main [data-m="pubprev"]'); await pg.waitForTimeout(600)
-ok(/Verificata/.test(await pg.locator('#main').innerText()) && n('mre_publish') === 0, 'non verificata: messaggio chiaro, niente pubblicato')
-await pg.screenshot({ path: `${OUT}/1_non_verificata.png` })
-
-/* 3. verified → preview: what changes, food cost, warnings; ONE tap does not publish, the second does */
-await pg.click('#main [data-m="review"]'); await pg.waitForTimeout(700)
+ok(await pg.locator('#main [data-m="pubprev"]').count() === 1 && /Salva e pubblica/.test(await pg.locator('#main [data-m="pubprev"]').innerText()), 'un solo tasto «Salva e pubblica» nella ricetta')
+ok(await pg.locator('#main [data-m="review"]').count() === 0, 'nessun tasto «Verificata» separato quando c\'è una bozza')
+ok(/Prima ti mostro cosa cambia/.test(await pg.locator('#main .mr-onenote').innerText()), 'spiega che prima mostra cosa cambia')
+await pg.screenshot({ path: `${OUT}/1_tasto.png` })
 await pg.click('#main [data-m="pubprev"]'); await pg.waitForSelector('#main [data-m="pubgo"]', { timeout: 5000 })
+ok(n('mre_review') === 1 && review && n('mre_publish') === 0, 'primo tocco: Verificata registrata a parte, niente pubblicato')
 const box = await pg.locator('#main .mr-pubbox').innerText()
 ok(/Diced Butter: 20 → 10/.test(box) && /Procedimento: 0 → 17 passi/.test(box), 'anteprima: cosa cambia in Brigade')
 ok(/Food cost a porzione: \$0[.,]389 → \$3[.,]32/.test(box), 'anteprima: food cost a porzione prima → dopo')
 ok(/FC05 oggi/.test(box) && /scaricherà diversamente: 2/.test(box), 'anteprima: FC05 oggi e scarico di 1 porzione')
 ok(/niente traduzione inventata/.test(box), 'anteprima: avviso sulle lingue')
+ok(/Conferma: pubblica in Brigade/.test(await pg.locator('#main [data-m="pubgo"]').innerText()), 'tasto «Conferma: pubblica in Brigade»')
 await pg.screenshot({ path: `${OUT}/2_anteprima.png`, fullPage: false })
-await pg.click('#main [data-m="pubgo"]'); await pg.waitForTimeout(300)
-ok(/Tocca di nuovo/.test(await pg.locator('#main [data-m="pubgo"]').innerText()) && n('mre_publish') === 0, 'primo tocco: chiede conferma, niente scritto')
 await pg.click('#main [data-m="pubgo"]'); await pg.waitForTimeout(900)
 ok(n('mre_publish') === 1, 'secondo tocco: UNA pubblicazione')
 ok(/Pubblicata in Brigade \(n\. 7\)/.test(await pg.locator('#main').innerText()), 'conferma nella scheda: pubblicata, controllata, ripristinabile')
@@ -102,8 +98,10 @@ scenario = 'refused'; review = { by: 'Max', at: new Date().toISOString() }
 ;({ pg, c } = await page())
 await pg.click('#main [data-m="pubprev"]'); await pg.waitForTimeout(700)
 ok(/Non si può ancora pubblicare/.test(await pg.locator('#main .mr-pubbox').innerText()) && await pg.locator('#main [data-m="pubgo"]').count() === 0, 'rifiutata: motivi scritti, nessun pulsante per pubblicare')
+ok(/Sistema nella ricetta/.test(await pg.locator('#main .mr-pubbox').innerText()), 'rifiutata: dice cosa fare')
+await pg.screenshot({ path: `${OUT}/5_rifiutata.png` })
 await pg.click('#main [data-m="pubno"]'); await pg.waitForTimeout(300)
-ok(await pg.locator('#main [data-m="pubprev"]').count() === 1, '«Non ora» chiude l\'anteprima')
+ok(await pg.locator('#main [data-m="pubprev"]').count() === 1, '«Indietro» chiude l\'anteprima')
 await c.close()
 
 /* 6. staff: never sees it */
@@ -115,7 +113,7 @@ await c.close()
 /* 7. English */
 role = 'chef'; scenario = 'ok'
 ;({ pg, c } = await page('en'))
-ok(/Publish to Brigade/.test(await pg.locator('#main .mr-pubbox').innerText()), 'in inglese: «Publish to Brigade…»')
+ok(/Save and publish/.test(await pg.locator('#main [data-m="pubprev"]').innerText()), 'in inglese: «Save and publish»')
 await c.close()
 await browser.close()
 console.log(`\nTOTALE ${pass} PASS, ${fail} FAIL`)

@@ -84,6 +84,16 @@ ok(/Salva bozza/.test(await btn()), '6. dopo il salvataggio automatico «Salva b
 await pg.locator('#main [data-m="savedraft"]').first().click(); await pg.waitForTimeout(800)
 ok(await pg.locator('#main .mr.mr-edit').count() === 0 && /bozza/i.test(await pg.locator('#main .mr-flash').innerText().catch(() => '')), '7. «Salva bozza» salva, chiude e lo dice in cima')
 await pg.screenshot({ path: `${OUT}/3_dopo_salva.png` })
+/* 8. MR-26: from the editor, «Salva e pubblica» saves, closes and opens the same step (what changes + «Conferma») */
+await pg.click('#main [data-m="edit"]'); await pg.waitForSelector('#main .mr.mr-edit', { timeout: 10000 }); await pg.waitForTimeout(400)
+const t2 = pg.locator('#main [data-mt="title"]'); await t2.click(); await pg.keyboard.press('End'); await pg.keyboard.type('Y'); await pg.waitForTimeout(300)
+await pg.click('#main [data-m="pv:1"]'); await pg.waitForTimeout(400)
+ok(await pg.locator('#main [data-m="savepub"]').count() === 1 && !/segna «Verificata»/.test(await pg.locator('#main').innerText()), '8a. in Anteprima: tasto «Salva e pubblica», niente istruzioni in tre passi')
+const nsave = CALLS.filter(x => x.startsWith('mre_save_draft')).length
+await pg.click('#main [data-m="savepub"]'); await pg.waitForTimeout(2500)
+ok(/Y/.test(((BODY.mre_save_draft || {}).doc || {}).title || '') && await pg.locator('#main .mr.mr-edit').count() === 0, '8b. la modifica è salvata e l\'editor si chiude')
+ok(CALLS.includes('mre_review') && CALLS.includes('mre_publish_preview') && !CALLS.includes('mre_publish'), '8c. registra Verificata, mostra cosa cambia, niente pubblicato')
+await pg.screenshot({ path: `${OUT}/4_salva_e_pubblica.png` })
 await c.close(); await browser.close()
 console.log(`\nTOTALE ${pass} PASS, ${fail} FAIL`)
 process.exit(fail ? 1 : 0)
