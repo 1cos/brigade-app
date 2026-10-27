@@ -661,7 +661,7 @@ function onClick(ev) {
       const r = await call('mre_publish', { id: p.id, reason: w.reason || '', base: d.recipe.current_version }); if (!r) return;
       flash(p.id, T('published', { v: r.version })); delete WORK[p.id]; p.edit = false; p.saved = false; p.f = 1; w.reason = ''; forget(); H.render(true); })(); return; }
   else if (k === 'pubprev') { if (w.busy) return; w.busy = k; H.render(true); (async () => {
-      if (!(d.recipe && d.recipe.review)) { const rv = await call('mre_review', { id: p.id, verified: true }); if (!rv) { w.busy = null; H.render(true); return; } if (d.recipe) d.recipe.review = rv.review || null; }   // MR-26: «Verificata» is recorded on its own, then the preview
+      { const rv = await call('mre_review', { id: p.id, verified: true }); if (!rv) { w.busy = null; H.render(true); return; } if (d.recipe) d.recipe.review = rv.review || null; }   // MR-26: «Verificata» is recorded on its own, then the preview; MR-32: every tap records it (an older «Verificata» before the last change blocked the publish)
       const r = await call('mre_publish_preview', { id: p.id }); w.busy = null; if (r) { w.pub = r; w.pubSure = false; } H.render(true);
       const bx = document.querySelector('#main .mr-pubbox'); if (bx) bx.scrollIntoView({ block: 'start' }); })(); return; }
   else if (k === 'pubno') { w.pub = null; w.pubSure = false; H.render(true); return; }
