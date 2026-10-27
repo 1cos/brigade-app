@@ -686,7 +686,15 @@ function onClick(ev) {
       if (w.lastAdd && w.lastAdd.ref === a1 && Date.now() - w.lastAdd.at < 2000) return;
       const nid = 'n' + Date.now().toString(36); work().lines.push({ id: nid, kind: k === 'addr' ? 'recipe' : 'ingredient', ref: a1, qty: null, unit: 'g', role: 'produzione', note: null, group: null });
       w.lastAdd = { ref: a1, at: Date.now() }; w.q = ''; w.search = null; w.searching = false; clearTimeout(qT); touch(p); el.blur(); H.render(true);
-      const li = document.querySelector(`#main [data-m="del:${nid}"]`); if (li) li.closest('li').classList.add('mr-new'); return; }
+      const li = document.querySelector(`#main [data-m="del:${nid}"]`); if (li) li.closest('li').classList.add('mr-new');
+      // MR-30 (Chef 27/10: the ragù added as sub-recipe showed «?»): read the new sub-recipe and its tree into this recipe at once
+      if (k === 'addr') (async () => { const pd = H.peek('mre_recipe', { id: p.id }); if (!pd || pd.docs[a1]) return;
+        const sd = await API.get('mre_recipe', { id: a1 }, 5 * 60000).catch(() => null); const cd = H.peek('mre_recipe', { id: p.id }); if (!sd || !cd) return;
+        for (const [x, v] of Object.entries(sd.docs || {})) if (!cd.docs[x]) cd.docs[x] = v;
+        if (!cd.docs[a1] && sd.doc) cd.docs[a1] = sd.doc;
+        for (const [x, v] of Object.entries(sd.facts || {})) if (!cd.facts[x]) cd.facts[x] = v;
+        H.render(true); })();
+      return; }
   else if (k === 'restore') { if (w.busy) return; w.busy = k; (async () => { const r = await call('mre_restore', { id: p.id, version: +a1 }); w.busy = null; if (r) { flash(p.id, r.draft ? T('restored_draft', { v: a1 }) : T('restored', { v: a1, n: r.version })); API.forget('mre_recipe'); forget(p.id); H.render(true); } })(); return; }
   else if (k === 'checkdiffs') { (async () => { const r = await call('mre_check_diffs', { id: p.id }, T('checked')); if (r) { forget(); H.render(true); } })(); return; }
   else if (k === 'dec') { (async () => { const r = await call('mre_decide', { suggestion_id: a1, status: a2 }, T('st_' + a2.replace(' ', '_'))); if (r) { forget(); H.render(true); } })(); return; }
