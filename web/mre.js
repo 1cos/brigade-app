@@ -96,15 +96,15 @@ function render(p) {
   const fl = ui(p.id).flash; if (fl && Date.now() - fl.at < 8000) h += `<div class="mr-flash${fl.bad ? ' bad' : ''}" role="status">${esc(fl.msg)}</div>`;
 
   // editor bar: Edit | Preview, and Save draft — the whole path on one line
-  if (m !== 'view') h += `<div class="mr-ebar"><div class="mr-vs" role="tablist"><button class="${edit ? 'on' : ''}" data-m="pv:0" role="tab" aria-selected="${edit}">${T('tab_edit')}</button><button class="${pv ? 'on' : ''}" data-m="pv:1" role="tab" aria-selected="${pv}">${T('tab_preview')}</button></div>${saveBtn(p.id)}</div>`;
+  if (m !== 'view') h += `<div class="mr-ebar"><span></span>${saveBtn(p.id)}</div>`;     // MR-28 (Chef 27/10 «il mio ricettario, Modifica e Salva»): no Edit/Preview tabs
 
   // head
   const tags = [row && row.prep ? `<span class="rm-tag">Prep</span>` : '', row && row.menu ? `<span class="rm-tag menu">Menu Item</span>` : '', `<span class="mr-cat">${esc(cat(doc.category))}</span>`].join('');
   h += `<div class="mr-head"><div class="mr-row1"><span class="mr-tags">${tags}</span>${chef && m === 'view' ? `<button class="mr-editbtn" data-m="edit">${T('edit')}</button>` : ''}</div>`;
-  if (chef && m === 'view' && d.source !== 'lab' && d.draft) h += `<div class="mr-vs" role="tablist"><button class="${draftView ? 'on' : ''}" data-m="view:draft">${T('v_draft', { v: d.draft._version })}</button><button class="${!draftView ? 'on' : ''}" data-m="view:live">${T('v_live')}</button></div>`;
+  if (false) h += `<div class="mr-vs" role="tablist"><button class="${draftView ? 'on' : ''}" data-m="view:draft">${T('v_draft', { v: d.draft._version })}</button><button class="${!draftView ? 'on' : ''}" data-m="view:live">${T('v_live')}</button></div>`;
   else if (chef && d.source === 'lab' && m === 'view') h += `<div><span class="rm-draft">${T('v_new')}</span></div>`;
   if (m !== 'view') h += `<div class="mr-estate" data-sst="${esc(p.id)}" role="status" aria-live="polite">${statusInner(p.id, d)}</div>`;
-  if (chef && draftView) { const dv = (d.versions || []).find(v => v.state === 'bozza'); h += `<div class="mr-dstate">${T('draft_state', { v: d.draft._version, t: dv && dv.at ? dt(dv.at) : '' })}</div>`;
+  if (chef && draftView) { const dv = (d.versions || []).find(v => v.state === 'bozza'); h += `<div class="mr-dstate">${T('pending_pub')}</div>`;
     const tm = dv && /^(T\.E\.C\. per Max: |Proposta nuova di T\.E\.C\.)(.*)$/s.exec(dv.reason || '');            // MR-14: what T.E.C. wrote, so the Chef checks it before «Verificata»
     if (tm) h += `<div class="mr-tecnote"><b>${T('tec_note')}</b>${tm[2] && tm[2].trim() ? ' ' + esc(tm[2].trim()) : ''}<br><span class="mr-muted">${T('tec_note_check')}</span></div>`; }
   h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(I.dn(doc.title))}</h1>`;
@@ -137,7 +137,7 @@ function render(p) {
   if (chef && m === 'view') { const c = !PREVIEW && d.cost ? d.cost : E().cost(p.id, 1, ctx); const pp = c.per_portion;
     h += `<div class="mr-fc"><button class="mr-link" data-m="p:cost">${T('food_cost')}</button> <b>${pp == null ? usd(c.food) + ' / ' + T('batch') : usd(pp) + ' / ' + (y.portion_unit ? pu(1) : T('portion'))}</b> <span class="${c.complete ? 'mr-okc' : 'mr-bad'}">· ${c.complete ? T('fc_complete') : T('fc_partial')}</span>${c.chef_est ? ` <span class="mr-warnm">· ${T('est_with')}</span>` : ''}${c.pack ? ` <span class="mr-muted">· ${T('pack_plus', { v: usd(c.portions ? c.pack / c.portions : c.pack) })}</span>` : ''}</div>`;
     const rv = d.recipe && d.recipe.review;
-    if (rv) h += `<div class="mr-ok">✓ ${T('verified_by', { by: esc(rv.by || ''), at: esc(dt(rv.at)) })} <span class="mr-muted">· ${T('rv_not_pub')}</span></div>`;
+    void rv;
     h += issuesHtml(d, p.id, ctx, p.iss); }
   h += `</div>`;
   if (edit) h += approvedReminder(d);
@@ -390,7 +390,7 @@ function editFoot(p, d, doc) {
   const pair = (a, b) => Math.abs((a || 0) - (b || 0)) < 0.0005 ? `<b>${usd(b)}</b>` : `${usd(a)} → <b>${usd(b)}</b>`;
   return `<div class="mr-foot"><div class="mr-muted">${c.pb != null ? `${T('fc_portion_c')} ${pair(c.pa, c.pb)}` : `${T('fc_lot')} ${pair(c.a.food, c.b.food)}`}${c.b.missing ? ' · ' + T('missing_prices', { n: c.b.missing }) : ''}</div>
     ${errs.length ? `<div class="mr-bad">${esc(errs.map(e => T('v_' + e.split(':')[0])).join(' · '))}</div>` : ''}
-    <div class="mr-acts mr-between">${discardBtn(p)}<button class="mr-link acc" data-m="pv:1">${T('tab_preview')} ›</button></div></div>`;
+    <div class="mr-acts mr-between">${discardBtn(p)}${saveBtn(p.id)}</div></div>`;
 }
 /* Preview: the recipe exactly as it will read, then what changes (food cost, deductions) — same engine as the nightly run */
 const pb = (c, dc) => { const n = Number(dc && dc.yield && dc.yield.portions); return c.pack ? (n > 0 ? c.pack / n : c.pack) : 0; };
@@ -512,7 +512,7 @@ function paintStatus(id) { document.querySelectorAll('#main [data-sst]').forEach
   document.querySelectorAll('#main [data-m="savedraft"]').forEach(b => { if (!b.disabled) b.outerHTML = saveBtn(id); }); }
 /* MR-18 (Chef 24/10): «Salva bozza» only after a change in this editing; untouched, the same place just closes the editor (nothing saved, no empty draft) */
 const changed = id => { const s = SV[id]; return !!(s && s.seq > 0); };
-const saveBtn = id => changed(id) ? `<button class="mr-btn dark" data-m="savedraft">${T('save_draft')}</button>` : `<button class="mr-btn" data-m="savedraft">${T('close_editor')}</button>`;
+const saveBtn = id => changed(id) ? `<button class="mr-btn dark" data-m="savepub">${T('save_simple')}</button>` : `<button class="mr-btn" data-m="savedraft">${T('close_editor')}</button>`;   // MR-28: «Salva» saves, then shows what changes + «Conferma»
 const pending = () => Object.keys(SV).filter(id => SV[id].seq !== SV[id].done || SV[id].busy);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pending().forEach(id => flush(id)); });   // the phone is put away: send now
 
@@ -635,6 +635,9 @@ function onClick(ev) {
       const v = sv(p.id).ver || (d.draft && d.draft._version); delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft';
       flash(p.id, T('draft_saved_toast', { v })); API.get('mre_list', null, 0).catch(() => {}); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
   else if (k === 'savepub') { if (w.busy) return; w.busy = k; el.disabled = true; el.textContent = T('saving');
+      if (d.source !== 'official' && !(d.recipe && d.recipe.lab_only)) { w.busy = null; (async () => { if (!(await flush(p.id))) return;      // test lab: «Salva» publishes the version there, as «Pubblica» did
+        const r = await call('mre_publish', { id: p.id, reason: w.reason || '', base: d.recipe.current_version }); if (!r) return;
+        flash(p.id, T('published', { v: r.version })); delete WORK[p.id]; p.edit = false; p.saved = false; p.f = 1; w.reason = ''; forget(); H.render(true); })(); return; }
       (async () => { const s = sv(p.id); if (s.seq) { const ok = await flush(p.id); if (!ok) { w.busy = null; paint(); return; } }
       delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft'; w.busy = null;
       API.forget('mre_recipe'); await API.get('mre_recipe', { id: p.id }, 0).catch(() => {}); API.get('mre_list', null, 0).catch(() => {});

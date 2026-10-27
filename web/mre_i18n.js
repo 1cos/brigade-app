@@ -131,6 +131,8 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   t_d1: ['Weight ↔ volume as 1 ml = 1 g', 'Peso ↔ volume con 1 ml = 1 g', 'Peso ↔ volumen con 1 ml = 1 g'],
   t_d1_note: ['(no density for these lines: Chef\'s rule 22/10, the difference is minimal)', '(queste righe non hanno una densità: regola dello Chef 22/10, differenza minima)', '(estas líneas no tienen densidad: regla del Chef 22/10, diferencia mínima)'],
   // MR-04 «Pubblica ricetta per ricetta»
+  save_simple: ['Save', 'Salva', 'Guardar'],
+  pending_pub: ['Changes not in Brigade yet: tap «Save and publish» at the bottom.', 'Modifiche non ancora in Brigade: tocca «Salva e pubblica» in fondo.', 'Cambios todavía no en Brigade: toca «Guardar y publicar» abajo.'],
   one_btn: ['Save and publish', 'Salva e pubblica', 'Guardar y publicar'], one_btn_new: ['Save and publish as a NEW recipe', 'Salva e pubblica come ricetta NUOVA', 'Guardar y publicar como receta NUEVA'],
   one_note: ['First I show you what changes in Brigade; nothing is written until you confirm. «Verified» is recorded on its own.', 'Prima ti mostro cosa cambia in Brigade; niente viene scritto finché non confermi. «Verificata» resta registrata a parte.', 'Primero te muestro qué cambia en Brigade; no se escribe nada hasta que confirmes. «Verificada» queda registrada aparte.'],
   one_wait: ['One moment…', 'Un momento…', 'Un momento…'], one_back: ['Back', 'Indietro', 'Atrás'],
@@ -203,7 +205,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   tech: ['Technical info', 'Info tecniche', 'Info técnica'], t_source: ['Source', 'Fonte', 'Fuente'], t_draft: ['Draft', 'Bozza', 'Borrador'], t_draft_v: ['v{v} · saved {at}', 'v{v} · salvata {at}', 'v{v} · guardado {at}'], t_none: ['none', 'nessuna', 'ninguno'],
   t_publish: ['Publish', 'Pubblicazione', 'Publicación'], t_locked: ['locked (test mode)', 'bloccata (modalità prova)', 'bloqueada (modo prueba)'], t_test: ['lab test example', 'esempio di prova del laboratorio', 'ejemplo de prueba'],
   t_review: ['Chef review', 'Revisione Chef', 'Revisión Chef'], t_not_reviewed: ['not reviewed yet', 'non ancora revisionata', 'aún no revisada'],
-  discard_draft: ['Discard draft', 'Scarta bozza', 'Descartar borrador'], discard_sure: ['Tap again to discard', 'Tocca di nuovo per scartare', 'Toca otra vez para descartar'],
+  discard_draft: ['Cancel changes', 'Annulla modifiche', 'Cancelar cambios'], discard_sure: ['Tap again to discard', 'Tocca di nuovo per scartare', 'Toca otra vez para descartar'],
   fc_portion_c: ['Food cost per portion', 'Food cost a porzione', 'Food cost por porción'], what_changes: ['What changes', 'Cosa cambia', 'Qué cambia'],
   publish_word: ['Publish', 'Pubblica', 'Publicar'], publish_off: ['Not active in test mode', 'Non attiva in modalità prova', 'No activa en modo prueba'],
   // R1.16 (Chef 21/10): the state of the work is always visible — Editing / Saving / Saved / Error — and Draft ≠ In use
@@ -240,6 +242,6 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   searching: ['Searching…', 'Cerco…', 'Buscando…'],
   draft_state: ['DRAFT v{v} · saved {t} · not published — the kitchen uses the recipe “In use”.', 'BOZZA v{v} · salvata {t} · non pubblicata — in cucina si usa la ricetta “In uso”.', 'BORRADOR v{v} · guardado {t} · no publicado — en cocina se usa la receta “En uso”.'],
   rm_all: ['All', 'Tutte', 'Todas'], rm_every: ['All', 'Tutte', 'Todas'], rm_todo: ['To review', 'Da revisionare', 'Por revisar'], rm_done: ['Reviewed', 'Revisionate', 'Revisadas'], rm_drafts: ['Drafts', 'Bozze', 'Borradores'],
-  rm_progress: ['{n} of {t} reviewed by the Chef', '{n} di {t} revisionate dallo Chef', '{n} de {t} revisadas por el Chef'], rm_draft: ['Draft', 'Bozza', 'Borrador'], rm_in_use: ['in use: {t}', 'in uso: {t}', 'en uso: {t}'],
+  rm_progress: ['{n} of {t} reviewed by the Chef', '{n} di {t} revisionate dallo Chef', '{n} de {t} revisadas por el Chef'], rm_draft: ['to publish', 'da pubblicare', 'por publicar'], rm_in_use: ['in use: {t}', 'in uso: {t}', 'en uso: {t}'],
   rm_none: ['No recipe here.', 'Nessuna ricetta qui.', 'Ninguna receta aquí.'], rm_back: ['‹ Back to the recipes', '‹ Torna alle ricette', '‹ Volver a las recetas'], rm_archived: ['Archived ({n})', 'Archiviate ({n})', 'Archivadas ({n})'],
 }).map(([k, v]) => ['m_' + k, v])));

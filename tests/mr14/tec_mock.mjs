@@ -60,9 +60,7 @@ async function page() {
 }
 const { pg, c } = await page()
 ok(await pg.locator('#main .rm-row .rm-tec').count() === 2, 'nell\'elenco: 2 ricette segnate «da T.E.C.»')
-ok(/da T\.E\.C\. · 2/.test(await pg.locator('#main .rm-chips').innerText()), 'filtro «da T.E.C. · 2»')
-await pg.click('#main .rm-chips [data-v="tec"]'); await pg.waitForTimeout(400)
-ok(await pg.locator('#main .rm-row').count() === 2, 'il filtro mostra solo le bozze di T.E.C.')
+ok(await pg.locator('#main .rm-chips').count() === 0 && await pg.locator('#main .rm-check').count() === 0, 'MR-28: niente filtri di revisione né spunte, un solo ricettario')
 await pg.screenshot({ path: `${OUT}/1_elenco_tec.png` })
 await pg.click('#main .rm-row:has(.name:text-is("Wheel Pasta"))'); await pg.waitForSelector('#main .mr-ings', { timeout: 20000 }); await pg.waitForTimeout(400)
 const note = await pg.locator('#main .mr-tecnote').innerText().catch(() => '')

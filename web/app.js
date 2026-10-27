@@ -164,11 +164,12 @@ function actButtons(id, a) {
 let MRE_ORDER = [];                                     // ids of the list as last shown: "Next" follows it
 const rmName = r => isChef() && r.draft_title ? r.draft_title : I.dn(r.title);
 function rmRows(L, p) {
-  const q = fold(p.q || ''), k = p.k || 'all', st = isChef() ? p.st || 'all' : 'all';
+  const q = fold(p.q || ''), k = p.k || 'all', st = p.st === 'archived' ? 'archived' : 'all';   // MR-28: one recipe book, no review filters
   return L.recipes.filter(r => (st === 'archived' ? r.archived : !r.archived)
     && (k === 'all' || (k === 'prep' ? r.prep : r.menu))
     && (st === 'all' || st === 'archived' || (st === 'todo' ? !r.review : st === 'done' ? !!r.review : st === 'tec' ? !!r.da_tec : !!r.draft))
-    && (!q || (r._s || (r._s = [r.title, r.draft_title, ...(r.pos_names || [])].filter(Boolean).map(fold).join(' | '))).includes(q)));
+    && (!q || (r._s || (r._s = [r.title, r.draft_title, ...(r.pos_names || [])].filter(Boolean).map(fold).join(' | '))).includes(q)))
+    .sort((a, b) => fold(rmName(a)).localeCompare(fold(rmName(b))));
 }
 /* R1.18: found by its POS name → that name is shown in the row */
 const posHit = (r, q0) => { const q = fold(q0 || ''); if (!q || [r.title, r.draft_title].some(x => x && fold(x).includes(q))) return '';
@@ -191,12 +192,12 @@ SCREENS.restaurant = { title: () => t('m_lab_title'), c: '--rest', render(p) {
   const tag = r => [r.prep ? `<span class="rm-tag">Prep</span>` : '', r.menu ? `<span class="rm-tag menu">Menu Item</span>` : ''].join('');
   const row = r => `<button class="row rm-row" data-a="openRecipe" data-r="${r.id}"><span class="main"><div class="name">${esc(rmName(r))}</div>
       <div class="rm-meta">${tag(r)}${posHit(r, p.q)}${chef && r.draft ? `<span class="rm-draft">${t('m_rm_draft')}</span>` : ''}${chef && r.da_tec ? `<span class="rm-tec">${t('m_rm_tec')}</span>` : ''}${chef && r.draft_title ? `<span class="rm-was">${esc(t('m_rm_in_use', { t: I.dn(r.title) }))}</span>` : ''}${chef && r.review && r.review.open ? `<span class="rm-open">⚠ ${r.review.open}</span>` : ''}</div></span>
-      ${chef ? `<span class="rm-check${r.review ? ' on' : ''}" aria-label="${esc(r.review ? t('m_rm_done') : t('m_rm_todo'))}">${r.review ? '✓' : ''}</span>` : '<span class="chev">›</span>'}</button>`;
+      <span class="chev">›</span></button>`;
   // R1.14: a reviewed recipe can still have open problems — they stay visible in the list
   const nArch = L.recipes.length - live.length;
   return `<div class="page rm" style="--c:var(--rest)">${top}
     <input id="q" class="search" type="search" placeholder="${esc(t('search_n', { n: live.length }))}" value="${esc(p.q || '')}" autocomplete="off" enterkeyhint="search">
-    ${seg}${chips}${prog}
+    ${seg}
     ${chef && !L.publish_locked ? (p.newOpen ? `<div class="rm-new"><input id="rmNewT" class="search" type="text" maxlength="200" placeholder="${esc(t('m_rm_new_ph'))}" value="${esc(p.newT || '')}" autocomplete="off">
       <div class="seg">${[['menu', 'Menu Item'], ['prep', 'Prep']].map(([v, l]) => `<button class="${(p.newK || 'menu') === v ? 'on' : ''}" data-a="rmNewKind" data-v="${v}">${l}</button>`).join('')}</div>
       ${p.newErr ? `<p class="err">${esc(p.newErr)}</p>` : ''}<div class="mr-acts mr-between"><button class="mr-btn" data-a="rmNewOpen" data-v="0">${t('m_pub_cancel')}</button><button class="mr-btn dark" data-a="rmNewGo">${t('m_rm_new_go')}</button></div>

@@ -102,8 +102,7 @@ role = 'chef'
   const q2 = (await pg.locator('#main .mr-ings li').first().locator('b.mq').innerText()).trim()
   ok((await H1(pg)) === 'Artichoke' && /editing|Stai modificando|Editing|Bozza v[0-9]+|Draft v[0-9]+/i.test(await pg.locator('#main .mr-estate').innerText()) && q2.startsWith('3'), `back → still editing, quantity kept (${q2}) — ${await pg.locator("#main .mr-estate").innerText().catch(() => "-")} — ${await H1(pg)}`)
   // publish in the test lab
-  await pg.locator('#main .mr-ebar button[data-m="pv:1"]').click(); await pg.waitForTimeout(300)      // R1.13: Publish lives in Preview
-  await pg.locator('#main button[data-m="publish"]').click(); await pg.waitForTimeout(800)
+  await pg.locator('#main .mr-ebar button[data-m="savepub"]').click(); await pg.waitForTimeout(1200)      // MR-28: one «Salva»
   ok(LAB[ART].cur === 2 && LAB[ART].versions[1].doc.lines[0].qty === 3 && calls.includes('mre_publish'), 'save v2 in the test lab: version 2 with the new quantity')
   const roles2 = LAB[ART].versions[1].doc.lines.map(l => l.role).join(','), roles1 = LAB[ART].versions[0].doc.lines.map(l => l.role).join(',')
   ok(roles1 === roles2, 'roles kept exactly in v2 (hidden, not lost)')
