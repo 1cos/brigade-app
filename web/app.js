@@ -115,6 +115,7 @@ SCREENS.today = { title: () => t('w_today'), c: '--today', render() {
   return `<div class="page" style="--c:var(--today)">
     ${top}<p class="brief">${brief}${next}</p></div>
     ${isChef() ? `<div class="acts"><button class="btn" data-a="compose">${t('msg_team')}</button></div>` : ''}
+    ${inService() && window.ServiceBoardUI ? '<div id="sbQuick"></div>' : ''}
     ${isChef() && window.ChecklistUI ? window.ChecklistUI.row() : ''}
     ${isChef() && window.OfficeUI ? (d => d ? window.OfficeUI.alertRows(d) : '')(need('office', null, 5 * 60000)) : ''}
     ${isChef() && (need('mre_list', null, 2 * 60000) || {}).pending ? `<div class="list"><button class="row" data-a="world" data-w="restaurant"><span class="main"><div class="name">${t('m_lab_pending', { n: API.peek('mre_list').pending })}</div><div class="meta">${t('m_lab_title')}</div></span><span class="chev">›</span></button></div>` : ''}
@@ -129,6 +130,16 @@ SCREENS.today = { title: () => t('w_today'), c: '--today', render() {
     ${testNote()}
   </div>`;
 } };
+
+SCREENS.today.after = () => { const el = $('sbQuick'); if (el) window.ServiceBoardUI.mountQuick(el, sbCall, { onOpen: () => A.openMonitors({ dataset: { tab: 'board' } }) }); };
+
+/* ============ B-86 MONITORS (3 monitor ON/OFF + Monitor 3 camerieri) — schermata in service_board.js, uguale a Brigade ============ */
+// Servizio serale 16:00–20:59 (Max 29/10): in home il pannello Limited Stock con −1 immediato. Chi non è Chef/Sous non vede niente (403 dal server).
+const inService = () => { const h = hourCDT(); return h >= 16 && h < 21; };
+const sbCall = (op, args) => API.call('sb', { sb_op: op, args: args || {} }).catch(e => ({ ok: false, error: e.code || 'offline' }));
+const WAITER_URL = 'https://1cos.github.io/back-of-house/waiter.html';
+SCREENS.monitors = { title: () => 'Monitors', c: '--office', render() { return `<div class="page" style="--c:var(--office)">${backBtn()}<div id="sbHost"></div></div>`; },
+  after(p) { const el = $('sbHost'); if (el && window.ServiceBoardUI) window.ServiceBoardUI.mount(el, sbCall, { tab: p.tab || 'monitors', waiterUrl: WAITER_URL }); } };
 
 /* ============ PREP (tab) ============ */
 SCREENS.prep = { title: p => { const d = API.peek('prep', { id: p.id }); return d ? d.prep.name : (p.name || t('prep_word')); }, c: '--today', render(p) {
@@ -332,7 +343,8 @@ SCREENS.office = { title: () => t('w_office'), c: '--office', render() {
   const d = need('office', null, 5 * 60000);
   if (!d) return `<div class="page">${top}${waiting('office')}</div>`;
   const comp = window.KitchenUI ? window.KitchenUI.completeRow(need('completeness', null, 5 * 60000)) + window.KitchenUI.gapsRow() : '';
-  return `<div class="page" style="--c:var(--office)">${top}${window.OfficeUI.home(d, ICON, comp)}</div>`;
+  const mon = `<div class="list"><button class="row" data-a="openMonitors" data-tab="monitors"><span class="main"><div class="name">📺 Monitors</div><div class="meta">Guest · Kitchen · Waiters — ON/OFF, Feature, Risotto, Limited Stock, 86</div></span><span class="chev">›</span></button></div>`;
+  return `<div class="page" style="--c:var(--office)">${top}${mon}${window.OfficeUI.home(d, ICON, comp)}</div>`;
 } };
 /* one decision, opened straight from My Shift or the Ufficio */
 SCREENS.decision = { title: () => window.OfficeUI.w('of_decision'), c: '--office', render(p) {
@@ -493,6 +505,7 @@ const A = {
       API.forget('mre_list'); API.get('mre_list', null, 0).catch(() => {}); openMre(r.id, r.title, 1, '', '', '', true) }
     catch (x) { el.disabled = false; if (x.status === 401) return; const c = String(x.code || '').split(':')[0]; e.p.newT = title; e.p.newErr = t('m_err_' + c) !== 'm_err_' + c ? t('m_err_' + c) : errText(x); render(true) } },
   rmFilter(el) { const e = cur(); e.p = Object.assign({}, e.p, { [el.dataset.f]: el.dataset.v }); e.y = 0; render(true); $('main').scrollTop = 0; },
+  openMonitors(el) { openTab('monitors', 'b86', { s: 'monitors', p: { tab: el.dataset.tab || 'monitors' } }); },
   openOffice(el) { const k = el.dataset.k, scope = el.dataset.scope || 'all'; openTab('office', k + ':' + scope, { s: k, p: { scope } }); },
   openIng(el) { openTab('ing', el.dataset.id, { s: 'ing', p: { id: el.dataset.id, from: el.dataset.from || '', line: el.dataset.line || '' } }); },
   /* R1.15 suggested purchase match: the Chef decides, nothing is linked by itself */

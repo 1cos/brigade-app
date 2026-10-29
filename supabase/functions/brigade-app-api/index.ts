@@ -12,6 +12,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
+import * as SERVICE from './service.ts'
 
 const BUILD = 'api-r1.18'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -25,7 +26,7 @@ const svc = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSessio
 
 type User = { id: number; name: string; lang: string | null; station: string | null; role: 'chef' | 'staff'; session_id: string }   // B-63: nel database c'è anche 'assistente' (bloccato sotto)
 // B-63: il ruolo «assistente» (T.E.C. per Max) può usare SOLO queste operazioni. Tutto il resto: 403.
-const TEC_OPS = new Set(['me', 'tec_leggi', 'tec_prova', 'tec_salva_bozza', 'tec_proposta_nuova'])
+const TEC_OPS = new Set(['me', 'tec_leggi', 'tec_prova', 'tec_salva_bozza', 'tec_proposta_nuova', 'sb'])   // B-86: 'sb' = monitor camerieri a voce
 
 class HttpError extends Error { constructor(public status: number, public code: string) { super(code) } }
 const deny = (code = 'unauthorized') => new HttpError(401, code)
@@ -354,12 +355,13 @@ Deno.serve(async (req: Request) => {
       case 'mre_review': out = await MRE.mreReview(u, body, svc); break
       case 'mre_purchase_match': out = await MRE.mrePurchaseMatch(u, body, svc); break
       case 'mre_match_decide': out = await MRE.mreMatchDecide(u, body, svc); break
+      case 'sb': out = await SERVICE.sb(u as any, body, svc); break                       // B-86: MONITORS + Monitor 3 camerieri
       case 'mre_translate': out = await MRE.mreTranslate(u, body); break
       default: throw bad('bad_op')
     }
     return new Response(JSON.stringify(out), { headers: H })
   } catch (e) {
-    if (e instanceof HttpError || e instanceof MRE.MreError || e instanceof OFFICE.OfficeError || e instanceof KITCHEN.KitchenError) return new Response(JSON.stringify({ ok: false, error: (e as any).code }), { status: (e as any).status, headers: H })
+    if (e instanceof HttpError || e instanceof MRE.MreError || e instanceof OFFICE.OfficeError || e instanceof KITCHEN.KitchenError || e instanceof SERVICE.ServiceError) return new Response(JSON.stringify({ ok: false, error: (e as any).code }), { status: (e as any).status, headers: H })
     console.error('[app-api]', (e as Error)?.message || e)
     return new Response(JSON.stringify({ ok: false, error: 'server_error' }), { status: 500, headers: H })
   }
