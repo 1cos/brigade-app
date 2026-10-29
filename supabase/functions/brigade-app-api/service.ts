@@ -29,6 +29,7 @@ export async function sb(u: U, b: any, svc: any) {
     case 'adjust': return rpc(svc, 'sb_adjust', { p_actor: who, p_source: src, p_item: String(a.item || ''), p_delta: Number(a.delta) })
     case '86': return rpc(svc, 'sb_set_86', { p_actor: who, p_source: src, p_item: String(a.item || ''), p_on: a.on !== false })
     case 'display': return rpc(svc, 'sb_set_display', { p_actor: who, p_source: src, p_which: String(a.which || ''), p_on: a.on === true })
+    case 'history': return { ok: true, history: await rpc(svc, 'sb_insights', { p_days: Math.min(365, Math.max(7, Number(a.days) || 60)) }) }   // B-87
     default: throw new ServiceError(400, 'bad_op')
   }
 }
