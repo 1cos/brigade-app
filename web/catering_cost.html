@@ -1,0 +1,506 @@
+<title>Food cost catering</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: registro a righe, una scheda per evento; il rosso segna solo i prezzi che mancano. */
+:root{
+  --bg:#f3f5f6; --panel:#ffffff; --ink:#1b262c; --mute:#5d6b73; --line:#d9e0e4; --soft:#e9eef0;
+  --accent:#1d5b6e; --accent-ink:#ffffff; --miss:#b3261e; --miss-bg:#fdecea; --warn:#8a5a00; --warn-bg:#fff3d6;
+  --ok:#216e3a; --ok-bg:#e3f4e8; --info-bg:#e5f0f4;
+  --f-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif; --f-num:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12181b; --panel:#1a2226; --ink:#e6edf0; --mute:#97a6ad; --line:#2d3a40; --soft:#222d32;
+  --accent:#6fb8cd; --accent-ink:#0d1a1f; --miss:#ff8a80; --miss-bg:#3a1f1d; --warn:#f2c35b; --warn-bg:#3a2f14;
+  --ok:#7fd29a; --ok-bg:#1b3325; --info-bg:#1b2d34; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12181b; --panel:#1a2226; --ink:#e6edf0; --mute:#97a6ad; --line:#2d3a40; --soft:#222d32;
+  --accent:#6fb8cd; --accent-ink:#0d1a1f; --miss:#ff8a80; --miss-bg:#3a1f1d; --warn:#f2c35b; --warn-bg:#3a2f14;
+  --ok:#7fd29a; --ok-bg:#1b3325; --info-bg:#1b2d34; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-block:20px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:18px;min-width:0}
+.wrap>*{min-width:0;max-width:100%}
+.dishhead>*,.evhead>*,.row>*{min-width:0}
+h1{font-size:26px;font-weight:600;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:18px;font-weight:600;margin:0;text-wrap:balance}
+h3{font-size:12px;font-weight:600;margin:0;letter-spacing:.07em;text-transform:uppercase;color:var(--mute)}
+.sub{color:var(--mute);margin:4px 0 0;max-width:68ch}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grow{flex:1 1 auto;min-width:0}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);font-weight:600;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid var(--soft);vertical-align:top}
+td.r,th.r{text-align:right}
+a{color:var(--accent)}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.chip{padding:2px 8px;font-size:12px;border-radius:999px}
+button.chip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input[type=number],input[type=text],input[type=search],select{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+input[type=number]{width:84px;font-family:var(--f-num)}
+input.p{width:92px}
+.badge{display:inline-block;font-size:11px;font-weight:600;border-radius:4px;padding:1px 6px;white-space:nowrap}
+.b-miss{background:var(--miss-bg);color:var(--miss)} .b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-ok{background:var(--ok-bg);color:var(--ok)} .b-info{background:var(--info-bg);color:var(--accent)}
+.miss{background:var(--miss-bg);color:var(--miss)}
+.evhead{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:flex-start}
+.kv{display:flex;flex-direction:column;gap:2px}
+.kv span:first-child{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.big{font-size:22px;font-weight:600}
+.dish{border-top:1px solid var(--line);padding:10px 0}
+.dishhead{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.dishhead .t{flex:1 1 260px;min-width:0;font-weight:500}
+.lines{margin:8px 0 2px;border:1px solid var(--soft);border-radius:6px}
+.lines td{padding:5px 8px;font-size:13px}
+.note{font-size:13px;color:var(--mute)}
+.note.warn{color:var(--warn)}
+.alert{border-radius:6px;padding:8px 10px;font-size:13px}
+.alert.miss{background:var(--miss-bg);color:var(--miss)} .alert.warn{background:var(--warn-bg);color:var(--warn)} .alert.info{background:var(--info-bg);color:var(--ink)}
+.tot{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;border-top:2px solid var(--ink);padding-top:12px;margin-top:6px}
+.add{background:var(--soft);border-radius:8px;padding:10px 12px;margin-top:10px}
+.add .row>*{min-width:0}
+.sugg{position:relative}
+.list{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel);margin-top:4px}
+.list button{display:flex;gap:8px;justify-content:space-between;width:100%;text-align:left;border:0;border-bottom:1px solid var(--soft);border-radius:0;padding:6px 8px}
+.list button:hover{background:var(--info-bg)}
+.x{border:0;background:none;color:var(--mute);padding:2px 6px}
+.legend{font-size:13px;color:var(--mute)}
+.top{padding:6px 0}
+.syncbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;justify-content:flex-end;padding:3px 0;pointer-events:none}.syncbar .badge{pointer-events:auto;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+@media (max-width:560px){h1{font-size:22px}.big{font-size:19px}}
+</style>
+
+<div class="wrap" id="app"></div>
+
+<script>
+const API = (window.parent && window.parent !== window && window.parent.AppApi) || window.AppApi || null;
+const _$ = s => document.querySelector(s);
+async function boot() {
+  const app = _$('#app');
+  if (!API) { app.innerHTML = '<div class="panel"><div class="alert miss">Questa pagina funziona dentro Brigade 2 (Catering → Food cost catering).</div></div>'; return; }
+  app.innerHTML = '<div class="panel"><div class="note">Leggo eventi, menu, prezzi e costi da Brigade…</div></div>';
+  try { const SV = await API.call('cc_load', {}); START(SV.D, SV); }
+  catch (e) { app.innerHTML = '<div class="panel"><div class="alert miss">Non riesco a leggere i dati (' + (e && (e.code || e.message) || 'offline') + '). <button onclick="location.reload()">Riprova</button></div></div>'; }
+}
+function START(D, SV) {
+const NMAX = 220;
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = n => (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const money4 = n => '$' + n.toFixed(4);
+const up = x => Math.ceil(x * 100 - 1e-9) / 100;               // regola ADM03: arrotondo per eccesso al centesimo
+const fq = n => (Math.round(n * 100) / 100).toLocaleString('en-US', {maximumFractionDigits: 2});
+const dmy = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return d + '/' + m; };
+const fdate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('it-IT', {weekday: 'short', day: 'numeric', month: 'long'}); };
+
+// ---------------------------------------------------------------- stato
+// ---------------------------------------------------------------- stato: salvato in Brigade (una versione per salvataggio), non nel browser
+let S = {mode: (SV.prefs && SV.prefs.mode) || 'br', buffer: SV.prefs ? SV.prefs.buffer !== false : true, ui: {filter: 'tutti', cancelled: false}, ev: {}, ver: {}, prefsVer: SV.prefs_ver || 0};
+for (const [k, v] of Object.entries(SV.states || {})) { S.ev[k] = v.state; S.ver[k] = v.ver; }
+const dirty = new Set(), conflicts = {}, restoreNote = {}; let timer = null, sync = {state: 'saved'}, hist = null;
+const LOCAL_KEY = 'b99-catering-v1';
+const local = (() => { try { const x = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null'); return x && x.v === 1 && x.s && x.s.ev ? x.s : null; } catch (e) { return null; } })();
+const importable = local ? Object.keys(local.ev).filter(k => !(SV.states || {})[k] && D.events.some(e => e.id === k)) : [];
+function paintSync() {
+  const el = document.getElementById('sync'); if (!el) return;
+  const t = {saved: ['b-ok', 'salvato in Brigade'], saving: ['b-warn', 'salvo…'], error: ['b-miss', 'non riesco a salvare (riprovo)'], conflict: ['b-miss', 'conflitto: guarda la scheda']}[sync.state];
+  el.className = 'badge ' + t[0]; el.textContent = t[1];
+}
+function save(key) {
+  if (!key) return;
+  if (key !== '_prefs') { const e = D.events.find(x => x.id === key); if (e && e.menu_hash && S.ev[key] && !S.ev[key].mh) S.ev[key].mh = e.menu_hash; }
+  dirty.add(key); sync = {state: 'saving'}; paintSync(); clearTimeout(timer); timer = setTimeout(flush, 600);
+}
+async function flush() {
+  clearTimeout(timer);
+  for (const key of [...dirty]) {
+    if (conflicts[key] != null) continue;
+    dirty.delete(key);
+    const state = key === '_prefs' ? {mode: S.mode, buffer: S.buffer} : S.ev[key], base = key === '_prefs' ? S.prefsVer : (S.ver[key] || 0);
+    try {
+      const r = await API.call('cc_save', {key, state, base_ver: base, note: restoreNote[key] || null}); delete restoreNote[key];
+      if (r.ok) { if (key === '_prefs') S.prefsVer = r.ver; else S.ver[key] = r.ver; }
+      else { conflicts[key] = r.ver; dirty.add(key); }
+    } catch (e) { dirty.add(key); sync = {state: 'error'}; paintSync(); timer = setTimeout(flush, 6000); return; }
+  }
+  sync = Object.keys(conflicts).length ? {state: 'conflict'} : dirty.size ? {state: 'saving'} : {state: 'saved'}; paintSync();
+  if (sync.state === 'conflict') render();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && dirty.size) flush(); });
+window.addEventListener('beforeunload', e => { if (dirty.size) { e.preventDefault(); e.returnValue = ''; } });
+function evState(e) {
+  if (!S.ev[e.id]) S.ev[e.id] = {guests: e.guests, mp: e.menu_price, mq: e.menu_qty, dishes: {}, extras: [], clone: false, ovr: {}};
+  return S.ev[e.id];
+}
+const dk = (d, i) => d.id != null ? String(d.id) : String(i);   // chiave del piatto (i vecchi eventi curati: la posizione di prima, quindi le modifiche già fatte restano valide)
+function dState(es, i) { if (!es.dishes[i]) es.dishes[i] = {N: null, man: {}}; return es.dishes[i]; }
+const evById = id => D.events.find(e => e.id === id);
+const INGBY = Object.fromEntries(D.ing.map(x => [x.id, x]));
+const RECBY = Object.fromEntries(D.rec.map(x => [x.id, x]));
+
+// ---------------------------------------------------------------- calcolo
+function priceFor(e, pid, ovrKey, es) {
+  const pr = D.prices[pid], c = D.check[e.id][pid];
+  const o = es.ovr[ovrKey];
+  if (o != null && o !== '') return {p: +o, st: 'PREZZO INSERITO DA TE', src: 'inserito nella pagina', manual: true};
+  if (S.mode === 'br' && c && c.use === 'br' && c.br && c.br.p != null)
+    return {p: c.br.p, st: 'FATTURA BRIGADE ' + dmy(c.br.date), src: (c.br.v || '') + (c.br.pack ? ' · ' + c.br.pack : '') + (c.br.inv ? ' · fatt. ' + c.br.inv : ''), brig: true};
+  if (pr.p == null) return {p: null, st: 'PREZZO MANCANTE', src: pr.s};
+  return {p: pr.p, st: pr.st, src: pr.v + ' · ' + pr.s};
+}
+function evalDish(e, es, d, i) {
+  const ds = dState(es, dk(d, i));
+  const out = {label: d.label, lines: [], cost: 0, missing: 0, pending: false, qlabel: '', conf: d.conf, hint: d.hint, manual: !!d.manual, N: null, notes: []};
+  if (d.rule) {
+    const N = ds.N == null ? (d.n0 ? 0 : es.guests) : ds.N; out.N = N;
+    const t = D.rules[d.rkey][Math.max(0, Math.min(NMAX, Math.round(N)))];
+    out.qlabel = t[0]; out.notes = t[2];
+    for (const [pid, q] of t[1]) {
+      const pr = D.prices[pid], pf = priceFor(e, pid, dk(d, i) + '|' + pid, es);
+      const l = {key: dk(d, i) + '|' + pid, desc: pr.d, q, u: pr.u, p: pf.p, st: pf.st, src: pf.src, manual: pf.manual, brig: pf.brig, cost: pf.p == null ? null : q * pf.p, canFix: true};
+      if (l.cost == null) out.missing++; else out.cost += l.cost;
+      out.lines.push(l);
+    }
+    if (N <= 0) out.pending = true;
+  } else {
+    // piatto senza regola catering: porzioni scritte da te x costo della ricetta del ristorante
+    out.pending = true;
+    for (const rid of d.recids) {
+      const r = RECBY[rid]; if (!r) continue;
+      const port = +(ds.man[rid] || 0);
+      const base = r.cpp == null && r.cpu != null;   // ricetta base senza porzioni: costo al grammo/ml dalla resa
+      const rp = base ? r.cpu : r.cpp;
+      const l = {key: dk(d, i) + '|' + rid, desc: r.t + ' (ricetta ristorante)', q: port, u: base ? r.cu : 'porz.', p: rp, st: rp == null ? 'COSTO NON CALCOLABILE' : (base ? 'DA FATTURE (ricetta base, a ' + r.cu + ')' : (r.part ? 'COSTO PARZIALE' : 'DA FATTURE')),
+        src: (r.miss.length ? 'mancano: ' + r.miss.join(', ') : (base ? 'costo Brigade per ' + r.cu + ' dalla resa' : 'costo Brigade')), part: r.part, rec: rid, cost: rp == null ? null : port * rp, miss: r.miss};
+      if (port > 0) { out.pending = false; if (l.cost == null || r.part) out.missing++; }
+      if (l.cost != null) out.cost += l.cost;
+      out.lines.push(l);
+    }
+    if (!d.recids.length) out.pending = true;
+  }
+  return out;
+}
+function unitFactor(u) { return {g: 1, kg: 1000, oz: 28.3495, lb: 453.592, ml: 1, l: 1000, 'fl oz': 29.5735, gal: 3785.41, pz: 1}[u]; }
+function evalExtra(e, es, x, k) {
+  const l = {key: 'x|' + k, extra: k, q: x.qty, u: x.unit, cost: null, p: null, st: '', src: '', desc: ''};
+  if (x.type === 'rec') {
+    const r = RECBY[x.refId]; if (!r) { l.desc = (x.name || 'ricetta') + ' (ricetta non più in Brigade)'; l.st = 'COSTO NON CALCOLABILE'; return l; }
+    l.desc = r.t + ' (ricetta ristorante)'; l.u = 'porz.';
+    // unità scelte: 'porz.' (costo per porzione) oppure grammi/ml/kg/lb... per le ricette base (costo dalla resa)
+    let uu = x.unit || 'porz.';
+    if (uu === 'porz.' && r.cpp == null && r.cpu != null) uu = r.cu;   // vecchie righe: ricetta base senza porzioni = grammi/ml
+    const base = uu !== 'porz.' && r.cpu != null && unitFactor(uu) != null;
+    l.u = base ? uu : 'porz.';
+    l.p = base ? r.cpu * unitFactor(uu) : r.cpp; l.part = r.part; l.miss = r.miss;
+    l.st = l.p == null ? 'COSTO NON CALCOLABILE' : (base ? 'DA FATTURE (ricetta base, a ' + uu + ')' : (r.part ? 'COSTO PARZIALE' : 'DA FATTURE'));
+    l.src = r.miss.length ? 'mancano: ' + r.miss.join(', ') : (base ? 'costo Brigade dalla resa della ricetta' : 'costo Brigade');
+    if (x.price != null && x.price !== '') { l.p = +x.price; l.st = 'PREZZO INSERITO DA TE'; l.manual = true; l.part = false; }
+    l.cost = l.p == null ? null : x.qty * l.p;
+    return l;
+  }
+  const g = INGBY[x.refId]; if (!g) { l.desc = (x.name || 'articolo') + ' (non più in Brigade)'; l.st = 'PREZZO MANCANTE'; return l; }
+  l.desc = g.n;
+  let p = null, st = '', src = '';
+  const f = unitFactor(x.unit);
+  if (x.price != null && x.price !== '') { p = +x.price; st = 'PREZZO INSERITO DA TE'; l.manual = true; l.cost = x.qty * p; l.p = p; l.st = st; l.src = 'prezzo per ' + x.unit; return l; }
+  if (['g', 'kg', 'oz', 'lb'].includes(x.unit) && g.pg != null) { p = g.pg * f; }
+  else if (['ml', 'l', 'fl oz', 'gal'].includes(x.unit) && g.pm != null) { p = g.pm * f; }
+  else if (x.unit === 'pz' && g.pe != null) { p = g.pe; }
+  src = (g.v || 'nessuna fattura') + (g.d ? ' · ' + dmy(g.d) : '') + (g.pack ? ' · ' + g.pack : '');
+  if (p == null) { l.st = 'PREZZO MANCANTE'; l.src = g.pg == null && g.pm == null && g.pe == null ? 'nessun prezzo in Brigade' : 'prezzo in Brigade ma non per questa unità'; return l; }
+  l.p = p; l.cost = x.qty * p; l.st = g.stima ? 'STIMA CHEF (non fattura)' : 'FATTURA BRIGADE ' + dmy(g.d); l.src = src;
+  return l;
+}
+function evalEvent(e) {
+  const es = evState(e);
+  const dishes = e.dishes.map((d, i) => evalDish(e, es, d, i));
+  const extras = es.extras.map((x, k) => evalExtra(e, es, x, k));
+  let total = dishes.reduce((s, d) => s + d.cost, 0) + extras.reduce((s, l) => s + (l.cost || 0), 0);
+  let missing = dishes.reduce((s, d) => s + d.missing, 0) + extras.filter(l => l.cost == null || l.part).length;
+  const pending = dishes.filter(d => d.pending).length;
+  const buf = S.buffer ? total * 0.10 : 0, fin = total + buf;
+  const rev = (es.mp || 0) * (es.mq || 0);
+  return {es, dishes, extras, total, buf, fin, missing, pending, rev};
+}
+
+// ---------------------------------------------------------------- vista
+function lineRow(e, ev, l, i) {
+  const miss = l.cost == null;
+  const stc = miss ? 'b-miss' : (l.manual ? 'b-info' : (/PARZIALE|STIMA|PROVVIS|PROVISIONAL|UNKNOWN|CHEF STANDARD/i.test(l.st) ? 'b-warn' : (l.brig || /FATTURA|FATTURE|VERIFIED/.test(l.st) ? 'b-ok' : 'b-info')));
+  const stl = {VERIFIED: 'DA FATTURA', PROVISIONAL: 'PROVVISORIO', UNKNOWN: 'SCONOSCIUTO', 'CHEF STANDARD': 'STANDARD CHEF'}[l.st] || l.st;
+  let fix = '';
+  if (l.canFix && (miss || l.manual)) {
+    fix = `<input class="p num" type="number" step="0.0001" min="0" placeholder="$/${esc(l.u)}" data-fid="ovr-${esc(e.id)}-${esc(l.key)}" data-act="ovr" data-ev="${e.id}" data-k="${esc(l.key)}" value="${l.manual ? l.p : ''}" aria-label="Prezzo per ${esc(l.desc)}">`;
+  }
+  if (l.extra != null && (miss || l.manual)) {
+    fix = `<input class="p num" type="number" step="0.0001" min="0" placeholder="$/${esc(l.u)}" data-fid="xp-${esc(e.id)}-${l.extra}" data-act="xprice" data-ev="${e.id}" data-k="${l.extra}" value="${l.manual ? l.p : ''}" aria-label="Prezzo inserito da te">`;
+  }
+  return `<tr class="${miss ? 'miss' : ''}">
+    <td>${esc(l.desc)}${l.src ? `<div class="note">${esc(l.src)}</div>` : ''}${l.miss && l.miss.length && !l.manual ? `<div class="note warn">mancano: ${esc(l.miss.join(', '))}</div>` : ''}</td>
+    <td class="r num">${fq(l.q)} ${esc(l.u)}</td>
+    <td class="r num">${l.p == null ? '—' : money4(l.p)}</td>
+    <td class="r num">${miss ? '<b>MANCANTE</b>' : money4(l.cost)}</td>
+    <td><span class="badge ${stc}">${esc(stl)}</span></td>
+    <td>${fix}</td></tr>`;
+}
+function linesTable(e, ev, lines) {
+  return `<div class="scroll"><table class="lines"><thead><tr><th>Ingrediente</th><th class="r">Quantità</th><th class="r">Prezzo unit.</th><th class="r">Costo</th><th>Stato prezzo</th><th>Prezzo mancante?</th></tr></thead><tbody>${lines.map(l => lineRow(e, ev, l)).join('')}</tbody></table></div>`;
+}
+function sourceChips(e, es) {
+  return e.fonti.map(([lab, n], k) => `<button class="chip ${es.guests === n ? 'on' : ''}" data-act="guestsrc" data-ev="${e.id}" data-n="${n}" title="${esc(lab)}">${n} · ${esc(lab)}</button>`).join(' ');
+}
+function dishHtml(e, ev, d, i, dd) {
+  const es = ev.es, key = e.id + '#' + i, open = S.ui[key];
+  let ctl;
+  if (d.rule) {
+    ctl = `<label class="row" style="gap:6px">persone <input type="number" min="0" max="${NMAX}" step="1" data-fid="n-${key}" data-act="dishN" data-ev="${e.id}" data-i="${esc(dk(d, i))}" value="${dd.N}" aria-label="Persone per ${esc(d.label)}"></label>
+           <span class="note">${esc(dd.qlabel)}</span>`;
+  } else {
+    ctl = (d.recids || []).filter(rid => RECBY[rid]).map(rid => `<label class="row" style="gap:6px">${esc(RECBY[rid].t)} <input type="number" min="0" step="1" data-fid="m-${key}-${rid}" data-act="man" data-ev="${e.id}" data-i="${esc(dk(d, i))}" data-r="${rid}" value="${es.dishes[dk(d, i)] && es.dishes[dk(d, i)].man[rid] || ''}" placeholder="porzioni"></label>`).join(' ');
+  }
+  const flags = [];
+  if (dd.missing) flags.push(`<span class="badge b-miss">${dd.missing} ${d.rule ? 'prezz' + (dd.missing > 1 ? 'i mancanti' : 'o mancante') : 'dati incompleti'}</span>`);
+  if (dd.pending) flags.push(`<span class="badge b-warn">${d.rule ? 'persone da inserire' : 'porzioni da inserire'}</span>`);
+  if (!d.rule) flags.push('<span class="badge b-warn">senza regola catering</span>');
+  if (d.n0) flags.push('<span class="badge b-info">a scelta del cliente</span>');
+  return `<div class="dish">
+    <div class="dishhead"><div class="t">${esc(d.label)}${d.from && d.from !== d.label ? `<div class="note">dal menu: «${esc(String(d.from).slice(0, 110))}»</div>` : ''}</div>${ctl}
+      <span class="num"><b>${money(dd.cost)}</b></span> ${flags.join(' ')}
+      ${dd.lines.length ? `<button class="chip" data-act="open" data-key="${key}">${open ? 'nascondi righe' : 'mostra righe'}</button>` : ''}</div>
+    ${d.hint ? `<div class="note warn" style="margin-top:4px">${esc(d.hint)}</div>` : ''}
+    ${d.conf ? `<div class="note warn" style="margin-top:4px">${esc(d.conf)}</div>` : ''}
+    ${open && dd.lines.length ? linesTable(e, ev, dd.lines) : ''}
+  </div>`;
+}
+function addPanel(e, ev) {
+  const es = ev.es, ui = S.ui['add-' + e.id] || {tab: 'ing', q: '', unit: 'g', qty: ''};
+  const src = ui.tab === 'ing' ? D.ing : D.rec;
+  const qq = (ui.q || '').toLowerCase();
+  const res = qq.length >= 2 ? src.filter(x => (x.n || x.t).toLowerCase().includes(qq)).slice(0, 40) : [];
+  const sel = ui.sel && !ui.loading ? (ui.tab === 'ing' ? INGBY[ui.sel] : RECBY[ui.sel]) : null;
+  let units = ['g', 'kg', 'oz', 'lb', 'ml', 'l', 'fl oz', 'gal', 'pz'];
+  if (sel && ui.tab === 'rec') { units = []; if (sel.cpp != null) units.push('porz.'); if (sel.cpu != null) units.push(...(sel.cu === 'g' ? ['g', 'kg', 'oz', 'lb'] : ['ml', 'l', 'fl oz', 'gal'])); if (!units.length) units = ['porz.']; }
+  else if (!sel && ui.tab === 'rec') units = ['porz.'];
+  if (sel && ui.tab === 'ing') { units = []; if (sel.pg != null) units.push('g', 'kg', 'oz', 'lb'); if (sel.pm != null) units.push('ml', 'l', 'fl oz', 'gal'); if (sel.pe != null) units.push('pz'); if (!units.length) units = ['g', 'kg', 'oz', 'lb', 'ml', 'l', 'pz']; }
+  return `<div class="add">
+    <div class="row"><h3>Aggiungi</h3>
+      <button class="chip ${ui.tab === 'ing' ? 'on' : ''}" data-act="addtab" data-ev="${e.id}" data-t="ing">Articolo di inventario</button>
+      <button class="chip ${ui.tab === 'rec' ? 'on' : ''}" data-act="addtab" data-ev="${e.id}" data-t="rec">Ricetta</button></div>
+    <div class="row" style="margin-top:8px">
+      <div class="sugg grow" style="min-width:200px"><input type="search" style="width:100%" id="addq-${e.id}" data-fid="addq-${e.id}" data-act="addq" data-ev="${e.id}" placeholder="${ui.tab === 'ing' ? 'Cerca ingrediente (es. shrimp, zucchini)' : 'Cerca ricetta (es. lasagna)'}" value="${esc(sel ? (sel.n || sel.t) : ui.q)}">
+        ${!sel && res.length ? `<div class="list">${res.map(x => ui.tab === 'ing'
+          ? `<button data-act="addpick" data-ev="${e.id}" data-id="${x.id}"><span>${esc(x.n)}</span><span class="note num">${x.pg != null ? money4(x.pg * 453.592) + '/lb' : x.pm != null ? money4(x.pm * 1000) + '/l' : x.pe != null ? money4(x.pe) + '/pz' : 'senza prezzo'}</span></button>`
+          : `<button data-act="addpick" data-ev="${e.id}" data-id="${x.id}"><span>${esc(x.t)}</span><span class="note num">${x.lazy ? 'costo di oggi alla scelta' : x.cpp != null ? money4(x.cpp) + (x.part ? ' parziale' : '') : x.cpu != null ? money4(x.cpu * 1000) + (x.cu === 'g' ? '/kg' : '/l') : 'costo incompleto'}</span></button>`).join('')}</div>` : ''}
+      </div>
+      <input type="number" min="0" step="any" style="width:90px" data-fid="addqty-${e.id}" data-act="addqty" data-ev="${e.id}" placeholder="quantità" value="${esc(ui.qty)}">
+      <select id="addunit-${e.id}" data-act="addunit" data-ev="${e.id}">${units.map(u => `<option ${ui.unit === u ? 'selected' : ''}>${u}</option>`).join('')}</select>
+      <button class="pri" data-act="addgo" data-ev="${e.id}" ${sel && +ui.qty > 0 ? '' : 'disabled'}>Aggiungi</button></div>
+    ${ui.loading ? '<div class="note" style="margin-top:6px">Leggo il costo di oggi della ricetta…</div>' : ''}${sel ? `<div class="note" style="margin-top:6px">${ui.tab === 'ing' ? (sel.pg == null && sel.pm == null && sel.pe == null ? '<b class="miss" style="padding:0 4px">Nessun prezzo in Brigade per questo articolo: dopo averlo aggiunto scrivi tu il prezzo.</b>' : esc((sel.stima ? 'STIMA CHEF (non fattura) · ' : '') + sel.v + (sel.d ? ' · fattura ' + dmy(sel.d) : '') + ' · ' + sel.pack)) : (sel.cpp == null && sel.cpu != null ? 'Ricetta base senza porzioni: costo ' + money4(sel.cpu * (sel.cu === 'g' ? 1000 : 1000)) + (sel.cu === 'g' ? '/kg' : '/l') + ' dalla resa. Scegli grammi, kg, ecc.' : sel.cpp == null ? 'Costo incompleto: ' + esc(sel.miss.join(', ')) : (sel.part ? 'Costo parziale, mancano: ' + esc(sel.miss.join(', ')) : 'Costo completo da fatture'))}</div>` : ''}
+  </div>`;
+}
+function priceCheck(e) {
+  const c = D.check[e.id], ids = Object.keys(c).filter(k => c[k].br);
+  if (!ids.length) return '';
+  const rows = ids.map(pid => {
+    const x = c[pid], pb = x.pb, br = x.br, u = D.prices[pid].u;
+    const diff = (pb.p != null && br.p != null) ? (br.p - pb.p) / pb.p * 100 : null;
+    return `<tr><td>${esc(D.prices[pid].d)}</td>
+      <td class="r num">${pb.p == null ? '<span class="badge b-miss">MANCANTE</span>' : money4(pb.p) + '/' + u}<div class="note">${esc(pb.src)}</div></td>
+      <td class="r num">${br.p == null ? '<span class="note">non confrontabile</span>' : money4(br.p) + '/' + u}<div class="note">${esc(dmy(br.date))} · ${esc((br.v || '').split(' / ')[0])} · ${esc(br.pack || '')}</div></td>
+      <td class="r num">${diff == null ? '' : (diff > 0 ? '+' : '') + diff.toFixed(0) + '%'}</td>
+      <td>${x.use === 'br' ? '<span class="badge b-ok">uso fattura Brigade</span>' : '<span class="badge b-info">uso listino consuntivi</span>'}</td></tr>`;
+  }).join('');
+  return `<div class="scroll"><table><thead><tr><th>Voce</th><th class="r">Listino consuntivi</th><th class="r">Ultima fattura Brigade ≤ ${dmy(e.date)}</th><th class="r">Diff.</th><th>Nel calcolo</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function eventHtml(e) {
+  const ev = evalEvent(e), es = ev.es;
+  const pp = es.guests > 0 ? up(ev.fin) / es.guests : 0;
+  const pct = ev.rev > 0 ? ev.fin / ev.rev * 100 : null;
+  const empty = !e.dishes.length && !es.clone;
+  const miss = ev.missing;
+  return `<section class="panel" id="ev-${e.id}">
+   <div class="evhead"><div><h2>${esc(e.name)}</h2><div class="sub">${esc(fdate(e.date))} · ${esc(e.time)} · ${esc(e.room)}</div></div>
+     <div class="row">${miss ? `<span class="badge b-miss">${miss} prezz${miss > 1 ? 'i/dati mancanti' : 'o/dato mancante'}</span>` : '<span class="badge b-ok">nessun prezzo mancante</span>'}${ev.pending ? `<span class="badge b-warn">${ev.pending} piatti da completare</span>` : ''}</div></div>
+   <div class="alert info" style="margin-top:10px">${esc(e.brigade)}</div>
+   ${menuChanged(e, es) ? `<div class="alert warn" style="margin-top:8px"><b>Il menu di Tripleseat è cambiato</b> (versione ${esc(e.menu_version)}, ${esc(dmy(String(e.menu_at || '').slice(0, 10)))}) dopo l'ultima volta che l'hai guardato. I piatti qui sotto sono quelli del menu di adesso (o il piano di prima, se l'avevi preparato a mano); le tue modifiche non sono state toccate. <button data-act="ack" data-ev="${e.id}">Ho controllato</button></div>` : ''}
+   <div class="row" style="margin-top:8px"><button class="chip" data-act="history" data-ev="${e.id}">Versioni</button><button class="chip" data-act="resetev" data-ev="${e.id}">${S.ui['rst-' + e.id] ? 'Confermi? Azzera le mie modifiche di questo evento' : 'Azzera le mie modifiche di questo evento'}</button><button class="chip" data-act="closeev" data-id="${e.id}">chiudi la scheda</button></div>${histPanel(e)}
+   <div class="row" style="margin-top:12px;align-items:flex-end">
+     <label class="kv"><span>Ospiti (modificabile)</span><input type="number" min="0" max="${NMAX}" data-fid="g-${e.id}" data-act="guests" data-ev="${e.id}" value="${es.guests}"></label>
+     <div class="grow"><div class="note" style="margin-bottom:3px">Fonti ospiti: tocca per usarne una</div><div class="row" style="gap:5px">${sourceChips(e, es)}</div></div></div>
+   <div class="row" style="margin-top:10px"><span class="note">Ricavo menu da BEO:</span>
+     <label class="row" style="gap:4px">$<input type="number" min="0" step="1" data-fid="mp-${e.id}" data-act="mp" data-ev="${e.id}" value="${es.mp}" aria-label="Prezzo menu per persona"> a persona ×</label>
+     <input type="number" min="0" step="1" data-fid="mq-${e.id}" data-act="mq" data-ev="${e.id}" value="${es.mq}" aria-label="Menu fatturati"> menu = <b class="num">${money(ev.rev)}</b></div>
+   ${empty ? `<div class="alert miss" style="margin-top:12px">Nessun menu trovato per questa data. ${e.id === 'freedom30' ? '<button data-act="clone" data-ev="freedom30">Usa lo stesso menu del 29/09 (da confermare)</button>' : ''}</div>` : ''}
+   <div style="margin-top:14px">${e.dishes.map((d, i) => dishHtml(e, ev, d, i, ev.dishes[i])).join('')}</div>
+   ${es.extras.length ? `<div class="dish"><h3>Articoli e ricette aggiunti</h3>${linesTable(e, ev, ev.extras)}
+      <div class="row" style="margin-top:6px">${es.extras.map((x, k) => `<button class="chip" data-act="xdel" data-ev="${e.id}" data-k="${k}">togli ${esc(x.name)}</button>`).join(' ')}</div></div>` : ''}
+   ${addPanel(e, ev)}
+   <div class="tot">
+     <div class="kv"><span>Totale analitico</span><span class="num big">${money(up(ev.total))}</span></div>
+     <div class="kv"><span>Buffer 10%</span><span class="num big">${money(up(ev.buf))}</span></div>
+     <div class="kv"><span>Totale finale</span><span class="num big">${money(up(ev.fin))}</span></div>
+     <div class="kv"><span>Per persona</span><span class="num big">${money(pp)}</span></div>
+     <div class="kv"><span>Food cost sul ricavo</span><span class="num big">${pct == null ? '—' : pct.toFixed(1) + '%'}</span></div></div>
+   ${miss ? `<div class="alert miss" style="margin-top:10px"><b>Totale PARZIALE:</b> ${miss} voc${miss > 1 ? 'i' : 'e'} senza prezzo o con costo incompleto non sono nel totale. Scrivi il prezzo accanto alla riga rossa per includerle.</div>` : ''}
+   <div style="margin-top:12px"><button data-act="open" data-key="chk-${e.id}">${S.ui['chk-' + e.id] ? 'Nascondi' : 'Mostra'} verifica prezzi con le fatture di Brigade</button>${S.ui['chk-' + e.id] ? '<div style="margin-top:8px">' + priceCheck(e) + '</div>' : ''}</div>
+  </section>`;
+}
+const todayIso = new Date().toISOString().slice(0, 10);
+const visible = e => (S.ui.cancelled || e.status !== 'cancelled') && (S.ui.filter === 'tutti' || (S.ui.filter === 'prossimi' ? e.date >= todayIso : e.date < todayIso));
+function summary() {
+  const list = D.events.filter(visible);
+  const rows = list.map(e => {
+    const ev = evalEvent(e), es = ev.es, pct = ev.rev > 0 ? up(ev.fin) / ev.rev * 100 : null, open = !!S.ui['open-' + e.id];
+    const nomenu = !e.dishes.length && !es.clone;
+    return `<tr class="${e.status === 'cancelled' ? 'note' : ''}"><td><a href="#ev-${e.id}" data-act="goto" data-id="${e.id}">${esc(e.name)}</a>${e.status && e.status !== 'definite' ? ` <span class="badge b-info">${esc(e.status)}</span>` : ''}${S.ver[e.id] ? ' <span class="badge b-ok" title="ha modifiche salvate">modificato</span>' : ''}${menuChanged(e, es) ? ' <span class="badge b-warn">menu cambiato</span>' : ''}</td><td>${esc(dmy(e.date))}</td><td class="r num">${es.guests}</td>
+      <td class="r num"><b>${nomenu ? '—' : money(up(ev.fin))}</b>${!nomenu && (ev.missing || ev.pending) && es.guests > 0 ? ' <span class="badge b-warn">parziale</span>' : ''}</td><td class="r num">${es.guests > 0 && !nomenu ? money(up(ev.fin) / es.guests) : '—'}</td>
+      <td class="r num">${pct == null || nomenu ? '—' : pct.toFixed(1) + '%'}</td>
+      <td>${nomenu ? '<span class="badge b-info">nessun menu</span>' : ev.missing ? `<span class="badge b-miss">${ev.missing} mancanti</span>` : ''} ${ev.pending ? `<span class="badge b-warn">${ev.pending} da completare</span>` : ''}${!nomenu && !ev.missing && !ev.pending && es.guests > 0 ? '<span class="badge b-ok">completo</span>' : ''}</td>
+      <td><button class="chip" data-act="${open ? 'closeev' : 'openev'}" data-id="${e.id}">${open ? 'chiudi' : 'apri'}</button></td></tr>`;
+  }).join('');
+  const chip = (k, lab) => `<button class="chip ${S.ui.filter === k ? 'on' : ''}" data-act="filter" data-f="${k}">${lab}</button>`;
+  return `<div class="panel"><div class="row"><h3>Eventi</h3>${chip('tutti', 'Tutti')}${chip('prossimi', 'Prossimi')}${chip('passati', 'Passati')}
+    <label class="row" style="gap:6px"><input type="checkbox" data-act="cancelled" ${S.ui.cancelled ? 'checked' : ''}> mostra gli annullati</label><span class="note">${list.length} eventi</span></div>
+   <div class="scroll"><table><thead><tr><th>Evento</th><th>Data</th><th class="r">Ospiti</th><th class="r">Totale (con buffer)</th><th class="r">Per persona</th><th class="r">Sul ricavo</th><th>Stato</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+   <p class="legend">I totali sono parziali finché ci sono righe rosse o piatti da completare. Il ricavo è il menu a persona del BEO per i menu fatturati, non il totale evento: per gli eventi nuovi scrivilo tu nella scheda.</p></div>`;
+}
+function menuChanged(e, es) { if (!e.menu_hash) return false; const base = es.mh || e.curated_hash; return !!base && base !== e.menu_hash; }
+function banners() {
+  let h = '';
+  if (importable.length) h += `<div class="panel"><div class="alert warn"><b>Ho trovato modifiche fatte in questo browser con la pagina di prima</b> (${importable.length} ${importable.length === 1 ? 'evento' : 'eventi'}: ${importable.map(k => esc((D.events.find(e => e.id === k) || {}).name || k)).join(', ')}).
+     Importale in Brigade così restano per sempre e le vedi da qualsiasi telefono. <button class="pri" data-act="import">Importa le mie modifiche</button></div></div>`;
+  for (const k of Object.keys(conflicts)) { const e = D.events.find(x => x.id === k);
+    h += `<div class="panel"><div class="alert miss"><b>${esc(e ? e.name : k)}</b>: nel frattempo qualcun altro ha salvato questa scheda (versione ${conflicts[k]}).
+      <button data-act="keepmine" data-id="${esc(k)}">Tieni le mie modifiche</button> <button data-act="reloadsrv">Prendi quelle salvate</button></div></div>`; }
+  return h;
+}
+function histPanel(e) {
+  if (!hist || hist.key !== e.id) return '';
+  if (hist.loading) return '<div class="alert info" style="margin-top:10px">Leggo le versioni…</div>';
+  return `<div class="alert info" style="margin-top:10px"><b>Versioni salvate</b> (le ultime 30): ${hist.versions.length ? '' : 'nessuna ancora.'}<div class="scroll"><table><tbody>${hist.versions.map(v => `<tr><td class="num">v${v.ver}</td><td>${esc(v.saved_by)}</td><td>${esc(new Date(v.saved_at).toLocaleString('it-IT', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}))}</td>
+      <td class="num">${v.state.guests} ospiti · ${(v.state.extras || []).length} aggiunte</td><td class="note">${esc(v.note || '')}</td><td><button class="chip" data-act="restore" data-ev="${e.id}" data-v="${v.ver}">ripristina questa</button></td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function render() {
+  const a = document.activeElement, fid = a && a.dataset ? a.dataset.fid : null, pos = a && a.selectionStart != null ? [a.selectionStart, a.selectionEnd] : null;
+  const sy = window.scrollY;
+  const nCh = D.events.filter(e => e.status !== 'cancelled' && menuChanged(e, evState(e))).length;
+  $('#app').innerHTML = `
+   <div class="syncbar"><span id="sync" class="badge b-ok">salvato in Brigade</span></div>
+   <div class="top"><h1>Food cost catering</h1>
+      <p class="sub">Tutti i catering di Brigade, passati e futuri, con menu, prezzi e costi letti ora. Le tue modifiche si salvano in Brigade e vincono sempre sull'aggiornamento automatico. Dove manca un prezzo c'è scritto, non è stimato. <b>Ricette, prezzi e menu letti da Brigade alle ${new Date(SV.loaded_at).toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'})}</b> (a ogni apertura della pagina, nessuna copia).</p></div>
+   ${banners()}
+   ${nCh ? `<div class="panel"><div class="alert warn"><b>${nCh} ${nCh === 1 ? 'evento ha' : 'eventi hanno'} il menu cambiato in Tripleseat</b> dopo l'ultima volta che l'hai guardato (segnati «menu cambiato»). Le tue modifiche non sono state toccate.</div></div>` : ''}
+   <div class="panel"><div class="row"><h3>Prezzi usati</h3>
+     <button class="chip ${S.mode === 'br' ? 'on' : ''}" data-act="mode" data-m="br">Fatture Brigade alla data dell'evento (se più recenti del listino)</button>
+     <button class="chip ${S.mode === 'pb' ? 'on' : ''}" data-act="mode" data-m="pb">Solo listino dei consuntivi chiusi</button>
+     <label class="row" style="gap:6px"><input type="checkbox" id="bufchk" data-act="buf" ${S.buffer ? 'checked' : ''}> buffer 10%</label></div></div>
+   ${summary()}
+   ${D.events.filter(e => visible(e) && S.ui['open-' + e.id]).map(eventHtml).join('')}
+   ${notes()}`;
+  paintSync();
+  window.scrollTo(0, sy);
+  if (fid) { const el = document.querySelector('[data-fid="' + fid + '"]'); if (el) { el.focus(); try {
+    if (el.type === 'number') { el.type = 'text'; const n = el.value.length; el.setSelectionRange(n, n); el.type = 'number'; }   // i campi numerici non accettano il cursore: lo rimetto in fondo
+    else if (pos) el.setSelectionRange(pos[0], pos[1]);
+  } catch (e) {} } }
+}
+function notes() {
+  return `<div class="panel"><h3>Da sapere</h3><ul class="note" style="padding-left:18px;margin:8px 0 0;display:flex;flex-direction:column;gap:5px">
+   <li><b>Da dove viene ogni cosa.</b> Eventi, ospiti e menu sono letti da Brigade (sincronizzati da Tripleseat) ogni volta che apri la pagina; sotto il nome di ogni evento c'è scritto da dove vengono e quando è stato aggiornato. Janay e Freedom di settembre non sono in Brigade: restano come li avevi preparati.</li>
+   <li><b>Le tue modifiche vincono.</b> Se Tripleseat cambia il menu o gli ospiti, compare «menu cambiato» ma quello che hai scritto non viene toccato. Ogni salvataggio è una versione: da «Versioni» si può tornare indietro.</li>
+   <li><b>Ospiti.</b> Di base valgono i menu fatturati nel documento di Tripleseat; sotto «Fonti ospiti» puoi scegliere il numero di Brigade o scriverne un altro.</li>
+   <li><b>Menu a scelta del cliente</b> («option…», «to be chosen»): non invento i piatti; le voci a scelta partono con 0 persone, scrivi tu per quante.</li>
+   <li><b>Piatti senza regola catering:</b> non invento le porzioni. Inserisci tu le porzioni e il costo viene dalla ricetta del ristorante, con i prezzi mancanti segnalati. Le ricette indicate sono le più vicine per nome, da confermare.</li>
+   <li><b>Prezzo menu e ricavo.</b> Non sono nel menu di Tripleseat: per gli eventi nuovi scrivi tu il prezzo a persona nella scheda.</li>
+   <li><b>Bevande, acqua e tè, vini, affitto sala:</b> non sono food cost e non sono contati.</li>
+   <li><b>Come è calcolato.</b> Quantità = regole dei consuntivi chiusi (porzioni, resa, +30% sui finger food). Prezzo = ultima fattura entro la data dell'evento; dove Brigade ha una fattura più recente del listino la uso e lo scrivo. Totale arrotondato per eccesso al centesimo, buffer 10%.</li></ul></div>`;
+}
+
+// ---------------------------------------------------------------- azioni
+function ui(id) { return S.ui['add-' + id] || (S.ui['add-' + id] = {tab: 'ing', q: '', unit: 'g', qty: '', dish: -1}); }
+document.addEventListener('click', ev => {
+  const t = ev.target.closest('[data-act]'); if (!t) return;
+  const act = t.dataset.act, id = t.dataset.ev, e = id && evById(id);
+  if (act === 'goto' || act === 'openev') { ev.preventDefault(); S.ui['open-' + t.dataset.id] = true; render(); const el = document.getElementById('ev-' + t.dataset.id); if (el) el.scrollIntoView({behavior: 'smooth'}); return; }
+  if (act === 'closeev') { S.ui['open-' + t.dataset.id] = false; render(); return; }
+  if (act === 'filter') { S.ui.filter = t.dataset.f; render(); return; }
+  if (act === 'mode') S.mode = t.dataset.m;
+  else if (act === 'copy') {
+    const txt = JSON.stringify({mode: S.mode, buffer: S.buffer, ev: S.ev, ver: S.ver});
+    const done = ok => { t.textContent = ok ? 'Copiato! Incolla in chat' : 'Copia a mano il testo qui sotto'; if (!ok) { let ta = document.getElementById('cpbox'); if (!ta) { ta = document.createElement('textarea'); ta.id = 'cpbox'; ta.style.cssText = 'width:100%;height:120px;margin-top:8px'; t.parentNode.appendChild(ta); } ta.value = txt; ta.select(); } };
+    try { navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)); } catch (e) { done(false); }
+    return;
+  }
+  else if (act === 'resetev') {   // due tocchi: la prima volta chiede conferma; la versione precedente resta nello storico
+    if (!S.ui['rst-' + id]) { S.ui['rst-' + id] = true; render(); return; }
+    S.ui['rst-' + id] = false; delete S.ev[id]; restoreNote[id] = 'azzerato da Max'; evState(e);
+  }
+  else if (act === 'ack') { evState(e).mh = e.menu_hash; }
+  else if (act === 'history') { if (hist && hist.key === id) { hist = null; render(); return; } hist = {key: id, loading: true}; render(); API.call('cc_history', {key: id}).then(r => { hist = {key: id, versions: r.versions}; render(); }).catch(() => { hist = null; render(); }); return; }
+  else if (act === 'restore') { const v = hist && hist.versions.find(x => x.ver === +t.dataset.v); if (!v) return; S.ev[id] = JSON.parse(JSON.stringify(v.state)); restoreNote[id] = 'ripristinata la versione ' + v.ver; hist = null; }
+  else if (act === 'import') { t.disabled = true; API.call('cc_import', {data: local}).then(() => { try { localStorage.setItem(LOCAL_KEY + '-importato', JSON.stringify(local)); localStorage.removeItem(LOCAL_KEY); } catch (e) {} location.reload(); }).catch(() => { t.disabled = false; t.textContent = 'Non è andata: riprova'; }); return; }
+  else if (act === 'keepmine') { S.ver[t.dataset.id] = conflicts[t.dataset.id]; delete conflicts[t.dataset.id]; dirty.add(t.dataset.id); sync = {state: 'saving'}; flush(); render(); return; }
+  else if (act === 'reloadsrv') { location.reload(); return; }
+  else if (act === 'open') S.ui[t.dataset.key] = !S.ui[t.dataset.key];
+  else if (act === 'guestsrc') evState(e).guests = +t.dataset.n;
+  else if (act === 'clone') {
+    const src = evById('freedom29'); e.dishes = JSON.parse(JSON.stringify(src.dishes)); const es = evState(e); es.clone = true;
+    e.fonti = e.fonti.slice(); e.guests = 0; es.guests = 0;
+  }
+  else if (act === 'addtab') { const u = ui(id); u.tab = t.dataset.t; u.q = ''; u.sel = null; u.qty = ''; u.unit = 'g'; }
+  else if (act === 'addpick') {
+    const u = ui(id); u.sel = t.dataset.id;
+    if (u.tab === 'ing') { const g = INGBY[u.sel]; u.unit = g.pg != null ? 'g' : g.pm != null ? 'ml' : g.pe != null ? 'pz' : 'g'; }
+    else {
+      const r = RECBY[u.sel];
+      if (r && r.lazy) { u.loading = true; API.call('cc_recipe', {id: u.sel}).then(x => { const i = D.rec.findIndex(y => y.id === u.sel); if (i >= 0) D.rec[i] = x.rec; RECBY[u.sel] = x.rec; u.loading = false; u.unit = x.rec.cpp != null ? 'porz.' : (x.rec.cpu != null ? x.rec.cu : 'porz.'); render(); }).catch(() => { u.loading = false; u.sel = null; render(); }); }
+      else u.unit = r.cpp != null ? 'porz.' : (r.cpu != null ? r.cu : 'porz.');
+    }
+  }
+  else if (act === 'addgo') {
+    const u = ui(id), es = evState(e); if (!u.sel || !(+u.qty > 0)) return;
+    const ref = u.tab === 'ing' ? INGBY[u.sel] : RECBY[u.sel];
+    es.extras.push({type: u.tab, refId: u.sel, name: ref.n || ref.t, qty: +u.qty, unit: u.unit || 'porz.'});
+    u.sel = null; u.q = ''; u.qty = '';
+  }
+  else if (act === 'xdel') evState(e).extras.splice(+t.dataset.k, 1);
+  else return;
+  if (['mode'].includes(act)) save('_prefs'); else if (['guestsrc', 'clone', 'addgo', 'xdel', 'resetev', 'ack', 'restore'].includes(act)) save(id);
+  render();
+});
+document.addEventListener('input', ev => {
+  const t = ev.target; const act = t.dataset && t.dataset.act; if (!act) return;
+  if (act === 'cancelled') { S.ui.cancelled = t.checked; render(); return; }
+  if (act === 'buf') { S.buffer = t.checked; save('_prefs'); render(); return; }
+  const id = t.dataset.ev, e = id && evById(id); if (!e) return;
+  const es = evState(e);
+  const num = v => v === '' ? null : Math.max(0, +v);
+  if (act === 'guests') es.guests = Math.min(NMAX, num(t.value) || 0);
+  else if (act === 'mp') es.mp = num(t.value) || 0;
+  else if (act === 'mq') es.mq = num(t.value) || 0;
+  else if (act === 'dishN') dState(es, t.dataset.i).N = num(t.value) == null ? null : Math.min(NMAX, num(t.value));
+  else if (act === 'man') dState(es, t.dataset.i).man[t.dataset.r] = num(t.value) || 0;
+  else if (act === 'ovr') { const v = t.value; if (v === '') delete es.ovr[t.dataset.k]; else es.ovr[t.dataset.k] = v; }
+  else if (act === 'xprice') { es.extras[+t.dataset.k].price = t.value === '' ? null : t.value; }
+  else if (act === 'addq') { const u = ui(id); u.q = t.value; u.sel = null; }
+  else if (act === 'addqty') { ui(id).qty = t.value; }
+  else if (act === 'addunit') { ui(id).unit = t.value; }
+  else return;
+  if (!['addq', 'addqty', 'addunit'].includes(act)) save(id);
+  clearTimeout(window._rt); window._rt = setTimeout(render, 450);   // aspetta che finisci di scrivere: così il cursore non salta
+});
+// ripristina il menu copiato per Freedom 30/09 se l'avevi scelto
+D.events.forEach(e => { const es = S.ev[e.id]; if (es && es.clone && !e.dishes.length) e.dishes = JSON.parse(JSON.stringify(evById('freedom29').dishes)); });
+render();
+}
+boot();
+</script>

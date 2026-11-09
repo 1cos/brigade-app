@@ -360,6 +360,7 @@ SCREENS.catering = { title: () => t('w_cat'), c: '--cat', render() {
   const top = head(t('next2'), t('w_cat'));
   if (!d) return `<div class="page">${top}${waiting('catering')}</div>`;
   return `<div class="page" style="--c:var(--cat)">${top}
+    ${isChef() ? `<div class="list"><button class="row" data-a="openPassati"><span class="main"><div class="name">📊 Food cost catering</div><div class="meta">Tutti gli eventi di Brigade · menu, prezzi e le tue modifiche salvate</div></span><span class="chev">›</span></button></div>` : ''}
     <div class="list">${d.events.map(e => `<button class="row" data-a="openEvent" data-id="${e.id}"><span class="dotc"></span><span class="main"><div class="name">${esc(e.name)}</div><div class="meta">${shortDay(e.date)}${e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''}${e.guests ? ' · ' + t('guests', { n: e.guests }) : ''} · ${e.ts_menu ? t('ts_menu') + ' · ' + e.ts_menu.lines.length : I.plural(e.dishes.length, 'dishes')}</div></span><span class="chev">›</span></button>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('no_events')}</div></span></div>`}</div>
   </div>`;
 } };
@@ -380,6 +381,9 @@ SCREENS.event = { title: p => { const d = API.peek('catering'); const e = d && d
     ${tsHtml}${oldHtml}
   </div>`;
 } };
+
+/* B-99c food cost catering (solo Chef) — pagina in catering_cost.html: legge e salva tramite il server di Brigade */
+SCREENS.cpassati = { title: () => 'Food cost catering', c: '--cat', render() { return `<div class="page" style="--c:var(--cat)">${backBtn()}<iframe src="catering_cost.html" title="Food cost catering" style="width:100%;height:calc(100vh - 120px);min-height:560px;border:0;border-radius:12px;background:#fff"></iframe></div>`; } };
 
 /* ============ PLANNER (my shifts; the to-do planner is its own pending module) ============ */
 SCREENS.planner = { title: () => t('w_plan'), c: '--plan', render() {
@@ -528,6 +532,7 @@ const A = {
     openTab('recipe', s.id, { s: 'recipe', p: { id: s.id, name: s.name, factor: s.factor, subWarn: s.warn, prep: '', tab: p.tab } }); },
   openSubId(el) { const f = num(el.dataset.f); openTab('recipe', el.dataset.r, { s: 'recipe', p: { id: el.dataset.r, factor: f > 0 ? f : 1, subWarn: null, prep: '', tab: cur().p.tab } }); },
   rcTab(el) { cur().p.tab = el.dataset.k; render(true); },
+  openPassati() { openTab('cpassati', 'list', { s: 'cpassati', p: {} }); },
   openEvent(el) { openTab('event', el.dataset.id, { s: 'event', p: { id: el.dataset.id } }); },
   station(el) { cur().p = Object.assign(cur().p || {}, { st: el.dataset.k }); render(true); },
   refresh() { Object.keys(ERR).forEach(k => delete ERR[k]); API.forget(); render(true); },
