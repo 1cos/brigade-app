@@ -99,8 +99,8 @@ const money = n => (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-US'
 const money4 = n => '$' + n.toFixed(4);
 const up = x => Math.ceil(x * 100 - 1e-9) / 100;               // regola ADM03: arrotondo per eccesso al centesimo
 const fq = n => (Math.round(n * 100) / 100).toLocaleString('en-US', {maximumFractionDigits: 2});
-const dmy = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return d + '/' + m; };
-const fdate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('it-IT', {weekday: 'short', day: 'numeric', month: 'long'}); };
+const dmy = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return m + '/' + d; };   // americano: mese/giorno
+const fdate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', {weekday: 'short', month: 'long', day: 'numeric'}); };
 
 // ---------------------------------------------------------------- stato
 // ---------------------------------------------------------------- stato: salvato in Brigade (una versione per salvataggio), non nel browser
@@ -339,7 +339,7 @@ function eventHtml(e) {
    <div class="row" style="margin-top:10px"><span class="note">Ricavo menu da BEO:</span>
      <label class="row" style="gap:4px">$<input type="number" min="0" step="1" data-fid="mp-${e.id}" data-act="mp" data-ev="${e.id}" value="${es.mp}" aria-label="Prezzo menu per persona"> a persona ×</label>
      <input type="number" min="0" step="1" data-fid="mq-${e.id}" data-act="mq" data-ev="${e.id}" value="${es.mq}" aria-label="Menu fatturati"> menu = <b class="num">${money(ev.rev)}</b></div>
-   ${empty ? `<div class="alert miss" style="margin-top:12px">Nessun menu trovato per questa data. ${e.id === 'freedom30' ? '<button data-act="clone" data-ev="freedom30">Usa lo stesso menu del 29/09 (da confermare)</button>' : ''}</div>` : ''}
+   ${empty ? `<div class="alert miss" style="margin-top:12px">Nessun menu trovato per questa data. ${e.id === 'freedom30' ? '<button data-act="clone" data-ev="freedom30">Usa lo stesso menu del 09/29 (da confermare)</button>' : ''}</div>` : ''}
    <div style="margin-top:14px">${e.dishes.map((d, i) => dishHtml(e, ev, d, i, ev.dishes[i])).join('')}</div>
    ${es.extras.length ? `<div class="dish"><h3>Articoli e ricette aggiunti</h3>${linesTable(e, ev, ev.extras)}
       <div class="row" style="margin-top:6px">${es.extras.map((x, k) => `<button class="chip" data-act="xdel" data-ev="${e.id}" data-k="${k}">togli ${esc(x.name)}</button>`).join(' ')}</div></div>` : ''}
@@ -498,7 +498,7 @@ document.addEventListener('input', ev => {
   if (!['addq', 'addqty', 'addunit'].includes(act)) save(id);
   clearTimeout(window._rt); window._rt = setTimeout(render, 450);   // aspetta che finisci di scrivere: così il cursore non salta
 });
-// ripristina il menu copiato per Freedom 30/09 se l'avevi scelto
+// ripristina il menu copiato per Freedom 09/30 se l'avevi scelto
 D.events.forEach(e => { const es = S.ev[e.id]; if (es && es.clone && !e.dishes.length) e.dishes = JSON.parse(JSON.stringify(evById('freedom29').dishes)); });
 render();
 }
