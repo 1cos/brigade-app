@@ -383,7 +383,8 @@ SCREENS.event = { title: p => { const d = API.peek('catering'); const e = d && d
 } };
 
 /* B-99c food cost catering (solo Chef) — pagina in catering_cost.html: legge e salva tramite il server di Brigade */
-SCREENS.cpassati = { title: () => 'Food cost catering', c: '--cat', render() { return `<div class="page" style="--c:var(--cat)">${backBtn()}<iframe src="catering_cost.html" title="Food cost catering" style="width:calc(100% + 32px);margin:0 -16px;height:calc(100vh - 120px);min-height:560px;border:0;background:transparent"></iframe></div>`; } };
+const CC_V = Date.now();   // una pagina nuova a ogni apertura di Brigade (GitHub tiene i file 10 minuti in memoria); costante finché l'app resta aperta, così il riquadro non si ricarica da solo
+SCREENS.cpassati = { title: () => 'Food cost catering', c: '--cat', render() { return `<div class="page" style="--c:var(--cat)">${backBtn()}<iframe src="catering_cost.html?v=${CC_V}" title="Food cost catering" style="width:calc(100% + 32px);margin:0 -16px;height:calc(100vh - 120px);min-height:560px;border:0;background:transparent"></iframe></div>`; } };
 
 /* ============ PLANNER (my shifts; the to-do planner is its own pending module) ============ */
 SCREENS.planner = { title: () => t('w_plan'), c: '--plan', render() {
