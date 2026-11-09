@@ -6,7 +6,7 @@
   const BRIGADE_URL = 'https://1cos.github.io/back-of-house/';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = v => { const n = parseFloat(v); return isFinite(n) ? (Math.round(n * 100) / 100).toLocaleString(I.locale(), { maximumFractionDigits: 2 }) : ''; };
-  const day = d => d ? new Date((String(d).length === 10 ? d : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(d))) + 'T12:00:00Z').toLocaleDateString(I.locale(), { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  const day = d => d ? new Date((String(d).length === 10 ? d : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(d))) + 'T12:00:00Z').toLocaleDateString(I.dateLocale(), { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }) : '';
   const pl = (n, en, it, es) => [`${n} ${n === 1 ? en[0] : en[1]}`, `${n} ${n === 1 ? it[0] : it[1]}`, `${n} ${n === 1 ? es[0] : es[1]}`];
   const sold = p => p.sold ? [`Sold ${p.sold} times in the last 30 days. `, `Venduto ${p.sold} volte negli ultimi 30 giorni. `, `Vendido ${p.sold} veces en los últimos 30 días. `] : ['', '', ''];
   const join3 = (a, b) => a.map((x, i) => x + b[i]);

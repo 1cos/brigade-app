@@ -425,7 +425,7 @@ function conseqHtml(d, id, ctxOld, ctxNew) {
   if (!c.sale.length && !c.production.length && !th.length) return `<div class="mr-muted">${T('conseq_none')}</div>`;
   return `<div class="mr-conseq"><div class="mr-muted">${T('conseq_title')}</div>${c.sale.length ? `<p class="mr-sim">${T('conseq_sale')}</p>` + rows(c.sale) : ''}${c.production.length ? `<p class="mr-sim">${T('conseq_prod')}</p>` + rows(c.production) : ''}${th.length ? `<p class="mr-sim">${T('conseq_theo')}</p>` + rows(th) : ''}</div>`;
 }
-const dt = iso => iso ? new Intl.DateTimeFormat(loc(), { timeZone: 'America/Chicago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '';
+const dt = iso => iso ? new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '';
 
 /* ============ INTERACTIONS ============ */
 function entry() { return H.entry(); }

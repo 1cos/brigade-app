@@ -29,7 +29,7 @@ const fmt = v => { const n = num(v); if (n === null) return ''; return (Math.rou
 const cut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 const cat = c => { const x = String(c || 'Other').split('|')[0].trim(); return x ? x[0].toUpperCase() + x.slice(1).toLowerCase() : 'Other'; };
 const tFmt = iso => iso ? new Intl.DateTimeFormat(I.locale(), { timeZone: 'America/Chicago', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '';
-const dayName = (d, opt = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(d + 'T12:00:00Z').toLocaleDateString(I.locale(), Object.assign({ timeZone: 'UTC' }, opt));
+const dayName = (d, opt = { weekday: 'long', day: 'numeric', month: 'long' }) => new Date(d + 'T12:00:00Z').toLocaleDateString(I.dateLocale(), Object.assign({ timeZone: 'UTC' }, opt));
 const shortDay = d => dayName(d, { weekday: 'short', day: 'numeric', month: 'short' });
 const hourCDT = () => +new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hour12: false }).format(new Date()) % 24;
 const PLAN = { do_first: 'do_first', prep_today: 'prep_today', count_first: 'count_first' };
@@ -373,7 +373,7 @@ SCREENS.event = { title: p => { const d = API.peek('catering'); const e = d && d
   const m = e.ts_menu;
   const tsLine = l => `<div class="row"><span class="main"><div class="name">${esc(l.name)}</div>${l.qty != null && l.qty !== '' ? `<div class="meta">${t('ts_qty', { n: esc(l.qty) })}</div>` : ''}${l.details ? `<div class="meta">${esc(l.details)}</div>` : ''}</span></div>`;
   const tsHtml = m ? `<section><h2>${t('ts_menu')}</h2><div class="list">${m.lines.map((l, i) => (l.section && (i === 0 || m.lines[i - 1].section !== l.section) ? `<div class="row"><span class="main"><div class="meta"><b>${esc(l.section)}</b></div></span></div>` : '') + tsLine(l)).join('') || `<div class="row"><span class="main"><div class="meta">${t('ts_empty')}</div></span></div>`}</div>
-    <p class="note">${t('ts_updated', { v: m.version, d: m.received_at ? esc(new Date(m.received_at).toLocaleString(I.locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) : '—' })}</p></section>` : '';
+    <p class="note">${t('ts_updated', { v: m.version, d: m.received_at ? esc(new Date(m.received_at).toLocaleString(I.dateLocale(), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })) : '—' })}</p></section>` : '';
   const oldHtml = m ? (e.dishes.length ? `<section><h2>${t('old_copy')}</h2><p class="note">${t('old_copy_note')}</p><div class="list">${e.dishes.map(dish).join('')}</div></section>` : '')
     : `<section><h2>${t('what_cook')}</h2><div class="list">${e.dishes.map(dish).join('') || `<div class="row"><span class="main"><div class="meta">${t('menu_not_set')}</div></span></div>`}</div></section>`;
   return `<div class="page" style="--c:var(--cat)">${backBtn()}

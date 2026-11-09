@@ -45,7 +45,7 @@
   const store = (d, s) => { try { localStorage.setItem(KEY(d), JSON.stringify(s)) } catch (e) {} };
   const nf = (x, dec) => Number(x).toLocaleString(I.locale(), { maximumFractionDigits: dec == null ? 1 : dec });
   const qty = (v, u) => v == null ? '—' : u === 'g' ? (v >= 1000 ? nf(v / 1000, 2) + ' kg' : nf(v, 0) + ' g') : nf(v, 0) + (u === 'pz' ? '' : ' ' + u);
-  const shortD = iso => new Intl.DateTimeFormat(I.locale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(iso + 'T12:00:00Z'));
+  const shortD = iso => new Intl.DateTimeFormat(I.dateLocale(), { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(iso + 'T12:00:00Z'));
   const longD = iso => new Intl.DateTimeFormat(I.locale(), { weekday: 'long', timeZone: 'UTC' }).format(new Date(iso + 'T12:00:00Z'));
   const addDay = (iso, n) => new Date(Date.parse(iso + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10)
   const refTxt = r => r.lo === r.hi ? String(r.lo) : r.lo + '–' + r.hi

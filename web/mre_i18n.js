@@ -10,7 +10,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   draft_open: ['open draft', 'bozza aperta', 'borrador abierto'],
   restore_draft: ['Take back as draft', 'Riprendi come bozza', 'Retomar como borrador'],
   restored_draft: ['v{v} is now the draft. The official recipe has not changed.', 'La v{v} è ora la bozza. La ricetta ufficiale non è cambiata.', 'La v{v} es ahora el borrador. La receta oficial no cambió.'],
-  hist_official: ['The recipe in use is the official one in Brigade; the history keeps the lab copies of 15/10 and the drafts.', 'La ricetta in uso è quella ufficiale di Brigade; lo storico tiene le copie del laboratorio del 15/10 e le bozze.', 'La receta en uso es la oficial de Brigade; el historial guarda las copias del laboratorio y los borradores.'],
+  hist_official: ['The recipe in use is the official one in Brigade; the history keeps the lab copies of 10/15 and the drafts.', 'La ricetta in uso è quella ufficiale di Brigade; lo storico tiene le copie del laboratorio del 10/15 e le bozze.', 'La receta en uso es la oficial de Brigade; el historial guarda las copias del laboratorio y los borradores.'],
   err_pubblicazione_bloccata: ['Publish is locked: the official recipes do not change from Brigade 2.0 yet.', 'Pubblica è bloccato: le ricette ufficiali non cambiano ancora da Brigade 2.0.', 'Publicar está bloqueado.'],
   err_produzione_solo_simulata: ['Production can only be simulated for this recipe for now (no stock is changed).', 'Per questa ricetta la produzione per ora è solo simulata (nessuna scorta cambia).', 'Por ahora la producción solo se simula.'],
   isolated: ['Isolated test area: the official Brigade recipe does not change. Publishing to Brigade needs a separate OK from Chef.', 'Spazio di prova isolato: la ricetta ufficiale di Brigade non cambia. La pubblicazione in Brigade richiede un OK separato dello Chef.', 'Espacio de prueba aislado: la receta oficial de Brigade no cambia. Publicar en Brigade requiere un OK aparte de Chef.'],
@@ -129,7 +129,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   s_stima_non_valida: ['estimate not valid', 'stima non valida', 'estimación no válida'], s_stima_chef: ['Chef\'s estimate', 'stima dello Chef', 'estimación del Chef'],
   // MR-05 regola semplice: 1 ml = 1 g senza densità, scritto solo nelle Info tecniche
   t_d1: ['Weight ↔ volume as 1 ml = 1 g', 'Peso ↔ volume con 1 ml = 1 g', 'Peso ↔ volumen con 1 ml = 1 g'],
-  t_d1_note: ['(no density for these lines: Chef\'s rule 22/10, the difference is minimal)', '(queste righe non hanno una densità: regola dello Chef 22/10, differenza minima)', '(estas líneas no tienen densidad: regla del Chef 22/10, diferencia mínima)'],
+  t_d1_note: ['(no density for these lines: Chef\'s rule 10/22, the difference is minimal)', '(queste righe non hanno una densità: regola dello Chef 10/22, differenza minima)', '(estas líneas no tienen densidad: regla del Chef 10/22, diferencia mínima)'],
   // MR-04 «Pubblica ricetta per ricetta»
   save_simple: ['Save', 'Salva', 'Guardar'],
   pending_pub: ['Changes not in Brigade yet: tap «Save and publish» at the bottom.', 'Modifiche non ancora in Brigade: tocca «Salva e pubblica» in fondo.', 'Cambios todavía no en Brigade: toca «Guardar y publicar» abajo.'],
