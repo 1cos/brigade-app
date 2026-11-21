@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta name="robots" content="noindex">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Brigade">
+<meta name="theme-color" content="#f2f5fa">
+<meta name="robots" content="noindex,nofollow">
+<title>Brigade</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Newsreader:opsz,wght@6..72,600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="login" hidden></div>
+<div id="top">
+  <div class="lab"><span class="who"><span class="brand"><b>Brigade</b> · </span><span id="who"></span></span><span class="acct"><button class="swbtn" id="switch" data-a="switchUser" hidden></button><span class="testbar" id="mode"></span></span></div>
+  <div id="tabs" role="tablist" hidden></div>
+</div>
+<div id="main"></div>
+<nav id="worlds"></nav>
+<div id="scrim" hidden></div>
+<div id="sheet" hidden></div>
+<script src="config.js"></script>
+<script src="i18n.js"></script>
+<script src="api.js"></script>
+<script src="recipe.js"></script>
+<script src="mre_i18n.js"></script>
+<script type="module">import * as MRE from './mre_engine.js'; window.MRE = MRE; window.dispatchEvent(new Event('app-data'));</script>
+<script src="mre.js"></script>
+<script src="office.js"></script>
+<script src="kitchen.js"></script>
+<script src="checklist.js"></script>
+<script src="service_board.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
