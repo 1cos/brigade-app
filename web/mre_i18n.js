@@ -209,6 +209,11 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   fc_portion_c: ['Food cost per portion', 'Food cost a porzione', 'Food cost por porción'], what_changes: ['What changes', 'Cosa cambia', 'Qué cambia'],
   publish_word: ['Publish', 'Pubblica', 'Publicar'], publish_off: ['Not active in test mode', 'Non attiva in modalità prova', 'No activa en modo prueba'],
   // R1.16 (Chef 21/10): the state of the work is always visible — Editing / Saving / Saved / Error — and Draft ≠ In use
+  mod_label: ['Portion when sold as a modifier', 'Porzione quando è venduta come modifier', 'Porción cuando se vende como modifier'],
+  mod_whole: ['whole', 'intera', 'entera'],
+  mod_prev: ['Normal portion {n} g → as a modifier {m} g · cost {c}', 'Porzione normale {n} g → come modifier {m} g · costo {c}', 'Porción normal {n} g → como modifier {m} g · coste {c}'],
+  mod_prev_nog: ['As a modifier {f} of the portion · cost {c}', 'Come modifier {f} della porzione · costo {c}', 'Como modifier {f} de la porción · coste {c}'],
+  err_modifier_senza_nomi_pos: ['This recipe is not sold as a modifier: the modifier portion cannot be set here.', 'Questa ricetta non è venduta come modifier: la porzione modifier non si può impostare qui.', 'Esta receta no se vende como modifier: aquí no se puede fijar la porción modifier.'],
   err_rifiuto: ['Not saved: check the line shown.', 'Non salvata: controlla la riga indicata.', 'No guardada: revisa la línea indicada.'],
   saved_toast: ['Saved. The recipe is changed for everyone.', 'Salvata. La ricetta è cambiata per tutti.', 'Guardada. La receta cambió para todos.'],
   draft_saved_toast: ['Saved as DRAFT v{v}. Not published: the kitchen still uses the recipe in use.', 'Salvata come BOZZA v{v}. Non pubblicata: in cucina si usa ancora la ricetta in uso.', 'Guardado como BORRADOR v{v}. No publicado: en cocina se usa todavía la receta en uso.'],

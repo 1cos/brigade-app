@@ -128,6 +128,7 @@ function render(p) {
     const bits = []; if (ry.g_derived) bits.push(T('y_lot_derived', { w: nf(ry.g / 1000, 2) })); packs.forEach(l => bits.push(`${nf(l.qty, 1)} × ${esc(lineName(d, l))}`));
     if (bits.length) h += `<div class="mr-meta mr-derived">${T('y_derived')}: ${bits.join(' · ')}</div>`;
     h += `<div class="mr-meta mr-muted">${T('y_real_note')}</div>`; }
+  if (chef && d.recipe && d.recipe.modifier_linked) h += modBlock(d, p, doc, edit, ctx);      // B-191: only the four sides that are sold as POS modifiers
   if (ui(p.id).err && /^y:/.test(ui(p.id).err.key)) h += `<div class="mr-inlerr" role="status">${esc(ui(p.id).err.msg)}</div>`;
   if (edit && p.adv) h += `<div class="mr-meta">${T('stock')}: <select data-ms="has_stock" class="mr-sel"><option value="1" ${doc.has_stock ? 'selected' : ''}>${T('yes')}</option><option value="0" ${!doc.has_stock ? 'selected' : ''}>${T('no')}</option></select></div>`;
   if (m === 'view' && f !== 1) {
@@ -222,6 +223,23 @@ function render(p) {
 }
 const cat = c => { const x = String(c || '').split('|')[0].trim(); return x ? x[0].toUpperCase() + x.slice(1).toLowerCase() : ''; };
 
+/* B-191: «Porzione quando è venduta come modifier» — one number on the original recipe (empty = not set), read by bots, prep lists and Shadow; the preview is read-only and uses the same engine as the food cost */
+const MODS = [[null, '—'], [0.5, '½'], [1 / 3, '⅓'], [0.25, '¼'], [0.75, '¾'], [1, null]];
+const modTxt = m => { const o = MODS.find(x => x[0] != null && Math.abs(x[0] - m) < 1e-3); return o ? (o[1] || T('mod_whole')) : nf(m, 3); };
+function modBlock(d, p, doc, edit, ctx) {
+  const y = doc.yield || {}, m = Number(y.modifier) > 0 ? Number(y.modifier) : null;
+  if (!edit && m == null) return '';
+  let h = `<div class="mr-meta mr-mod"><span class="mr-ylab">${T('mod_label')}</span> `;
+  h += edit ? `<select data-ms="mod" class="mr-sel">${MODS.map(([v, l]) => `<option value="${v == null ? '' : v}" ${(v == null ? m == null : m != null && Math.abs(v - m) < 1e-3) ? 'selected' : ''}>${esc(l || T('mod_whole'))}</option>`).join('')}</select>` : `<b>${esc(modTxt(m))}</b>`;
+  h += '</div>';
+  if (m != null) {
+    const ry = E().resolveDoc(doc).yield || {}, P = Number(y.portions) > 0 ? Number(y.portions) : null;
+    const normal = Number(y.portion_g) > 0 ? Number(y.portion_g) : (Number(ry.g) > 0 && P ? ry.g / P : null);
+    const c = !PREVIEW && d.cost ? d.cost : E().cost(p.id, 1, ctx), pp = c && c.per_portion != null ? c.per_portion * m : null, part = c && c.complete === false ? ' (' + T('fc_partial') + ')' : '';      // a partial food cost says so, never a bare number
+    if (normal != null || pp != null) h += `<div class="mr-meta mr-muted">${normal != null ? T('mod_prev', { n: nf(normal, 0), m: nf(normal * m, 1), c: usd(pp) + part }) : T('mod_prev_nog', { f: esc(modTxt(m)), c: usd(pp) + part })}</div>`;
+  }
+  return h;
+}
 /* R1.19 (Chef 22/10): "prezzo di fiducia" — only on an ingredient with NO invoice price; a stima for an indicative food cost, never an invoice */
 function estHtml(d, l) {
   const f = d.facts[l.ref];
@@ -792,6 +810,7 @@ function onChange(ev) {
   const p = entry(), doc = WORK[p && p.id]; if (!doc) return;
   const [k, a] = s.dataset.ms.split(':');
   if (k === 'has_stock') doc.has_stock = s.value === '1';
+  else if (k === 'mod') { doc.yield.modifier = s.value === '' ? null : Number(s.value); }      // B-191
   else if (k === 'pu') { if (s.value === 'portion') delete doc.yield.portion_unit; else doc.yield.portion_unit = s.value; }
   else if (k === 'per') { const l = doc.lines.find(x => x.id === a); if (!l) return; if (s.value === 'portion') l.per = 'portion'; else delete l.per; }
   else { const l = doc.lines.find(x => x.id === a); if (!l) return; if (k === 'role') l.role = s.value; if (k === 'unit') l.unit = s.value === '—' ? null : (E().standardUnit ? E().standardUnit(s.value) : s.value); }
