@@ -87,6 +87,7 @@ function render(p) {
   // opened with "Edit" from any recipe card (B-25): start the editor on the open draft, or on the recipe in use
   if (p.startEdit && H.isChef()) { startWork(d, p); queueTr(p.id, 400); p.edit = true; p.pv = false; p.adv = false; p.panel = null; p.saved = !!d.draft; delete p.startEdit; }
   const chef = H.isChef(), m = mode(d, p), edit = m === 'edit', pv = m === 'preview';
+  if (!edit && !pv && !p.startEdit && EDITED[p.id] && !WORK[p.id]) { EDITED[p.id] = false; try { localStorage.removeItem('mre_unsaved_' + p.id); } catch (e) {} }   // left the editor on purpose: nothing comes back
   const doc = shownDoc(d, p), draftView = m === 'view' && showsDraft(d, p) && !!d.draft;
   const f = m !== 'view' ? 1 : (p.f > 0 ? p.f : 1);
   PREVIEW = m !== 'view' || showsDraft(d, p);
@@ -467,7 +468,7 @@ function pubHist(p, d) {
 function flash(id, msg, bad) { ui(id).flash = { msg, bad: !!bad, at: Date.now() }; }
 async function call(op, body, okMsg) {
   try { const r = await API.call(op, body); const p = entry(); if (okMsg && p && p.id) flash(p.id, okMsg); return r; }
-  catch (e) { const c = String(e.code || '').split(':')[0]; const p = entry(); if (p && p.id) { flash(p.id, T('err_' + c) !== 'm_err_' + c ? T('err_' + c) : T('error', { e: e.code || 'error' }), true); H.render(true) } return null; }
+  catch (e) { const c = String(e.code || '').split(':')[0]; const p = entry(); if (p && p.id) { flash(p.id, c === 'rifiuto' ? String(e.code).replace(/^rifiuto:\s*/, '') : T('err_' + c) !== 'm_err_' + c ? T('err_' + c) : T('error', { e: e.code || 'error' }), true); H.render(true) } return null; }
 }
 /* ---- background saving (R1.16) ----
    Every change is applied to the working copy and shown AT ONCE; the server copy follows in the background.
@@ -482,12 +483,14 @@ async function flush(id) {
   if (s.dead || !WORK[id] || s.seq === s.done) { if (s.state !== 'error' && s.seq === s.done && s.done) { s.state = 'saved'; paintStatus(id); } return s.state !== 'error'; }
   const seq = s.seq, doc = JSON.parse(JSON.stringify(WORK[id])), d = H.peek('mre_recipe', { id });
   s.state = 'saving'; paintStatus(id);
-  s.busy = API.call('mre_save_draft', { id, doc, base: d && d.recipe ? d.recipe.current_version : undefined });
+  const own = !!(d && d.recipe && d.recipe.lab_only);          // R1.28 (Max 21/11): a recipe in use has NO server draft: the background copy stays on this device only, «Salva» is the only official act
+  if (!own) { try { localStorage.setItem('mre_unsaved_' + id, JSON.stringify({ doc, base: d && d.recipe ? d.recipe.current_version : null, at: Date.now() })); } catch (e) {} }
+  s.busy = own ? API.call('mre_save_draft', { id, doc, base: d && d.recipe ? d.recipe.current_version : undefined }) : Promise.resolve({ draft_version: 0 });
   let r = null; try { r = await s.busy; } catch (e) { s.err = String(e.code || 'error').split(':')[0]; } finally { s.busy = null; }
   if (SV[id] !== s || s.dead) return !!r;
   if (!r) { s.state = 'error'; paintStatus(id); return false; }
   s.done = Math.max(s.done, seq); s.ver = r.draft_version > 0 ? r.draft_version : null; s.at = new Date().toISOString(); s.err = null;
-  keepDraft(id, doc, r.draft_version, s.at);
+  if (own) keepDraft(id, doc, r.draft_version, s.at);          // a recipe in use has no draft, not even in memory: otherwise reopening it shows the abandoned text
   if (s.seq !== s.done) return flush(id);                    // the Chef kept working while this was saving: send the newest copy
   s.state = 'saved'; paintStatus(id); API.get('mre_list', null, 0).catch(() => {}); return true;
 }
@@ -561,8 +564,12 @@ function normalizeSteps(doc) {
   }
 }
 /** Start editing: the free yield note is kept as history only (never a number source again). */
+const EDITED = {};                                                // recipes edited in THIS page load: if the Chef leaves the editor by any normal way, the local copy is dropped (only a lost page brings it back)
 function startWork(d, p) {
-  const w = JSON.parse(JSON.stringify(d.draft || d.doc)), y = w.yield || (w.yield = {});
+  let base0 = d.draft || d.doc;                                   // R1.28: unsaved text of this device (never official) comes back if the recipe was not changed by anybody meanwhile
+  try { const u = JSON.parse(localStorage.getItem('mre_unsaved_' + p.id) || 'null'); if (u && u.doc && Date.now() - (u.at || 0) < 12 * 3600e3 && (!d.recipe || u.base == null || u.base === d.recipe.current_version)) base0 = u.doc; } catch (e) {}
+  EDITED[p.id] = true;
+  const w = JSON.parse(JSON.stringify(base0)), y = w.yield || (w.yield = {});
   if (String(y.label || '').trim()) { y.label_hist = (y.label_hist || []).concat([y.label]); y.label = null; }
   normalizeSteps(w); WORK[p.id] = w; return w;
 }
@@ -638,10 +645,11 @@ function onClick(ev) {
       if (d.source !== 'official' && !(d.recipe && d.recipe.lab_only)) { w.busy = null; (async () => { if (!(await flush(p.id))) return;      // test lab: «Salva» publishes the version there, as «Pubblica» did
         const r = await call('mre_publish', { id: p.id, reason: w.reason || '', base: d.recipe.current_version }); if (!r) return;
         flash(p.id, T('published', { v: r.version })); delete WORK[p.id]; p.edit = false; p.saved = false; p.f = 1; w.reason = ''; forget(); H.render(true); })(); return; }
-      (async () => { const s = sv(p.id); if (s.seq) { const ok = await flush(p.id); if (!ok) { w.busy = null; paint(); return; } }
-      delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'draft'; w.busy = null;
-      API.forget('mre_recipe'); await API.get('mre_recipe', { id: p.id }, 0).catch(() => {}); API.get('mre_list', null, 0).catch(() => {});
-      H.render(true); const b = document.querySelector('#main [data-m="pubprev"]'); if (b) { b.scrollIntoView({ block: 'center' }); b.click(); } })(); return; }
+      (async () => { const s = sv(p.id); clearTimeout(s.t);                  // R1.28 (Max 21/11): «Salva» = the recipe is changed for everyone at once: no draft, no «Verified», no preview
+        const doc = JSON.parse(JSON.stringify(WORK[p.id] || {})); const r = await call('mre_salva', { id: p.id, doc, base: d.recipe ? d.recipe.current_version : undefined }); w.busy = null;
+        if (!r) { paint(); return; }                                         // a refusal / «reopen and try again» is shown by call() in one plain line
+        s.dead = true; try { localStorage.removeItem('mre_unsaved_' + p.id); } catch (e) {} delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; p.view = 'live'; d.draft = null; d.avvisi = r.avvisi || [];
+        flash(p.id, T('saved_toast')); API.forget('mre_recipe'); await API.get('mre_recipe', { id: p.id }, 0).catch(() => {}); API.get('mre_list', null, 0).catch(() => {}); forget(p.id); H.render(true); document.getElementById('main').scrollTop = 0; })(); return; }
   else if (k === 'retry') { flush(p.id); return; }
   else if (k === 'trs') { const o = w.trOpen || (w.trOpen = {}); o[a1] = !o[a1]; paint(); return; }
   else if (k === 'trok') { const st = work().steps[+a1]; if (st) { st.tr = Object.assign({}, st.tr, { [a2]: 'chef' }); touch(p); } paint(); return; }
@@ -650,6 +658,7 @@ function onClick(ev) {
   else if (k === 'cancel') { if (!w.sure) { w.sure = true; H.render(true); setTimeout(() => { w.sure = false; }, 4000); return; }   // second tap discards: never a browser dialog
       w.sure = false; if (w.busy) return; w.busy = k;
       (async () => { const s = sv(p.id); s.dead = true; clearTimeout(s.t); if (s.busy) await s.busy.catch(() => {});      // no save may arrive after the discard
+        try { localStorage.removeItem('mre_unsaved_' + p.id); } catch (e) {}
         const had = d.draft || s.done; const r = had ? await call('mre_discard', { id: p.id }, T('discarded')) : true; w.busy = null;
         if (!r) { s.dead = false; s.seq++; paint(); return; }
         delete WORK[p.id]; delete SV[p.id]; p.edit = false; p.pv = false; p.saved = false; d.draft = null; d.versions = (d.versions || []).filter(v => v.state !== 'bozza'); forget(p.id); H.render(true); })(); return; }
@@ -819,8 +828,9 @@ window.MreUI = {
     m.addEventListener('click', onClick, true); m.addEventListener('focusout', onBlurText); m.addEventListener('change', onChange); m.addEventListener('input', onInput); },
   render,
   /* sign-out / switch user: nothing of the previous person's working copies stays in memory */
-  reset() { Object.keys(SV).forEach(k => { clearTimeout(SV[k].t); SV[k].dead = true; delete SV[k]; }); Object.keys(WORK).forEach(k => delete WORK[k]); Object.keys(UI).forEach(k => delete UI[k]); clearTimeout(qT); },
+  reset() { try { Object.keys(localStorage).filter(k => k.startsWith('mre_unsaved_')).forEach(k => localStorage.removeItem(k)); } catch (e) {} Object.keys(SV).forEach(k => { clearTimeout(SV[k].t); SV[k].dead = true; delete SV[k]; }); Object.keys(WORK).forEach(k => delete WORK[k]); Object.keys(UI).forEach(k => delete UI[k]); clearTimeout(qT); },
   pending,
+  dropLocal(id) { try { localStorage.removeItem('mre_unsaved_' + id); } catch (e) {} delete EDITED[id]; if (SV[id]) { clearTimeout(SV[id].t); SV[id].dead = true; delete SV[id]; } delete WORK[id]; },
   title(p) { const d = H && H.peek('mre_recipe', { id: p.id }); if (d) return I.dn(shownDoc(d, p).title);      // a tab always has a name, also while loading
     const r = H && H.listRow && H.listRow(p.id); return p.name || (r ? (H.isChef() && r.draft_title) || I.dn(r.title) : '…'); },
 };

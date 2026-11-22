@@ -180,7 +180,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   rm_new_note: ['It stays in Recipe Master until you publish it to Brigade.', 'Resta in Recipe Master finché non la pubblichi in Brigade.', 'Queda en Recipe Master hasta que la publiques en Brigade.'],
   pub_editor_hint: ['To publish: save, mark it «Verified», then «Publish to Brigade» in the recipe.', 'Per pubblicare: salva, segna «Verificata», poi «Pubblica in Brigade» nella ricetta.', 'Para publicar: guarda, marca «Verificada» y luego «Publicar en Brigade» en la receta.'],
   err_serve_verificata: ['First mark the recipe «Verified» (after the last change).', 'Prima segna la ricetta «Verificata» (dopo l\'ultima modifica).', 'Primero marca la receta «Verificada» (después del último cambio).'],
-  err_ricetta_cambiata: ['The recipe changed in Brigade after the preview: look at the preview again.', 'La ricetta è cambiata in Brigade dopo l\'anteprima: riguarda l\'anteprima.', 'La receta cambió en Brigade después de la vista previa: vuelve a verla.'],
+  err_ricetta_cambiata: ['The recipe changed in Brigade after the preview: look at the preview again.', 'Qualcun altro ha salvato questa ricetta mentre la modificavi: riaprila e riprova.', 'La receta cambió en Brigade después de la vista previa: vuelve a verla.'],
   err_piano_cambiato: ['The draft changed after the preview: look at the preview again.', 'La bozza è cambiata dopo l\'anteprima: riguarda l\'anteprima.', 'El borrador cambió después de la vista previa: vuelve a verla.'],
   err_non_pubblicabile: ['Not publishable: see the points listed.', 'Non pubblicabile: vedi i punti elencati.', 'No publicable: ver los puntos.'],
   err_niente_da_pubblicare: ['Nothing to publish.', 'Niente da pubblicare.', 'Nada que publicar.'],
@@ -209,6 +209,8 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   fc_portion_c: ['Food cost per portion', 'Food cost a porzione', 'Food cost por porción'], what_changes: ['What changes', 'Cosa cambia', 'Qué cambia'],
   publish_word: ['Publish', 'Pubblica', 'Publicar'], publish_off: ['Not active in test mode', 'Non attiva in modalità prova', 'No activa en modo prueba'],
   // R1.16 (Chef 21/10): the state of the work is always visible — Editing / Saving / Saved / Error — and Draft ≠ In use
+  err_rifiuto: ['Not saved: check the line shown.', 'Non salvata: controlla la riga indicata.', 'No guardada: revisa la línea indicada.'],
+  saved_toast: ['Saved. The recipe is changed for everyone.', 'Salvata. La ricetta è cambiata per tutti.', 'Guardada. La receta cambió para todos.'],
   draft_saved_toast: ['Saved as DRAFT v{v}. Not published: the kitchen still uses the recipe in use.', 'Salvata come BOZZA v{v}. Non pubblicata: in cucina si usa ancora la ricetta in uso.', 'Guardado como BORRADOR v{v}. No publicado: en cocina se usa todavía la receta en uso.'],
   st_start: ['Draft v{v} · no changes yet', 'Bozza v{v} · nessuna modifica', 'Borrador v{v} · sin cambios'],
   st_editing: ['Editing… (saves by itself)', 'Modifiche in corso… (si salva da sola)', 'Editando… (se guarda solo)'],

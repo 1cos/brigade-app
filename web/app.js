@@ -477,7 +477,8 @@ const A = {
     if (S.active === 'home' && S.world === w) { S.ws[w].length = 1; S.ws[w][0].y = 0; }
     S.world = w; S.active = 'home'; render(); },
   tab(el) { remember(); S.active = el.dataset.id; closeSheet(); render(); },
-  close(el) { const id = el.dataset.id, i = S.tabs.findIndex(x => x.id === id), tb = S.tabs[i]; if (i < 0) return; S.tabs.splice(i, 1); if (S.active === id) goOrigin(tb); render(); },
+  close(el) { const id = el.dataset.id, i = S.tabs.findIndex(x => x.id === id), tb = S.tabs[i]; if (i < 0) return; S.tabs.splice(i, 1); try { (tb.stack || []).forEach(x => x && x.s === 'mre' && x.p && x.p.id && window.MreUI && MreUI.dropLocal && MreUI.dropLocal(x.p.id)); } catch (e) {}   /* R1.28: closing the tab on purpose drops the unsaved copy */
+    if (S.active === id) goOrigin(tb); render(); },
   toOrigin() { remember(); goOrigin(tabById(S.active)); render(); },
   back() { const s = stack(); if (s.length > 1) { s.pop(); render(); } },
   openPrep(el) { const id = +el.dataset.id; const i = (API.peek('shift') || { items: [] }).items.find(x => x.id === id); openTab('prep', String(id), { s: 'prep', p: { id, name: i ? i.name : '' } }); },

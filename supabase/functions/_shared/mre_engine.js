@@ -174,11 +174,14 @@ export function showVol(ml, pref, loc) {
   if (ml >= 1000) return { n: nf(ml / 1000, 2, loc), u: 'l' };
   return { n: nf(ml, ml < 10 ? 1 : 0, loc), u: 'ml' };
 }
+const KEEP_WRITTEN = new Set(['gal', 'qt', 'pt', 'fl_oz', 'cup', 'tbsp', 'tsp', 'cl', 'dl', 'mg', 'oz', 'lb']);
 const COUNT_LABEL = { pz: 'pz', nest: 'nidi', portion: 'porz.', case: 'case' };
 /** What the cook reads for one line at a factor: { n, u, theo } — theo = exact value when a whole number was rounded. */
 export function showLine(ln, factor, ctx, pref, loc) {
   const q = Number(ln.qty) * factor, k = normUnit(ln.unit);
   if (k == null || !isFinite(q)) return { n: '—', u: ln.unit || '', status: 'da_definire' };
+  // SALVA UNICO (Max 21/11, «3 galloni restano 3 galloni»): le unità con nome che lo Chef ha scritto NON si trasformano in l/ml/kg/g a schermo; cambia solo il numero
+  if (KEEP_WRITTEN.has(k)) return { n: nf(q, 2, loc), u: ln.unit, status: 'ok' };
   if (k in MASS) return Object.assign(showMass(q * MASS[k], pref, loc), { status: 'ok' });
   if (k in VOL) return Object.assign(showVol(q * VOL[k], pref, loc), { status: 'ok' });
   if (k in COUNT) {
