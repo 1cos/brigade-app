@@ -360,6 +360,7 @@ SCREENS.catering = { title: () => t('w_cat'), c: '--cat', render() {
   const top = head(t('next2'), t('w_cat'));
   if (!d) return `<div class="page">${top}${waiting('catering')}</div>`;
   return `<div class="page" style="--c:var(--cat)">${top}
+    ${isChef() ? `<div class="list"><button class="row" data-a="openPast"><span class="main"><div class="name">📅 Eventi passati e prossimi</div><div class="meta">Production · Shopping · Cost evento, anche per gli eventi già fatti (es. Mason)</div></span><span class="chev">›</span></button></div>` : ''}
     ${isChef() ? `<div class="list"><button class="row" data-a="openPassati"><span class="main"><div class="name">📊 Food cost catering</div><div class="meta">Tutti gli eventi di Brigade · menu, prezzi e le tue modifiche salvate</div></span><span class="chev">›</span></button></div>` : ''}
     <div class="list">${d.events.map(e => `<button class="row" data-a="openEvent" data-id="${e.id}"><span class="dotc"></span><span class="main"><div class="name">${esc(e.name)}</div><div class="meta">${shortDay(e.date)}${e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''}${e.guests ? ' · ' + t('guests', { n: e.guests }) : ''} · ${e.ts_menu ? t('ts_menu') + ' · ' + e.ts_menu.lines.length : I.plural(e.dishes.length, 'dishes')}</div></span><span class="chev">›</span></button>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('no_events')}</div></span></div>`}</div>
   </div>`;
@@ -378,8 +379,55 @@ SCREENS.event = { title: p => { const d = API.peek('catering'); const e = d && d
     : `<section><h2>${t('what_cook')}</h2><div class="list">${e.dishes.map(dish).join('') || `<div class="row"><span class="main"><div class="meta">${t('menu_not_set')}</div></span></div>`}</div></section>`;
   return `<div class="page" style="--c:var(--cat)">${backBtn()}
     ${head(shortDay(e.date) + (e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''), esc(e.name), e.guests ? t(m ? 'guests_event' : 'guests', { n: e.guests }) : '')}
+    ${isChef() ? `<div class="list"><button class="row" data-a="openPlan" data-id="${e.id}"><span class="main"><div class="name">Production · Shopping · Cost</div><div class="meta">Dai collegamenti piatto → ricetta già salvati</div></span><span class="chev">›</span></button></div>` : ''}
     ${tsHtml}${oldHtml}
   </div>`;
+} };
+
+/* B-25 passo 1 — Catering: eventi anche passati + Production / Shopping / Cost evento (solo Chef, SOLA LETTURA, motori e dati già in Brigade) */
+const usd = v => v == null ? '—' : '$' + (Math.round(Number(v) * 100) / 100).toLocaleString(I.l || undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const qtyBig = (q, u) => { q = Number(q); if (!isFinite(q)) return '?'; if (u === 'g' && q >= 1000) return fmt(q / 1000) + ' kg'; if (u === 'ml' && q >= 1000) return fmt(q / 1000) + ' L'; return fmt(q) + ' ' + esc(u || ''); };
+SCREENS.cpast = { title: () => 'Eventi catering', c: '--cat', render() {
+  const top = head('Catering', 'Eventi passati e prossimi');
+  if (!isChef()) return `<div class="page">${backBtn()}${top}<p class="note">Solo per lo Chef.</p></div>`;
+  const d = need('catering_plan', {}, 5 * 60000);
+  if (!d) return `<div class="page">${backBtn()}${top}${waiting('catering_plan')}</div>`;
+  const row = e => `<button class="row" data-a="openPlan" data-id="${e.id}"><span class="dotc"></span><span class="main"><div class="name">${esc(e.name)}</div><div class="meta">${shortDay(e.date)}${e.guests ? ' · ' + t('guests', { n: e.guests }) : ''}${e.past ? ' · passato' : ''}${e.links ? ' · ' + e.links + ' piatti collegati' : ' · nessun piatto collegato'}</div></span><span class="chev">›</span></button>`;
+  const up = d.events.filter(e => !e.past).reverse(), past = d.events.filter(e => e.past);
+  return `<div class="page" style="--c:var(--cat)">${backBtn()}${top}
+    <section><h2>Prossimi</h2><div class="list">${up.map(row).join('') || '<div class="row"><span class="main"><div class="meta">Nessun evento</div></span></div>'}</div></section>
+    <section><h2>Passati (ultimi 60 giorni + quelli con piatti collegati)</h2><div class="list">${past.map(row).join('') || '<div class="row"><span class="main"><div class="meta">Nessun evento</div></span></div>'}</div></section>
+    <p class="note" style="font-size:14px">Sola lettura. Production, Shopping e Cost vengono dai collegamenti piatto → ricetta salvati in Brigade e dal motore costi FC05.</p>
+  </div>`;
+} };
+SCREENS.cplan = { title: p => { const d = API.peek('catering_plan', { id: p.id }); return d ? d.event.name : 'Evento'; }, c: '--cat', render(p) {
+  if (!isChef()) return `<div class="page">${backBtn()}<p class="note">Solo per lo Chef.</p></div>`;
+  const d = need('catering_plan', { id: p.id }, 2 * 60000);
+  if (!d) return `<div class="page">${backBtn()}${waiting('catering_plan')}</div>`;
+  const seg = p.seg || 'prod', e = d.event, c = d.cost;
+  const tabs = `<div class="seg">${[['prod', 'Production'], ['shop', 'Shopping'], ['cost', 'Cost']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-a="cplanSeg" data-k="${k}">${l}</button>`).join('')}</div>`;
+  const noLinks = !d.components.length ? `<p class="note">Nessun piatto di questo evento è ancora collegato a una ricetta. I collegamenti si salvano in Brigade (non in questa schermata).</p>` : '';
+  const miss = d.menu_not_linked.length ? `<p class="note" style="font-size:14px"><span class="wtx">${d.menu_not_linked.length} righe del menu Tripleseat senza collegamento</span> (non incluse): ${d.menu_not_linked.map(esc).join(', ')}.</p>` : '';
+  let body = '';
+  if (seg === 'prod') {
+    body = `${noLinks}<div class="list">${d.components.map(x => { const k = x.component || {}; return `<div class="row"><span class="main"><div class="name">${esc(k.title || '?')}</div><div class="meta">${esc(x.original_text || '')} · ${qtyBig(k.qty, k.unit === 'portions' ? 'porzioni' : k.unit)}${k.batches != null ? ' · ' + fmt(k.batches) + ' lotti' : ''}</div>${k.basis && k.basis.rule ? `<div class="meta">${esc(k.basis.rule)}</div>` : ''}${k.convertible === false ? `<div class="meta wtx">Non calcolabile: ${esc(k.not_convertible_why || '')}</div>` : ''}</span>${k.recipe_id ? `<span class="chev" data-a="openRecipe" data-r="${k.recipe_id}">›</span>` : ''}</div>`; }).join('')}</div>${miss}`;
+  } else if (seg === 'shop') {
+    const s = d.shopping, byName = {}; (s.known || []).forEach(x => { (byName[x.name] = byName[x.name] || []).push(x); });
+    const dup = Object.entries(byName).filter(([, v]) => v.length > 1);
+    body = `${noLinks}${dup.length ? `<p class="note" style="font-size:14px"><span class="wtx">Attenzione:</span> ${dup.map(([n, v]) => `${esc(n)} compare ${v.length} volte (${v.map(x => qtyBig(x.qty, x.unit)).join(' + ')})`).join('; ')}. È lo stesso ingrediente in unità diverse: la lista non le somma (difetto noto Mason n. 2, correzione in preparazione).</p>` : ''}
+      ${(s.known || []).length ? `<section><h2>Da comprare o preparare · quantità note</h2><div class="list">${s.known.map(x => `<button class="row" data-a="openIng" data-id="${x.ingredient_id}"><span class="main"><div class="name">${esc(x.name)}</div>${x.price_missing ? '<div class="meta wtx">prezzo mancante</div>' : ''}</span><span class="chev">${qtyBig(x.qty, x.unit)}</span></button>`).join('')}</div></section>` : ''}
+      ${(s.unknown || []).length ? `<section><h2>Quantità non calcolabile</h2><div class="list">${s.unknown.map(x => `<div class="row"><span class="main"><div class="name">${esc(x.name)}</div><div class="meta">${qtyBig(x.qty, x.unit)} in ${esc(x.via || '')} · ${esc(String(x.status || '').replace('non_calcolabile:', 'manca: ').replace(/_/g, ' '))}</div></span></div>`).join('')}</div></section>` : ''}
+      ${(s.no_batches || []).length ? `<p class="note" style="font-size:14px"><span class="wtx">Salvati ma non trasformabili in ingredienti</span> (resa o porzioni mancanti nel collegamento): ${s.no_batches.map(esc).join(', ')}.</p>` : ''}
+      <p class="note" style="font-size:14px">Le scorte non sono sottratte: i conteggi di Brigade non sono ancora affidabili.</p>${miss}`;
+  } else {
+    body = !c ? `${noLinks}<p class="note">Non c'è ancora un foglio costi per questo evento.</p>` : `
+      <div class="grid"><div class="big"><div class="lbl ${c.complete ? 'num' : 'wtx'}">${c.complete ? usd(c.total) : 'Incompleto'}</div><div class="val">${c.complete ? 'ingredienti + 10% imprevisti' : esc(c.motivo_evento || 'almeno un costo manca')}</div></div>
+      <div class="big"><div class="lbl num">${usd(c.subtotal)}</div><div class="val">solo ingredienti noti</div></div></div>
+      <section><h2>Piatto per piatto</h2><div class="list">${(c.lines || []).map(l => `<div class="row"><span class="main"><div class="name">${esc(l.title)}</div><div class="meta">${l.portions_charged || l.portions || ''} porzioni · ${l.semaforo || ''}${l.cost == null ? ' · <span class="wtx">costo non calcolabile</span>' : ''}</div>${(l.non_stimabili || []).map(n => `<div class="meta wtx">${esc(n.componente || '')}: ${esc(n.motivo || '')}</div>`).join('')}</span><span class="chev">${usd(l.cost)}</span></div>`).join('')}
+      ${(d.not_costed || []).map(x => `<div class="row"><span class="main"><div class="name">${esc(x.title)}</div><div class="meta wtx">${qtyBig(x.qty, x.unit)} · non costato: ${esc(x.why || '')}</div></span></div>`).join('')}</div></section>
+      <p class="note" style="font-size:14px">Prezzi: ${esc(c.priced_with || 'correnti')} (motore FC05 di Brigade). Imprevisti ${c.markup_pct || 10}% una sola volta, sui costi noti: non copre i costi mancanti qui sopra.${noLinks ? '' : ''}</p>${miss}`;
+  }
+  return `<div class="page" style="--c:var(--cat)">${backBtn()}${head(shortDay(e.date) + (e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''), esc(e.name), e.guests ? t('guests_event', { n: e.guests }) : '')}${tabs}${body}</div>`;
 } };
 
 /* B-99c food cost catering (solo Chef) — pagina in catering_cost.html: legge e salva tramite il server di Brigade */
@@ -547,6 +595,9 @@ const A = {
     openTab('recipe', s.id, { s: 'recipe', p: { id: s.id, name: s.name, factor: s.factor, subWarn: s.warn, prep: '', tab: p.tab } }); },
   openSubId(el) { const f = num(el.dataset.f); openTab('recipe', el.dataset.r, { s: 'recipe', p: { id: el.dataset.r, factor: f > 0 ? f : 1, subWarn: null, prep: '', tab: cur().p.tab } }); },
   rcTab(el) { cur().p.tab = el.dataset.k; render(true); },
+  openPast() { openTab('cpast', 'list', { s: 'cpast', p: {} }); },
+  openPlan(el) { openTab('cplan', el.dataset.id, { s: 'cplan', p: { id: el.dataset.id } }); },
+  cplanSeg(el) { cur().p = Object.assign(cur().p || {}, { seg: el.dataset.k }); render(true); },
   openPassati() { openTab('cpassati', 'list', { s: 'cpassati', p: {} }); },
   openEvent(el) { openTab('event', el.dataset.id, { s: 'event', p: { id: el.dataset.id } }); },
   station(el) { cur().p = Object.assign(cur().p || {}, { st: el.dataset.k }); render(true); },

@@ -13,10 +13,11 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 import * as SERVICE from './service.ts'
+import * as CP from './catering_plan.ts'                   // B-25 passo 1: Catering Production/Shopping/Cost, solo lettura, solo Chef
 import * as CC from './catering_cost.ts'                   // B-99c «Food cost catering» (solo Chef)
 import { resumi } from '../_shared/tec_resumo.js'
 
-const BUILD = 'api-r1.18+b91+b99c'
+const BUILD = 'api-r1.18+b91+b99c+b25cat'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -376,12 +377,13 @@ Deno.serve(async (req: Request) => {
       case 'mre_match_decide': out = await MRE.mreMatchDecide(u, body, svc); break
       case 'sb': out = await SERVICE.sb(u as any, body, svc); break                       // B-86: MONITORS + Monitor 3 camerieri
       case 'mre_translate': out = await MRE.mreTranslate(u, body); break
+      case 'catering_plan': out = await CP.cateringPlan(u as any, body, svc); break   // B-25 passo 1
       case 'cc_load': case 'cc_save': case 'cc_history': case 'cc_recipe': case 'cc_import': out = await CC.cc(u as any, body, svc); break   // B-99c
       default: throw bad('bad_op')
     }
     return new Response(JSON.stringify(out), { headers: H })
   } catch (e) {
-    if (e instanceof HttpError || e instanceof MRE.MreError || e instanceof OFFICE.OfficeError || e instanceof KITCHEN.KitchenError || e instanceof SERVICE.ServiceError || e instanceof CC.CostError) return new Response(JSON.stringify({ ok: false, error: (e as any).code }), { status: (e as any).status, headers: H })
+    if (e instanceof HttpError || e instanceof MRE.MreError || e instanceof OFFICE.OfficeError || e instanceof KITCHEN.KitchenError || e instanceof SERVICE.ServiceError || e instanceof CC.CostError || e instanceof CP.PlanError) return new Response(JSON.stringify({ ok: false, error: (e as any).code }), { status: (e as any).status, headers: H })
     console.error('[app-api]', (e as Error)?.message || e)
     return new Response(JSON.stringify({ ok: false, error: 'server_error' }), { status: 500, headers: H })
   }
