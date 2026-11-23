@@ -160,14 +160,14 @@ function render(p) {
     const stx = statusOf(d, l), bad = /mr-bad/.test(stx), adv = p.adv;
     h += `<li class="mr-eline"><span class="mr-nm">${nameHtml}${nameFb(d, l)}${l.kind === 'recipe' ? ` <span class="mr-muted mr-kind">${T('sub_recipe')}</span>` : ''}
         ${bad || adv ? `<span class="mr-note">${stx}</span>` : ''}
-        ${adv && !doc.has_stock ? `<span class="mr-note mr-adv">${T('role_sale')}</span>` : ''}${adv && doc.has_stock ? `<span class="mr-note mr-adv">${T('role')}: <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select></span>` : ''}${adv ? `
-        <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>` : noteHtml(nt, p.notesO)}${estHtml(d, l)}
+        ${adv && !doc.has_stock ? `<span class="mr-note mr-adv">${T('role_sale')}</span>` : ''}${adv && doc.has_stock ? `<span class="mr-note mr-adv">${T('role')}: <select data-ms="role:${esc(l.id)}" class="mr-sel">${['produzione', 'al_piatto', 'imballo'].map(r => `<option value="${r}" ${l.role === r ? 'selected' : ''}>${T('role_' + r)}</option>`).join('')}</select></span>` : ''}
+        <span class="mr-note mr-adv">${T('note')}: <span contenteditable="true" class="mr-txt" data-ph="${esc(T('note_ph'))}" data-mt="note:${esc(l.id)}" data-mred="1">${esc(l.note || '')}</span></span>${estHtml(d, l)}
 </span>
       ${l.per === 'portion' || l.role === 'imballo' || adv ? `<span class="mr-note">${T('per_q')} <select data-ms="per:${esc(l.id)}" class="mr-sel"><option value="" ${l.per !== 'portion' ? 'selected' : ''}>${T('per_lot')}</option><option value="portion" ${l.per === 'portion' ? 'selected' : ''}>${T('per_one', { u: T('pu_' + (y.portion_unit || 'portion') + '1') })}</option></select>${l.per === 'portion' && Number(y.portions) > 0 && l.qty != null ? ` = <b>${nf(l.qty * y.portions, 1)}</b> ${T('per_lot_n')}` : ''}</span>` : ''}
       <span class="mr-eq">${Q('l:' + l.id, l.qty == null ? '—' : nf(l.qty, 3), '')}<select data-ms="unit:${esc(l.id)}" class="mr-sel">${[...new Set([ucur, ...units])].map(u => `<option value="${esc(u || '—')}" ${u === ucur ? 'selected' : ''}>${esc(E().unitLabel ? E().unitLabel(u || '—') : (u || '—'))}</option>`).join('')}</select><button class="mr-x" data-m="del:${esc(l.id)}" aria-label="${esc(T('remove'))}" title="${esc(T('remove'))}">×</button></span></li>`;
   }
   h += `</ul>`;
-  if (nOther && !(edit && p.adv)) h += `<button class="mr-link mr-notesbtn" data-m="notesO">${p.notesO ? T('notes_hide') : T('notes_orig', { n: nOther })}</button>`;
+  if (nOther && !edit) h += `<button class="mr-link mr-notesbtn" data-m="notesO">${p.notesO ? T('notes_hide') : T('notes_orig', { n: nOther })}</button>`;
   if (edit) h += addHtml(p);
   h += `</div><div class="mr-right"><div class="mr-sec"><span>${T('method')}</span></div>`;
   const steps = doc.steps || [];

@@ -359,6 +359,8 @@ b.mq .n[contenteditable="true"]{color:var(--rest);box-shadow:inset 0 -2px 0 var(
 .mr-edit .mr-steps li > .mr-link{grid-column:2;justify-self:start;font-size:13px}
 .mr-txt{outline:none;box-shadow:inset 0 -1px 0 var(--line);min-width:2em;display:inline-block}
 .mr-txt:focus{box-shadow:inset 0 -2px 0 var(--rest)}
+.mr-txt[data-ph]:empty{min-width:9em}
+.mr-txt[data-ph]:empty::before{content:attr(data-ph);opacity:.45}
 .mr-steps p.mr-txt{display:block}
 .mr-tok{font-weight:700;white-space:nowrap;color:var(--rest)}
 .mr-sel{font:500 14px var(--fb);color:var(--tx);background:transparent;border:0;border-bottom:1px solid var(--line);padding:2px 0}

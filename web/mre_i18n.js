@@ -23,7 +23,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   imported_n: ['Imported from Brigade · {n} differences to check', 'Importata da Brigade · {n} differenze da controllare', 'Importada de Brigade · {n} diferencias por revisar'],
   ingredients: ['Ingredients', 'Ingredienti', 'Ingredientes'], method: ['Method', 'Procedimento', 'Preparación'], to_define: ['to define', 'da definire', 'por definir'],
   role_produzione: ['production', 'produzione', 'producción'], role_al_piatto: ['at the plate', 'al piatto', 'en el plato'], role_imballo: ['packaging', 'imballo', 'empaque'],
-  remove: ['remove', 'rimuovi', 'quitar'], note: ['note', 'nota', 'nota'],
+  remove: ['remove', 'rimuovi', 'quitar'], note: ['note', 'nota', 'nota'], note_ph: ['visible to the staff', 'la vede lo staff', 'la ve el personal'],
   no_steps: ['The method has not been written yet.', 'Il procedimento non è ancora scritto.', 'La preparación aún no está escrita.'],
   no_steps_chef: ['The method is not written in Brigade yet. You can write it with "Edit recipe".', 'Il procedimento non è ancora scritto in Brigade. Puoi scriverlo da "Modifica ricetta".', 'La preparación aún no está escrita en Brigade. Puedes escribirla con "Editar receta".'],
   loose_numbers: ['(quantities in this sentence are for 1 batch)', '(le quantità di questa frase sono per 1 lotto)', '(las cantidades de esta frase son para 1 lote)'],
