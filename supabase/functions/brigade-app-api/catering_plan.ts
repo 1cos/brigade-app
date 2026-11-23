@@ -29,6 +29,9 @@ async function plan(id: string, svc: any) {
   const r = await svc.rpc('catering_event_plan', { p_event_id: id })
   if (r.error) throw new Error('catering_event_plan: ' + r.error.message)
   const p = r.data || {}
+  // UN SOLO risultato di costo (previsto + effettivo + spesa) per tutte le schede: funzione costo_evento del database (usa FC05, collegamenti confermati e tabella regole)
+  const cr = await svc.rpc('costo_evento', { p_event_id: id })
+  if (cr.error) throw new Error('costo_evento: ' + cr.error.message)
   // righe di cucina del menu Tripleseat (ultima versione per documento) che NON hanno un collegamento: così si vede cosa manca
   let missing: string[] = []; let menuLines = 0
   if (e.tripleseat_id) {
@@ -42,7 +45,7 @@ async function plan(id: string, svc: any) {
   }
   return { ok: true, event: { id: e.id, name: e.name, date: e.event_date, time: e.event_time, guests: e.guest_count, status: e.status },
     components: p.components || [], shopping: p.shopping || { known: [], unknown: [], no_batches: [] }, cost: p.cost || null, cost_stale: p.cost_stale === true, cost_not_in_sheet: p.cost_not_in_sheet || [], not_costed: p.not_costed || [],
-    menu_lines: menuLines, menu_not_linked: missing }
+    menu_lines: menuLines, menu_not_linked: missing, costo: cr.data || null }
 }
 
 export async function cateringPlan(u: U, b: any, svc: any) {
