@@ -18,7 +18,7 @@ import * as CP from './catering_plan.ts'                   // B-25 passo 1: Cate
 import * as CC from './catering_cost.ts'                   // B-99c «Food cost catering» (solo Chef)
 import { resumi } from '../_shared/tec_resumo.js'
 
-const BUILD = 'api-r1.18+b91+b99c+b25cat3'
+const BUILD = 'api-r1.18+b91+b99c+b25cat3+qm1'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
