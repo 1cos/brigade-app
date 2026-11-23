@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Food cost catering</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -392,7 +393,73 @@ function histPanel(e) {
   return `<div class="alert info" style="margin-top:10px"><b>Versioni salvate</b> (le ultime 30): ${hist.versions.length ? '' : 'nessuna ancora.'}<div class="scroll"><table><tbody>${hist.versions.map(v => `<tr><td class="num">v${v.ver}</td><td>${esc(v.saved_by)}</td><td>${esc(new Date(v.saved_at).toLocaleString('it-IT', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}))}</td>
       <td class="num">${v.state.guests} ospiti · ${(v.state.extras || []).length} aggiunte</td><td class="note">${esc(v.note || '')}</td><td><button class="chip" data-act="restore" data-ev="${e.id}" data-v="${v.ver}">ripristina questa</button></td></tr>`).join('')}</tbody></table></div></div>`;
 }
+
+// ---------------------------------------------------------------- B-25 Fase 2: Production / Shopping / Cost / Preventivo = VISTE dello stesso risultato (evalEvent) di Food cost
+let VIEW = (new URLSearchParams(location.search).get('view') || 'food');
+const VIEWS = ['prod', 'shop', 'cost', 'prev'];
+window.ccSetView = v => { VIEW = v; render(); window.scrollTo(0, 0); };
+const qshow = (q, u) => (u === 'g' && q >= 1000) ? fq(q / 1000) + ' kg' : (u === 'ml' && q >= 1000) ? fq(q / 1000) + ' L' : fq(q) + ' ' + u;
+function viewHead(e, ev, title) {
+  return `<section class="panel"><div class="evhead"><div><h2>${esc(title)} · ${esc(e.name)}</h2><div class="sub">${esc(fdate(e.date))} · ${esc(e.time)} · ${ev.es.guests} ospiti</div></div></div>
+    <div class="alert info" style="margin-top:8px">Stesso calcolo di <b>Food cost</b> (scelte e quantità salvate da te, prezzi di Brigade). Per cambiare qualcosa apri Food cost: qui si legge soltanto.</div>`;
+}
+function missingList(ev) {
+  const m = [];
+  ev.dishes.forEach(d => { if (d.pending) m.push(`${d.label}: porzioni da scrivere`); d.lines.forEach(l => { if (l.cost == null) m.push(`${d.label}: ${l.desc} — ${/COSTO|PREZZO/.test(l.st) ? l.st.toLowerCase() : 'costo non disponibile'}`); else if (l.part) m.push(`${d.label}: ${l.desc} — costo parziale`); }); });
+  ev.extras.forEach(l => { if (l.cost == null || l.part) m.push(`${l.desc || 'riga aggiunta'}: ${l.cost == null ? 'costo non disponibile' : 'costo parziale'}`); });
+  return m;
+}
+function prodView(e, ev) {
+  const dishes = ev.dishes.map((dd, i) => `<div class="dish"><h3>${esc(dd.label)}</h3>
+    <div class="note">${dd.pending ? '<b class="warn">porzioni ancora da scrivere in Food cost</b>' : (dd.qlabel ? esc(dd.qlabel) : '')}${dd.N != null && !dd.qlabel ? ' ' + fq(dd.N) + ' porzioni' : ''}</div>
+    ${dd.lines.filter(l => l.q > 0).length ? `<table class="lines"><tbody>${dd.lines.filter(l => l.q > 0).map(l => `<tr><td>${esc(l.desc)}</td><td class="r num">${qshow(l.q, l.u)}</td></tr>`).join('')}</tbody></table>` : '<div class="note">nessuna quantità</div>'}
+    ${(dd.notes || []).length ? `<div class="note">${dd.notes.map(esc).join(' · ')}</div>` : ''}</div>`).join('');
+  const ex = ev.extras.filter(l => l.q > 0).length ? `<div class="dish"><h3>Articoli e ricette aggiunti</h3><table class="lines"><tbody>${ev.extras.filter(l => l.q > 0).map(l => `<tr><td>${esc(l.desc)}</td><td class="r num">${qshow(l.q, l.u)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  return viewHead(e, ev, 'Production') + (dishes || ex ? dishes + ex : '<div class="alert miss" style="margin-top:10px">Nessun piatto scelto per questo evento.</div>') + '</section>';
+}
+function shopView(e, ev) {
+  const all = [...ev.dishes.flatMap(d => d.lines), ...ev.extras].filter(l => l.q > 0);
+  const buy = {}, prep = {};
+  for (const l of all) {
+    if (l.u === 'porz.' || /ricetta ristorante/.test(l.desc || '')) { const k = l.desc; prep[k] = prep[k] || {desc: l.desc, q: 0, u: l.u}; prep[k].q += l.q; continue; }
+    const vend = !l.manual && l.cost != null && l.src ? String(l.src).split(' · ')[0] : 'Fornitore non indicato';
+    const k = l.desc + '|' + l.u; buy[vend] = buy[vend] || {}; buy[vend][k] = buy[vend][k] || {desc: l.desc, q: 0, u: l.u}; buy[vend][k].q += l.q;
+  }
+  const vendors = Object.keys(buy).sort((a, b) => (a === 'Fornitore non indicato') - (b === 'Fornitore non indicato') || a.localeCompare(b));
+  const sec = vendors.map(v => `<div class="dish"><h3>${esc(v)}</h3><table class="lines"><tbody>${Object.values(buy[v]).sort((a, b) => a.desc.localeCompare(b.desc)).map(x => `<tr><td>${esc(x.desc)}</td><td class="r num">${qshow(x.q, x.u)}</td></tr>`).join('')}</tbody></table></div>`).join('');
+  const pr = Object.values(prep).length ? `<div class="dish"><h3>Ricette del ristorante da preparare</h3><table class="lines"><tbody>${Object.values(prep).map(x => `<tr><td>${esc(x.desc)}</td><td class="r num">${qshow(x.q, x.u)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  return viewHead(e, ev, 'Shopping') + (sec + pr || '<div class="alert miss" style="margin-top:10px">Niente da comprare: nessuna quantità calcolata.</div>')
+    + '<div class="note" style="margin-top:8px">Le scorte non sono sottratte (i conteggi di Brigade non sono ancora affidabili). Il fornitore è quello dell\'ultimo prezzo usato.</div></section>';
+}
+function costView(e, ev) {
+  const es = ev.es, pp = es.guests > 0 ? up(ev.fin) / es.guests : 0, pct = ev.rev > 0 ? ev.fin / ev.rev * 100 : null, m = missingList(ev);
+  const rows = ev.dishes.map(dd => `<tr><td>${esc(dd.label)}</td><td class="r num">${dd.pending && !dd.cost ? '—' : money(dd.cost)}</td><td class="r">${dd.missing ? '<span class="badge b-miss">' + dd.missing + ' mancanti</span>' : (dd.pending ? '<span class="badge b-warn">da completare</span>' : '')}</td></tr>`).join('');
+  return viewHead(e, ev, 'Cost') + `<div class="tot"><div class="kv"><span>Totale analitico</span><span class="num big">${money(up(ev.total))}</span></div>
+     <div class="kv"><span>Buffer 10%</span><span class="num big">${money(up(ev.buf))}</span></div>
+     <div class="kv"><span>Totale finale</span><span class="num big">${money(up(ev.fin))}</span></div>
+     <div class="kv"><span>Per persona</span><span class="num big">${money(pp)}</span></div>
+     <div class="kv"><span>Food cost sul ricavo</span><span class="num big">${pct == null ? '—' : pct.toFixed(1) + '%'}</span></div></div>
+    ${rows ? `<div class="scroll"><table class="lines"><thead><tr><th>Piatto</th><th class="r">Costo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
+    ${m.length ? `<div class="alert miss" style="margin-top:10px"><b>Totale PARZIALE:</b> ${m.length} voci senza prezzo, quantità o con costo incompleto non sono nel totale:<ul>${m.map(x => '<li>' + esc(x) + '</li>').join('')}</ul></div>` : '<div class="alert info" style="margin-top:10px">Nessuna voce mancante.</div>'}</section>`;
+}
+function prevView(e, ev) {
+  const es = ev.es, price = (es.mp || 0) > 0 && (es.mq || 0) > 0;
+  const names = ev.dishes.map(d => `<li>${esc(d.label)}${d.pending ? ' <span class="note">(porzioni da definire)</span>' : ''}</li>`).join('');
+  return viewHead(e, ev, 'Preventivo') + `<div class="dish"><h3>Menu</h3>${names ? '<ul>' + names + '</ul>' : '<div class="note">Nessun piatto scelto.</div>'}</div>
+    <div class="tot"><div class="kv"><span>Ospiti</span><span class="num big">${es.guests}</span></div>
+     ${price ? `<div class="kv"><span>Prezzo a persona</span><span class="num big">${money(es.mp)}</span></div><div class="kv"><span>Menu fatturati</span><span class="num big">${es.mq}</span></div><div class="kv"><span>Totale per il cliente</span><span class="num big">${money(ev.rev)}</span></div>`
+      : '<div class="note">Prezzo menu a persona non ancora inserito: scrivilo in Food cost (Ricavo menu da BEO).</div>'}
+     <div class="kv"><span>Costo (interno)</span><span class="num big">${money(up(ev.fin))}</span></div></div>
+    <div class="note">Il costo interno non va mostrato al cliente.</div><div class="row" style="margin-top:8px"><button onclick="window.print()">Stampa</button></div></section>`;
+}
+function viewPage() {
+  const e = D.events.find(x => x.id === ONLY);
+  if (!e) return '<div class="panel"><div class="alert miss">Evento non trovato nei dati di Food cost.</div></div>';
+  const ev = evalEvent(e);
+  return {prod: prodView, shop: shopView, cost: costView, prev: prevView}[VIEW](e, ev, ONLY);
+}
 function render() {
+  if (ONLY && VIEWS.includes(VIEW)) { $('#app').innerHTML = viewPage(); return; }
   const a = document.activeElement, fid = a && a.dataset ? a.dataset.fid : null, pos = a && a.selectionStart != null ? [a.selectionStart, a.selectionEnd] : null;
   const sy = window.scrollY;
   const nCh = D.events.filter(e => e.status !== 'cancelled' && menuChanged(e, evState(e))).length;

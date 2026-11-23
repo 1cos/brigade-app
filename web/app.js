@@ -403,6 +403,8 @@ SCREENS.cpast = { title: () => 'Eventi catering', c: '--cat', render() {
 /* CORREZIONE REVERSIBILE (23/11/2026, non pubblicata): Food Cost Catering è l'unico motore. Finché Production, Shopping e Cost non leggono quel risultato NON mostrano importi del calcolo provvisorio.
    Per tornare indietro: COSTO_PROVVISORIO_ATTENDIBILE = true (o revert del commit). Nessun dato è toccato. */
 const COSTO_PROVVISORIO_ATTENDIBILE = false;
+/* FASE 2 (B-25): Production, Shopping, Cost, Food cost e Preventivo sono 5 viste dello STESSO risultato di Food cost (catering_cost.html, parametro view). Per tornare alla Fase 1: false. */
+const FASE2_VISTE_UNICHE = true;
 SCREENS.cplan = { title: p => { const d = API.peek('catering_plan', { id: p.id }); return d ? d.event.name : 'Evento'; }, c: '--cat', render(p) {
   if (!isChef()) return `<div class="page">${backBtn()}<p class="note">Solo per lo Chef.</p></div>`;
   const d = need('catering_plan', { id: p.id }, 2 * 60000);
@@ -410,6 +412,8 @@ SCREENS.cplan = { title: p => { const d = API.peek('catering_plan', { id: p.id }
   const seg = p.seg || (COSTO_PROVVISORIO_ATTENDIBILE ? 'prod' : 'food'), e = d.event, C = d.costo, PV = C && C.previsto, EF = C && C.effettivo;
   const tabs = `<div class="seg">${[['prod', 'Production'], ['shop', 'Shopping'], ['cost', 'Cost'], ['food', 'Food cost'], ['prev', 'Preventivo']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-a="cplanSeg" data-k="${k}">${l}</button>`).join('')}</div>`;
   const hd = head(shortDay(e.date) + (e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''), esc(e.name), e.guests ? t('guests_event', { n: e.guests }) : '');
+  if (FASE2_VISTE_UNICHE) return `<div class="page" style="--c:var(--cat);max-width:none">${backBtn()}${hd}${tabs}
+      <iframe id="ccframe" src="catering_cost.html?ev=${e.id}&view=${seg}&v=${CC_V}" title="Food cost catering" style="width:calc(100% + 32px);margin:0 -16px;height:calc(100vh - 340px);min-height:480px;border:0;background:transparent"></iframe></div>`;
   const NA = !COSTO_PROVVISORIO_ATTENDIBILE;   // true = importi nascosti, informazioni operative visibili
   const warn = NA ? `<div class="alert"><p class="note"><b>Importi nascosti: non attendibili qui.</b> Questa scheda usa un calcolo provvisorio che non conosce le scelte del cliente nei menu «Pick N», gli ospiti fatturati, le tue selezioni e quantità salvate: per questo i dollari non sono mostrati. Piatti, quantità e liste restano visibili come informazioni di lavoro, ma sono provvisorie. Il costo ufficiale è in <b>Food cost</b>.</p><button class="lnk" data-a="cplanSeg" data-k="food">Apri Food cost di questo evento ›</button></div>` : '';
   if (!C && seg !== 'food' && seg !== 'prev') return `<div class="page">${backBtn()}${hd}${tabs}<p class="note">Il costo di questo evento non è disponibile in questo momento.</p></div>`;
@@ -632,7 +636,14 @@ const A = {
   rcTab(el) { cur().p.tab = el.dataset.k; render(true); },
   openPast() { openTab('cpast', 'list', { s: 'cpast', p: {} }); },
   openPlan(el) { openTab('cplan', el.dataset.id, { s: 'cplan', p: { id: el.dataset.id } }); },
-  cplanSeg(el) { cur().p = Object.assign(cur().p || {}, { seg: el.dataset.k }); render(true); },
+  cplanSeg(el) {
+    cur().p = Object.assign(cur().p || {}, { seg: el.dataset.k });
+    const fr = FASE2_VISTE_UNICHE && document.getElementById('ccframe');
+    if (fr && fr.contentWindow && typeof fr.contentWindow.ccSetView === 'function') {   // stessa pagina, stessi dati: cambia solo la vista (niente ricaricamento)
+      document.querySelectorAll('button[data-a="cplanSeg"]').forEach(b => b.classList.toggle('on', b.dataset.k === el.dataset.k));
+      fr.contentWindow.ccSetView(el.dataset.k);
+    } else render(true);
+  },
   openPassati() { openTab('cpassati', 'list', { s: 'cpassati', p: {} }); },
   openEvent(el) { openTab('event', el.dataset.id, { s: 'event', p: { id: el.dataset.id } }); },
   station(el) { cur().p = Object.assign(cur().p || {}, { st: el.dataset.k }); render(true); },
