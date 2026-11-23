@@ -41,7 +41,7 @@ async function plan(id: string, svc: any) {
     missing = [...new Set(lines)].filter(n => !linkedNames.has(norm(n))).slice(0, 80)
   }
   return { ok: true, event: { id: e.id, name: e.name, date: e.event_date, time: e.event_time, guests: e.guest_count, status: e.status },
-    components: p.components || [], shopping: p.shopping || { known: [], unknown: [], no_batches: [] }, cost: p.cost || null, not_costed: p.not_costed || [],
+    components: p.components || [], shopping: p.shopping || { known: [], unknown: [], no_batches: [] }, cost: p.cost || null, cost_stale: p.cost_stale === true, cost_not_in_sheet: p.cost_not_in_sheet || [], not_costed: p.not_costed || [],
     menu_lines: menuLines, menu_not_linked: missing }
 }
 

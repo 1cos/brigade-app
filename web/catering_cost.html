@@ -356,7 +356,9 @@ function eventHtml(e) {
   </section>`;
 }
 const todayIso = new Date().toISOString().slice(0, 10);
-const visible = e => (S.ui.cancelled || e.status !== 'cancelled') && (S.ui.filter === 'tutti' || (S.ui.filter === 'prossimi' ? e.date >= todayIso : e.date < todayIso));
+const ONLY = new URLSearchParams(location.search).get('ev');   // B-25: aperto dalla scheda evento unica di Brigade 2 → mostra SOLO quell'evento, già aperto
+if (ONLY) { S.ui.filter = 'tutti'; S.ui.cancelled = true; S.ui['open-' + ONLY] = true; }
+const visible = e => (ONLY ? e.id === ONLY : (S.ui.cancelled || e.status !== 'cancelled') && (S.ui.filter === 'tutti' || (S.ui.filter === 'prossimi' ? e.date >= todayIso : e.date < todayIso)));
 function summary() {
   const list = D.events.filter(visible);
   const rows = list.map(e => {

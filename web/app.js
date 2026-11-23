@@ -405,10 +405,17 @@ SCREENS.cplan = { title: p => { const d = API.peek('catering_plan', { id: p.id }
   const d = need('catering_plan', { id: p.id }, 2 * 60000);
   if (!d) return `<div class="page">${backBtn()}${waiting('catering_plan')}</div>`;
   const seg = p.seg || 'prod', e = d.event, c = d.cost;
-  const tabs = `<div class="seg">${[['prod', 'Production'], ['shop', 'Shopping'], ['cost', 'Cost']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-a="cplanSeg" data-k="${k}">${l}</button>`).join('')}</div>`;
+  const tabs = `<div class="seg">${[['prod', 'Production'], ['shop', 'Shopping'], ['cost', 'Cost'], ['food', 'Food cost'], ['prev', 'Preventivo']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-a="cplanSeg" data-k="${k}">${l}</button>`).join('')}</div>`;
   const noLinks = !d.components.length ? `<p class="note">Nessun piatto di questo evento è ancora collegato a una ricetta. I collegamenti si salvano in Brigade (non in questa schermata).</p>` : '';
   const miss = d.menu_not_linked.length ? `<p class="note" style="font-size:14px"><span class="wtx">${d.menu_not_linked.length} righe del menu Tripleseat senza collegamento</span> (non incluse): ${d.menu_not_linked.map(esc).join(', ')}.</p>` : '';
   let body = '';
+  if (seg === 'food') {
+    return `<div class="page" style="--c:var(--cat);max-width:none">${backBtn()}${head(shortDay(e.date), esc(e.name), e.guests ? t('guests_event', { n: e.guests }) : '')}${tabs}<iframe src="catering_cost.html?ev=${e.id}&v=${CC_V}" title="Food cost catering" style="width:calc(100% + 32px);margin:0 -16px;height:calc(100vh - 220px);min-height:520px;border:0;background:transparent"></iframe></div>`;
+  }
+  if (seg === 'prev') {
+    return `<div class="page" style="--c:var(--cat)">${backBtn()}${head(shortDay(e.date), esc(e.name), e.guests ? t('guests_event', { n: e.guests }) : '')}${tabs}
+      <p class="note"><b>Preventivo</b> (per il cliente, con le regole buffet dello Chef e i prezzi di Brigade): è pronto in laboratorio ma NON ancora pubblicato. Per portarlo qui servono 4 risposte dello Chef (tiramisù standard, fruit tray 40–49 e oltre 80, persone per teglia di lasagna e chicken parm, ricotta) e la tabella dei preventivi salvati. Finché non è pubblicato non c'è nessun preventivo in Brigade 2: Production, Shopping, Cost e Food cost qui accanto sono le stime di cucina.</p></div>`;
+  }
   if (seg === 'prod') {
     body = `${noLinks}<div class="list">${d.components.map(x => { const k = x.component || {}; return `<div class="row"><span class="main"><div class="name">${esc(k.title || '?')}</div><div class="meta">${esc(x.original_text || '')} · ${qtyBig(k.qty, k.unit === 'portions' ? 'porzioni' : k.unit)}${k.batches != null ? ' · ' + fmt(k.batches) + ' lotti' : ''}</div>${k.basis && k.basis.rule ? `<div class="meta">${esc(k.basis.rule)}</div>` : ''}${k.convertible === false ? `<div class="meta wtx">Non calcolabile: ${esc(k.not_convertible_why || '')}</div>` : ''}</span>${k.recipe_id ? `<span class="chev" data-a="openRecipe" data-r="${k.recipe_id}">›</span>` : ''}</div>`; }).join('')}</div>${miss}`;
   } else if (seg === 'shop') {
@@ -421,7 +428,8 @@ SCREENS.cplan = { title: p => { const d = API.peek('catering_plan', { id: p.id }
       <p class="note" style="font-size:14px">Le scorte non sono sottratte: i conteggi di Brigade non sono ancora affidabili.</p>${miss}`;
   } else {
     body = !c ? `${noLinks}<p class="note">Non c'è ancora un foglio costi per questo evento.</p>` : `
-      <div class="grid"><div class="big"><div class="lbl ${c.complete ? 'num' : 'wtx'}">${c.complete ? usd(c.total) : 'Incompleto'}</div><div class="val">${c.complete ? 'ingredienti + 10% imprevisti' : esc(c.motivo_evento || 'almeno un costo manca')}</div></div>
+      ${d.cost_stale ? `<p class="note"><span class="wtx">Foglio costi non aggiornato:</span> le ricette di oggi permettono di costare anche ${d.cost_not_in_sheet.map(esc).join(', ')}, ma il foglio salvato per questo evento non le contiene. Il totale qui sotto NON è definitivo. Il foglio non viene modificato da questa schermata.</p>` : ''}
+      <div class="grid"><div class="big"><div class="lbl ${c.complete && !d.cost_stale ? 'num' : 'wtx'}">${c.complete && !d.cost_stale ? usd(c.total) : 'Incompleto'}</div><div class="val">${c.complete && !d.cost_stale ? 'ingredienti + 10% imprevisti' : d.cost_stale ? 'foglio non aggiornato, non definitivo' : esc(c.motivo_evento || 'almeno un costo manca')}</div></div>
       <div class="big"><div class="lbl num">${usd(c.subtotal)}</div><div class="val">solo ingredienti noti</div></div></div>
       <section><h2>Piatto per piatto</h2><div class="list">${(c.lines || []).map(l => `<div class="row"><span class="main"><div class="name">${esc(l.title)}</div><div class="meta">${l.portions_charged || l.portions || ''} porzioni · ${l.semaforo || ''}${l.cost == null ? ' · <span class="wtx">costo non calcolabile</span>' : ''}</div>${(l.non_stimabili || []).map(n => `<div class="meta wtx">${esc(n.componente || '')}: ${esc(n.motivo || '')}</div>`).join('')}</span><span class="chev">${usd(l.cost)}</span></div>`).join('')}
       ${(d.not_costed || []).map(x => `<div class="row"><span class="main"><div class="name">${esc(x.title)}</div><div class="meta wtx">${qtyBig(x.qty, x.unit)} · non costato: ${esc(x.why || '')}</div></span></div>`).join('')}</div></section>

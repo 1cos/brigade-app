@@ -22,7 +22,7 @@ const L = await cateringPlan(chef, {}, svc)
 ok(L.events.length === 1 && L.events[0].past && L.events[0].links === 3, 'elenco: Mason passato con 3 piatti collegati')
 const P = await cateringPlan(chef, { id: ID }, svc)
 ok(P.event.name === 'Mason Rehearsal' && P.components.length === 4, 'piano: 4 componenti su 3 piatti (Production)')
-ok(P.shopping.known.filter((x: any) => x.name === 'Penne').length === 2, 'spesa: difetto Mason n.2 visibile (Penne in 2 righe, 1,8 kg + 2.250 g)')
+ok(P.shopping.known.filter((x: any) => x.name === 'Penne').length === 1 && P.cost_stale === true, 'spesa: Penne in una riga (4.050 g) e foglio costi segnalato non aggiornato (risposta del database dopo la correzione Mason)')
 ok(P.cost.complete === false && Math.abs(P.cost.total - 15.678) < 0.001, 'costo: 15,68 $ incompleto (come nel database)')
 ok(P.menu_not_linked.length === 1 && P.menu_not_linked[0] === 'Tiramisu', 'menu Tripleseat: solo Tiramisu senza collegamento (bevande escluse)')
 try { await cateringPlan(chef, { id: 'x' }, svc); ok(false, 'id sbagliato rifiutato') } catch (e) { ok(e instanceof PlanError && e.status === 400, 'id sbagliato: 400') }
