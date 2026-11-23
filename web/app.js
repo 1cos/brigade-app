@@ -400,24 +400,30 @@ SCREENS.cpast = { title: () => 'Eventi catering', c: '--cat', render() {
     <p class="note" style="font-size:14px">Sola lettura. Production, Shopping e Cost vengono dai collegamenti piatto → ricetta salvati in Brigade e dal motore costi FC05.</p>
   </div>`;
 } };
+/* CORREZIONE REVERSIBILE (23/11/2026, non pubblicata): Food Cost Catering è l'unico motore. Finché Production, Shopping e Cost non leggono quel risultato NON mostrano importi del calcolo provvisorio.
+   Per tornare indietro: COSTO_PROVVISORIO_ATTENDIBILE = true (o revert del commit). Nessun dato è toccato. */
+const COSTO_PROVVISORIO_ATTENDIBILE = false;
 SCREENS.cplan = { title: p => { const d = API.peek('catering_plan', { id: p.id }); return d ? d.event.name : 'Evento'; }, c: '--cat', render(p) {
   if (!isChef()) return `<div class="page">${backBtn()}<p class="note">Solo per lo Chef.</p></div>`;
   const d = need('catering_plan', { id: p.id }, 2 * 60000);
   if (!d) return `<div class="page">${backBtn()}${waiting('catering_plan')}</div>`;
-  const seg = p.seg || 'prod', e = d.event, C = d.costo, PV = C && C.previsto, EF = C && C.effettivo;
+  const seg = p.seg || (COSTO_PROVVISORIO_ATTENDIBILE ? 'prod' : 'food'), e = d.event, C = d.costo, PV = C && C.previsto, EF = C && C.effettivo;
   const tabs = `<div class="seg">${[['prod', 'Production'], ['shop', 'Shopping'], ['cost', 'Cost'], ['food', 'Food cost'], ['prev', 'Preventivo']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-a="cplanSeg" data-k="${k}">${l}</button>`).join('')}</div>`;
   const hd = head(shortDay(e.date) + (e.time ? ' · ' + esc(String(e.time).slice(0, 5)) : ''), esc(e.name), e.guests ? t('guests_event', { n: e.guests }) : '');
-  if (!C) return `<div class="page">${backBtn()}${hd}${tabs}<p class="note">Il costo di questo evento non è disponibile in questo momento.</p></div>`;
+  if (!COSTO_PROVVISORIO_ATTENDIBILE && (seg === 'prod' || seg === 'shop' || seg === 'cost')) return `<div class="page" style="--c:var(--cat)">${backBtn()}${hd}${tabs}
+      <div class="alert"><p class="note"><b>Importi non attendibili qui.</b> Questa scheda usa un calcolo provvisorio che non conosce le scelte del cliente nei menu «Pick N», gli ospiti fatturati, le tue selezioni e quantità salvate. Il calcolo ufficiale è <b>Food cost</b>: Production, Shopping e Cost mostreranno gli stessi numeri quando saranno collegati a quel calcolo.</p>
+      <button class="lnk" data-a="cplanSeg" data-k="food">Apri Food cost di questo evento ›</button></div></div>`;
+  if (!C && seg !== 'food' && seg !== 'prev') return `<div class="page">${backBtn()}${hd}${tabs}<p class="note">Il costo di questo evento non è disponibile in questo momento.</p></div>`;
   const miss = d.menu_not_linked.length && !PV ? '' : '';
-  const sumBlock = `<div class="grid"><div class="big"><div class="lbl num">${usd(PV.totale_calcolabile)}</div><div class="val">PREVISTO · ingredienti${PV.incompleto ? ' · <span class="wtx">incompleto</span>' : ''}</div></div>
+  const sumBlock = !C ? '' : `<div class="grid"><div class="big"><div class="lbl num">${usd(PV.totale_calcolabile)}</div><div class="val">PREVISTO · ingredienti${PV.incompleto ? ' · <span class="wtx">incompleto</span>' : ''}</div></div>
       <div class="big"><div class="lbl ${EF.disponibile ? 'num' : 'wtx'}">${EF.disponibile ? usd(EF.totale_calcolabile) : '—'}</div><div class="val">EFFETTIVO${EF.disponibile ? (EF.parziale ? ' · <span class="wtx">PARZIALE</span>' : '') : ' · non disponibile'}</div></div></div>`;
   if (seg === 'food') {
-    return `<div class="page" style="--c:var(--cat);max-width:none">${backBtn()}${hd}${tabs}${sumBlock}<p class="note" style="font-size:14px">Sopra: il costo unico di Brigade (stesso risultato di Production, Shopping e Cost). Sotto: il vecchio calcolo a regole di B-99c, ancora in uso finché non è verificato: i due numeri possono non coincidere.</p>
+    return `<div class="page" style="--c:var(--cat);max-width:none">${backBtn()}${hd}${tabs}${COSTO_PROVVISORIO_ATTENDIBILE ? sumBlock : ''}
       <iframe src="catering_cost.html?ev=${e.id}&v=${CC_V}" title="Food cost catering" style="width:calc(100% + 32px);margin:0 -16px;height:calc(100vh - 340px);min-height:480px;border:0;background:transparent"></iframe></div>`;
   }
   if (seg === 'prev') {
     return `<div class="page" style="--c:var(--cat)">${backBtn()}${hd}${tabs}
-      <p class="note"><b>Preventivo</b> (per il cliente, con le regole buffet dello Chef): è pronto in laboratorio ma NON ancora pubblicato. Quando lo sarà leggerà lo stesso costo di questa scheda: quantità dai collegamenti e dalla tabella unica delle regole, prezzi di Brigade. Mancano le 4 risposte dello Chef (tiramisù standard, fruit tray, persone per teglia di lasagna e chicken parm, ricotta).</p></div>`;
+      <p class="note"><b>Preventivo</b> (per il cliente, con le regole buffet dello Chef): è pronto in laboratorio ma NON ancora pubblicato. Quando lo sarà sarà una vista dello stesso calcolo di Food cost. Mancano le 4 risposte dello Chef (tiramisù standard, fruit tray, persone per teglia di lasagna e chicken parm, ricotta).</p></div>`;
   }
   const mancRow = m => `<div class="row"><span class="main"><div class="name">${esc(m.nome || '')}${m.in ? ` <span class="meta">in ${esc(m.in)}</span>` : ''}</div><div class="meta ${m.importanza === 'importante' ? 'wtx' : ''}">${m.importanza === 'importante' ? 'IMPORTANTE' : 'marginale'} · ${esc({ prezzo: 'prezzo mancante', resa: 'resa mancante', conversione: 'conversione mancante', porzioni: 'porzioni/conversione mancanti', regola: 'nessuna regola né collegamento', sotto_ricetta: 'sotto-ricetta incompleta', costo: 'costo non disponibile', quantita_reale: 'quantità reale mancante' }[m.tipo] || m.tipo)}${m.qty != null && m.unita ? ' · ' + qtyBig(m.qty, m.unita) : ''}${m.motivo ? ' · ' + esc(m.motivo) : ''}</div>${m.stima_indicativa ? `<div class="meta">stima indicativa (non sommata): fino a ${usd(m.stima_indicativa.massimo)}</div>` : ''}</span></div>`;
   const sortM = a => [...a].sort((x, y) => (x.importanza === 'importante' ? 0 : 1) - (y.importanza === 'importante' ? 0 : 1));
