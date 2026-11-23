@@ -444,12 +444,20 @@ SCREENS.cpassati = { title: () => 'Food cost catering', c: '--cat', render() { r
 
 /* ============ PLANNER (my shifts; the to-do planner is its own pending module) ============ */
 SCREENS.planner = { title: () => t('w_plan'), c: '--plan', render() {
-  const d = need('planner', null, 10 * 60000);
-  const top = head(t('next2'), t('my_shifts'));
+  const d = need('planner', null, 5 * 60000);
+  const chef = isChef(), top = head(t('next2'), chef ? t('pl_kitchen') : t('my_shifts'));
   if (!d) return `<div class="page">${top}${waiting('planner')}</div>`;
+  const tm = iso => new Date(iso).toLocaleTimeString(I.dateLocale(), { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' });
+  const day = x => {
+    const label = `<div class="chap"><h2>${shortDay(x.date)}</h2><span>${x.state === 'non_ancora_pubblicato' ? t('pl_not_pub') : ''}</span></div>`;
+    if (x.state === 'non_ancora_pubblicato') return `<section>${label}<div class="list"><div class="row"><span class="main"><div class="meta wtx">${t('pl_not_pub')}</div></span></div></div></section>`;
+    const rows = x.shifts.map(s => `<div class="row"><span class="main"><div class="name">${s.name ? esc(s.name) : s.open ? t('pl_open') : esc(s.role)}</div><div class="meta">${s.name ? esc(s.role) + (s.open ? ' · ' + t('pl_open') : '') : ''}${s.changed ? ' · ' + t('pl_changed') : ''}</div></span><span class="r">${tm(s.start)} – ${tm(s.end)}</span></div>`).join('');
+    return `<section>${label}<div class="list">${rows || `<div class="row"><span class="main"><div class="meta">${t(chef || x.state === 'nessun_turno' ? 'pl_none' : 'pl_none_you')}</div></span></div>`}</div></section>`;
+  };
   return `<div class="page" style="--c:var(--plan)">${top}
-    <div class="list">${d.shifts.map(s => `<div class="row"><span class="main"><div class="name">${shortDay(s.date)}</div><div class="meta">${esc(s.role_name || s.department_name || '')}${s.is_closing ? ' · ' + t('closing') : ''}</div></span><span class="right">${esc(s.start_label || '')}–${esc(s.end_label || '')}</span></div>`).join('') || `<div class="row"><span class="main"><div class="meta">${t('no_shifts')}</div></span></div>`}</div>
-    <p class="note" style="font-size:14px">${t('planner_todo_pending')}</p>
+    ${d.linked ? '' : `<p class="note">${t('pl_unlinked')}</p>`}
+    ${d.days.map(day).join('')}
+    <p class="note" style="font-size:14px">${d.read_at ? t('pl_read', { t: esc(new Date(d.read_at).toLocaleString(I.dateLocale(), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })) }) : ''}</p>
   </div>`;
 } };
 

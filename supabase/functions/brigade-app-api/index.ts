@@ -13,11 +13,12 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 import * as SERVICE from './service.ts'
+import * as P from './planner_core.ts'                     // B-25 Planner 14 giorni (solo regole di visibilità e stato giorno)
 import * as CP from './catering_plan.ts'                   // B-25 passo 1: Catering Production/Shopping/Cost, solo lettura, solo Chef
 import * as CC from './catering_cost.ts'                   // B-99c «Food cost catering» (solo Chef)
 import { resumi } from '../_shared/tec_resumo.js'
 
-const BUILD = 'api-r1.18+b91+b99c+b25cat2'
+const BUILD = 'api-r1.18+b91+b99c+b25cat3'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -224,11 +225,17 @@ async function prepDetail(u: User, id: number) {
   return { prep: p, plan_date: plan.date, plan: r ? { status: r.status, qty: r.planned_output, unit: r.output_unit || p.unit, reason: reasonEN(r.reason) } : null, recipe: rec, yield: y, history: ev.map(e => ({ at: e.created_at, by: names[e.user_id] || '', kind: e.kind, qty: e.qty, unit: e.unit })), units: UNITS }
 }
 
+/* B-25 Planner (Max GO 22/11/2026): 14 giorni da 7shifts (turni_oggi, cucina BOH, nessuna paga). Lo Chef vede tutti i turni; lo staff SOLO i propri
+   (nessuna visibilità sui colleghi). Un giorno senza turni pubblicati NON è «libero»: oltre l'ultimo giorno pubblicato (o con sole bozze) è «non ancora pubblicato». */
 async function planner(u: User) {
+  const t = today(), end = addDays(t, 13), isChef = u.role === 'chef'
   const sn = must(await svc.from('users').select('schedule_name').eq('id', u.id).maybeSingle()) as any
-  const t = today()
-  const rows = sn?.schedule_name ? must(await svc.from('shifts_schedule').select('date,role_name,start_label,end_label,department_name,is_closing').eq('employee_name', sn.schedule_name).gte('date', t).lte('date', addDays(t, 13)).order('date')) as any[] : []
-  return { shifts: rows }
+  const me = P.norm(sn?.schedule_name)
+  const gi = must(await svc.from('turni_giorni').select('giorno,pubblicati,bozze,letto_il').gte('giorno', t).lte('giorno', end).order('giorno')) as any[]
+  const rows = must(await svc.from('turni_oggi').select('giorno,inizio,fine,ruolo,nome,stato,letto_il').gte('giorno', t).lte('giorno', end).neq('stato', 'cancellato').order('inizio')) as any[]
+  const days = P.buildDays(t, gi, rows, me, isChef)
+  const readAt = [...gi.map(g => g.letto_il), ...rows.map(r => r.letto_il)].filter(Boolean).sort().pop() || null
+  return { ok: true, today: t, scope: isChef ? 'all' : 'mine', linked: isChef || !!me, read_at: readAt, days }
 }
 
 async function catering(u: User) {
