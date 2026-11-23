@@ -35,7 +35,8 @@ for (const [dev, w, h] of [['telefono', 390, 844], ['computer', 1440, 900]]) {
     ok(!/\$\d/.test(t.replace(/\$0/g, '')) || !/151[.,]05|156[.,]45|15[.,]10|31[.,]24/.test(t), `${dev} · ${nome}: nessun importo del calcolo provvisorio`)
     for (const k of ['prod', 'shop', 'cost']) {
       await pg.click(`button[data-a="cplanSeg"][data-k="${k}"]`); await pg.waitForTimeout(250); t = await pg.locator('#main').innerText()
-      ok(/Importi non attendibili qui/.test(t) && !/\$\d/.test(t) && !/Penne|Penne|INCOMPLETO|PREVISTO/.test(t), `${dev} · ${nome} · ${k}: avviso «importi non attendibili», nessun importo, rimando a Food cost`)
+      const info = k === 'prod' ? /porzioni|lotti|quantit/i.test(t) : k === 'shop' ? /Da comprare|Quantità non calcolabile/i.test(t) : /Cosa manca|manca/i.test(t)
+      ok(/Importi nascosti/.test(t) && !/\$\s?\d/.test(t) && info, `${dev} · ${nome} · ${k}: avviso, nessun importo in dollari, informazioni operative ancora visibili`)
     }
     await pg.click('#main button[data-a="cplanSeg"][data-k="food"]'); await pg.waitForTimeout(300)
     ok(await pg.locator('#main iframe').count() === 1, `${dev} · ${nome}: dal pulsante si torna a Food cost`)
