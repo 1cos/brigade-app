@@ -201,12 +201,9 @@ function render(p) {
   h += `</div></div>`;
 
   if (m === 'view') {
-    // the Chef's review: one tap marks the recipe as verified and opens the next one (not a publication)
-    if (chef) { const rv = d.recipe && d.recipe.review, nx = H.next ? H.next(p.id) : null;
+    if (chef) {
       // MR-26 (Chef 27/10): with a draft to publish there is ONE button, «Salva e pubblica» (it records «Verificata», then shows what changes)
-      if (!d.publish_locked && (d.source === 'official' || d.recipe.lab_only) && d.draft) h += pubHtml(p, d);      // MR-12: a lab proposal publishes as a NEW recipe
-      else h += `<div class="mr-review">${rv ? `<button class="mr-link" data-m="unreview">${T('unreview')}</button>${nx ? `<button class="mr-btn dark grow" data-m="next">${T('next')} ›</button>` : ''}`
-        : `<button class="mr-btn pri grow" data-m="review">✓ ${nx ? T('verify_next') : T('verify')}</button>${nx ? `<button class="mr-btn" data-m="next">${T('skip')} ›</button>` : ''}`}</div>`; }
+      if (!d.publish_locked && (d.source === 'official' || d.recipe.lab_only) && d.draft) h += pubHtml(p, d); }      // MR-12: a lab proposal publishes as a NEW recipe
     const links = [];
     if (chef) links.push(['cost', T('food_cost')]);
     links.push(['struct', T('structure')], ['hist', T('history')]);
@@ -375,7 +372,7 @@ function panelHtml(p, d, doc, ctx) {
     let h = `<div class="mr-panel">` + kv(T('t_source'), d.source === 'lab' ? T('src_lab') : T('src_official', { t: dt(d.read_at) }))
       + kv(T('t_draft'), d.draft ? T('t_draft_v', { v: d.draft._version, at: dt((d.versions || []).find(v => v.state === 'bozza')?.at) }) : T('t_none'))
       + ((shownDoc(d, p).yield || {}).label_hist || (shownDoc(d, p).yield || {}).label ? kv(T('t_yield_hist'), esc([].concat((shownDoc(d, p).yield || {}).label_hist || [], (shownDoc(d, p).yield || {}).label || []).join(' · ')) + ` <span class="mr-muted">${T('t_yield_hist_note')}</span>`) : '')
-      + kv(T('t_publish'), d.publish_locked ? T('t_locked') : T('t_test')) + kv(T('t_review'), d.recipe && d.recipe.review ? T('verified_by', { by: esc(d.recipe.review.by || ''), at: esc(dt(d.recipe.review.at)) }) : T('t_not_reviewed'));
+      + kv(T('t_publish'), d.publish_locked ? T('t_locked') : T('t_test'));
     { const sd = shownDoc(d, p), cc = E().cost(p.id, 1, ctxFor(d, p.id, sd, showsDraft(d, p)))      // MR-05: 1 ml = 1 g only written here
       if (cc.d1_lines && cc.d1_lines.length) h += kv(T('t_d1'), esc(cc.d1_lines.map(id => { const l = (sd.lines || []).find(x => x.id === id); return l ? lineName(d, l) : id }).join(', ')) + ` <span class="mr-muted">${T('t_d1_note')}</span>`); }
     return h + `<p class="mr-muted"><b>${T('st_legend')}</b></p><p class="mr-muted">${T('locked_note')} ${T('hist_official')}</p></div>`;
