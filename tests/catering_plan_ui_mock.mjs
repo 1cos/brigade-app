@@ -48,7 +48,7 @@ for (const [dev, w, h] of [['telefono', 390, 844], ['tablet', 820, 1180], ['comp
   await pg.locator(`#main button[data-a="openPlan"][data-id="${ID}"]`).click(); await pg.waitForTimeout(500)
   ok((await H1(pg)) === 'Mason Rehearsal', `${dev} · apre Mason`)
   let t = await pg.locator('#main').innerText()
-  ok(/PENNE ARRABBIATA BUFFET/.test(t) && /Grilled Chicken/.test(t) && /Lasagna Pan/.test(t) && /Non calcolabile/.test(t), `${dev} · Production: 3 piatti, 2 segnati «non calcolabile»`)
+  ok(/PENNE ARRABBIATA BUFFET/.test(t) && /Grilled Chicken/.test(t) && /Lasagna Pan/.test(t) && /Non calcolabile/.test(t), `${dev} · Production: 4 componenti, 2 segnati «non calcolabile»`)
   ok(/1 righe del menu Tripleseat senza collegamento/.test(t) && /Tiramisu/.test(t), `${dev} · Production: segnala Tiramisu senza collegamento`)
   await pg.screenshot({ path: `${OUT}/${P}${dev}_2_production.png`, fullPage: true }); await noH(pg, `${dev} production`)
   await pg.click('button[data-a="cplanSeg"][data-k="shop"]'); await pg.waitForTimeout(300)
