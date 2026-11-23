@@ -237,7 +237,7 @@ export async function mreRecipe(u: U, id: string, svc: any) {
     if (source === 'lab' && !isChef && !(r && r.is_test)) throw new MreError(404, 'not_found')     // proposals are Chef work in progress
     const t = await tree(tx, svc, cur, isChef)
     const out: any = { engine: E.MRE_ENGINE_VERSION, source, read_at: off.read_at, publish_locked: !(r && r.is_test) && !(publishOn() && (source === 'official' || !!(r && r.source && r.source.lab_only))),
-      recipe: { id, pilot: r ? r.pilot : false, current_version: r ? r.current_version : 0, linked: !!r, lab_only: !!(r && !r.is_test && r.source && r.source.lab_only), review: isChef && r && r.source && r.source.review ? r.source.review : null },
+      recipe: { id, pilot: r ? r.pilot : false, current_version: r ? r.current_version : 0, linked: !!r, lab_only: !!(r && !r.is_test && r.source && r.source.lab_only), modifier_linked: !!(off.raw && off.raw[id] && off.raw[id].r && off.raw[id].r.modifier_pos_names), review: isChef && r && r.source && r.source.review ? r.source.review : null },
       doc: isChef ? cur : stripEst(cur), docs: isChef ? t.docs : stripEstDocs(t.docs), draft_docs: isChef ? t.draftDocs : {}, facts: isChef ? t.facts : stripPrices(t.facts), measures: t.measures }
     const vers = r ? await tx`select version, state, reason, created_by, created_at, published_by, published_at from mre.versions where recipe_id = ${id} order by version desc` : []
     const prods = r ? await tx`select id, version, factor, reference, yield_planned_g, yield_real_g, changed, note, user_id, created_at from mre.productions where recipe_id = ${id} ${isChef ? tx`` : tx`and user_id = ${u.id}`} order by created_at desc limit 20` : []
@@ -314,8 +314,11 @@ function cleanDoc(id: string, d: any) {
     return o })
   const y = d.yield || {}
   const hist = (Array.isArray(y.label_hist) ? y.label_hist : []).slice(0, 10).map((x: any) => str(x, 200)).filter(Boolean)
-  return { schema: 1, id, title: str(d.title, 200) || '', category: str(d.category, 100), yield: { g: num(y.g), portions: num(y.portions), label: str(y.label, 120), count: num(y.count), count_unit: str(y.count_unit, 20),
-      ...(num(y.portion_g) ? { portion_g: num(y.portion_g) } : {}), ...(y.portion_unit ? { portion_unit: str(y.portion_unit, 20) } : {}), ...(hist.length ? { label_hist: hist } : {}) },
+  // MR-78: a lot weight that disagrees with portions × portion weight is not an error for the Chef: what he typed (portions, portion weight) wins and the lot weight is derived (no hidden number blocks the save)
+  const yg = (num(y.portion_g) && num(y.portions) && num(y.g) && Math.abs(num(y.portion_g)! * num(y.portions)! - num(y.g)!) > 0.02 * num(y.g)!) ? null : num(y.g)
+  return { schema: 1, id, title: str(d.title, 200) || '', category: str(d.category, 100), yield: { g: yg, portions: num(y.portions), label: str(y.label, 120), count: num(y.count), count_unit: str(y.count_unit, 20),
+      ...(num(y.portion_g) ? { portion_g: num(y.portion_g) } : {}), ...(y.portion_unit ? { portion_unit: str(y.portion_unit, 20) } : {}), ...(hist.length ? { label_hist: hist } : {}),
+      ...(y.modifier === null ? { modifier: null } : Number(y.modifier) > 0 && Number(y.modifier) <= 1 ? { modifier: Number(y.modifier) } : {}) },       // B-191: portion sold as a POS modifier (0–1); null = taken away
     has_stock: !!d.has_stock, stock: Array.isArray(d.stock) ? d.stock.slice(0, 10) : [], lines, steps, notes: str(d.notes, 4000) }
 }
 
@@ -375,9 +378,9 @@ async function titleTaken(svc: any, title: string) {
   return rs.some(r => String(r.title || '').trim().toLowerCase() === t.toLowerCase())
 }
 const fcLot = (bd: any) => bd && bd.semaforo && bd.semaforo.costo_noto != null ? Number(bd.semaforo.costo_noto) : null
-async function publishContext(id: string, svc: any) {
+async function publishContext(id: string, svc: any, direct = false) {
   const st = await lab(async tx => {
-    const [r] = await tx`select source, is_test from mre.recipes where id = ${id}`
+    const [r] = await tx`select source, is_test, jsonb_array_length(coalesce(diffs, '[]'::jsonb)) as nd, diffs_checked_at from mre.recipes where id = ${id}`
     const [dr] = await tx`select version, doc, created_at from mre.versions where recipe_id = ${id} and state = 'bozza'`
     return { r, dr }
   })
@@ -385,7 +388,7 @@ async function publishContext(id: string, svc: any) {
   if (st.r.is_test) throw bad('solo_laboratorio')
   const isNew = !!(st.r.source && st.r.source.lab_only)                  // MR-12: a lab proposal → a NEW recipe in Brigade
   const review = st.r.source && st.r.source.review
-  if (!review || new Date(review.at).getTime() < new Date(st.dr.created_at).getTime()) throw new MreError(409, 'serve_verificata')
+  if (!direct && (!review || new Date(review.at).getTime() < new Date(st.dr.created_at).getTime())) throw new MreError(409, 'serve_verificata')   // SALVA DIRETTO: nessuna verifica
   const doc = Object.assign({}, st.dr.doc, { id })
   const off: any = isNew ? { raw: { [id]: emptyOfficial(id, doc.title) }, byId: {}, docs: {} } : await readOfficial(svc, [id])
   const raw = off.raw[id]; if (!raw) throw new MreError(404, 'not_found')
@@ -396,7 +399,7 @@ async function publishContext(id: string, svc: any) {
   return await lab(async tx => {
     const tBefore = await tree(tx, svc, off.docs[id], false), tAfter = await tree(tx, svc, doc, false)
     const facts = Object.assign({}, tBefore.facts, tAfter.facts)
-    const plan = P.planPublish({ id, doc, off: raw, facts, byId })
+    const plan = P.planPublish({ id, doc, off: raw, facts, byId, direct, noDerive: direct && !!(st.r.nd > 0 && !st.r.diffs_checked_at) })   // SALVA UNICO: differenze sostanziali irrisolte (mre.recipes.diffs non vuote e mai controllate) → solo le righe cambiate, il testo scritto NON si rigenera
     // a sub-recipe that is not in Brigade (a lab proposal) cannot be written as a BOM row
     for (const l of doc.lines || []) if (l.kind === 'recipe' && !byId[l.ref]) (plan.refusals as any[]).push({ code: 'sottoricetta_non_in_brigade', line: l.id, msg: `${(tAfter.docs[l.ref] || {}).title || l.ref}: questa sottoricetta non è ancora in Brigade (pubblicala prima)` })
     if (isNew) {
@@ -456,12 +459,13 @@ export async function mrePublish(u: U, b: any, svc?: any) {
   })
 }
 
-async function publishOfficial(u: U, id: string, b: any, reason: string | null, svc: any) {
-  const c = await publishContext(id, svc)
+async function publishOfficial(u: U, id: string, b: any, reason: string | null, svc: any, direct = false) {
+  const c = await publishContext(id, svc, direct)
   if (c.plan.empty) throw bad('niente_da_pubblicare')
   if (!c.plan.ok) throw new MreError(409, 'non_pubblicabile')
   if (String(b?.impronta || '') !== c.fp) throw new MreError(409, 'ricetta_cambiata')          // Brigade changed after the preview
   if (String(b?.piano || '') !== c.planHash) throw new MreError(409, 'piano_cambiato')         // the draft changed after the preview
+  let diag: any = null          // MR-78: what FC05 read when the check fails (written to the audit, nothing else)
   try {
     return await lab(async tx => {
       const [{ w }] = c.isNew
@@ -471,13 +475,16 @@ async function publishOfficial(u: U, id: string, b: any, reason: string | null, 
       const f = (x: string) => c.facts[x] || {}
       const rows = (w.after.bom as any[]).map(x => Object.assign({}, x, { ing_name: x.item_id ? f(x.item_id).name ?? null : null, policy: x.item_id ? f(x.item_id).policy ?? null : null }))
         .sort((a, b) => (a.sort_order ?? 1e9) - (b.sort_order ?? 1e9) || a.bom_id - b.bom_id)
-      const diff = P.verifyPublished({ id, doc: c.doc, offAfter: { r: w.after.r, rows, stepRows: w.after.steps, prepRows: c.raw.prepRows, y: w.yield || {} }, facts: c.facts, byId: c.byId })
+      const diff = P.verifyPublished({ direct, noDerive: c.plan.noDerive === true, stepsKept: c.plan.stepsKept ?? "", id, doc: c.doc, offAfter: { r: Object.assign({}, w.after.r, w.after.m && 'modifier_portion_factor' in w.after.m ? { modifier_portion_factor: w.after.m.modifier_portion_factor } : {}), rows, stepRows: w.after.steps, prepRows: c.raw.prepRows, y: w.yield || {} }, facts: c.facts, byId: c.byId })
       const fb = c.isNew ? 0 : fcLot(c.fc05), fa = fcLot(w.fc05)          // a new recipe: FC05 had nothing before
       const eb = c.strictCost.before.food + c.strictCost.before.pack, ea = c.strictCost.after.food + c.strictCost.after.pack
-      const fcOk = fb == null || fa == null ? fb == null && fa == null : Math.abs((fa - fb) - (ea - eb)) <= Math.max(0.01, 0.005 * Math.max(Math.abs(fa), 1))
-      const checks = { rilettura: diff, fc05: { before: fb, after: fa }, motore: { before: eb, after: ea }, fc05_ok: fcOk }
+      // MR-33 (Lasagna Pan 27/10): when FC05 could not cost the recipe BEFORE (a part «non stimabile»: its 0 is "unknown", not $0),
+      // there is no movement to compare; the rows read back (rilettura) still have to say exactly what the Chef approved
+      const fbUnknown = !c.isNew && !!(c.fc05 && c.fc05.semaforo && (c.fc05.semaforo.non_stimabili || []).length)
+      const fcOk = fbUnknown ? fa != null : fb == null || fa == null ? fb == null && fa == null : Math.abs((fa - fb) - (ea - eb)) <= Math.max(0.01, 0.005 * Math.max(Math.abs(fa), 1))
+      const checks = { rilettura: diff, fc05: { before: fb, after: fa }, motore: { before: eb, after: ea }, fc05_ok: fcOk, ...(direct ? { salva_diretto: true } : {}), ...(fbUnknown ? { fc05_prima_non_stimabile: true } : {}) }
       if (diff.length) throw new MreError(500, 'rilettura_diversa')          // same transaction: nothing stays written
-      if (!fcOk) throw new MreError(500, 'controllo_fc05')
+      if (!fcOk && !direct) { diag = { checks, fc_lines: ((w.fc05 && w.fc05.lines) || []).map((l: any) => ({ n: l.name, q: l.qty, u: l.unit, c: l.cost, s: l.status })), eng: { before: c.strictCost.before, after: c.strictCost.after } }; throw new MreError(500, 'controllo_fc05') }
       await tx`update mre.publications set checks = ${sql.json(checks as any)} where id = ${w.publication}`
       const v = await tx`update mre.versions set state = 'pubblicata', published_by = ${u.id}, published_at = now(), reason = ${reason} where recipe_id = ${id} and version = ${c.draftVersion} and state = 'bozza' returning version`
       if (v.length !== 1) throw new MreError(409, 'bozza_cambiata')
@@ -487,7 +494,7 @@ async function publishOfficial(u: U, id: string, b: any, reason: string | null, 
       return { ok: true, publication: w.publication, version: c.draftVersion, summary: c.plan.summary, checks }
     })
   } catch (e: any) {
-    await lab(async tx => audit(tx, u, 'publish_failed', id, { code: e.code || String(e.message || e).slice(0, 200) })).catch(() => {})
+    await lab(async tx => audit(tx, u, 'publish_failed', id, { code: e.code || String(e.message || e).slice(0, 200), ...(diag ? { diag } : {}) })).catch(() => {})
     const m = String(e.message || ''), k = /mr(?:04|12):([a-z_]+)/.exec(m)
     if (k) throw new MreError(409, k[1])
     throw e
@@ -863,4 +870,31 @@ export async function tecPropostaNuova(u: U, b: any, svc: any) {
     return { ok: true, ricetta_id: id, titolo, frasi: r.frasi, avvisi: r.avvisi, passi_da_tradurre: r.passi_da_tradurre.length,
              nota: 'Proposta salvata come BOZZA: non è in Brigade. Max la trova in Recipe Master → Ricette, segnata «da T.E.C.»: la controlla, la segna «Verificata» e la crea lui con «Pubblica in Brigade come ricetta NUOVA».' }
   })
+}
+
+/** SALVA DIRETTO (Max 21/11): «Salva» = la ricetta cambia per tutti. Stessa strada provata della pubblicazione (publish_write: impronta,
+ *  scrittura, rilettura, registro prima/dopo, ritorno con mre.publish_restore), senza verifica, senza anteprima a due tocchi, senza bozza che resti.
+ *  Rifiuta SOLO quantità mancante o unità sconosciuta (una riga in italiano). Il resto salva e resta come avviso («manca»). */
+export async function mreSalva(u: U, b: any, svc: any) {
+  chef(u)
+  if (!publishOn()) throw new MreError(423, LOCK)
+  const id = String(b?.id || ''); if (!isUuid(id)) throw bad('bad_id')
+  const reason = String(b?.reason || '').trim().slice(0, 500) || null
+  // stato di partenza della bozza: se il salvataggio non riesce si torna ESATTAMENTE a com'era (una ricetta nuova del laboratorio non si perde mai)
+  const prior = await lab(async tx => { const [d] = await tx`select version, doc from mre.versions where recipe_id = ${id} and state = 'bozza'`; const [r] = await tx`select source from mre.recipes where id = ${id}`; return { d, labOnly: !!(r && r.source && r.source.lab_only) } })
+  const back = async () => { await lab(async tx => {
+    if (prior.d) await tx`update mre.versions set doc = ${sql.json(prior.d.doc as any)} where recipe_id = ${id} and version = ${prior.d.version} and state = 'bozza'`
+    else if (!prior.labOnly) await tx`delete from mre.versions where recipe_id = ${id} and state = 'bozza'` }).catch(() => {}) }
+  const sv = await mreSaveDraft(u, { id, doc: b?.doc, base: b?.base }, svc)           // controlli sulla ricetta + collegamento (resta la stessa strada)
+  try {
+    const c = await publishContext(id, svc, true)
+    if (c.plan.empty) { await back(); return { ok: true, nessun_cambiamento: true } }
+    if (!c.plan.ok) throw new MreError(422, 'rifiuto:' + String((c.plan.refusals[0] || {}).msg || 'non leggibile dai bot').slice(0, 200))
+    if (b?.impronta && String(b.impronta) !== c.fp) throw new MreError(409, 'ricetta_cambiata')
+    const r: any = await publishOfficial(u, id, { impronta: c.fp, piano: c.planHash }, reason, svc, true)
+    return Object.assign(r, { avvisi: c.plan.warnings.map((w: any) => w.msg), costo: sv.cost, testo_non_rigenerato: c.plan.noDerive === true })
+  } catch (e) {
+    await back()
+    throw e
+  }
 }

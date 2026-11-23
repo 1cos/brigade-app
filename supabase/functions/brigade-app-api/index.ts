@@ -13,8 +13,10 @@ import * as MRE from './mre.ts'
 import * as OFFICE from './office.ts'
 import * as KITCHEN from './kitchen.ts'
 import * as SERVICE from './service.ts'
+import * as CC from './catering_cost.ts'                   // B-99c «Food cost catering» (solo Chef)
+import { resumi } from '../_shared/tec_resumo.js'
 
-const BUILD = 'api-r1.18'
+const BUILD = 'api-r1.18+b91+b99c'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const PEPPER = Deno.env.get('BRIGADE_RATE_PEPPER') ?? ''
@@ -26,7 +28,7 @@ const svc = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSessio
 
 type User = { id: number; name: string; lang: string | null; station: string | null; role: 'chef' | 'staff'; session_id: string }   // B-63: nel database c'è anche 'assistente' (bloccato sotto)
 // B-63: il ruolo «assistente» (T.E.C. per Max) può usare SOLO queste operazioni. Tutto il resto: 403.
-const TEC_OPS = new Set(['me', 'tec_leggi', 'tec_prova', 'tec_salva_bozza', 'tec_proposta_nuova', 'sb'])   // B-86: 'sb' = monitor camerieri a voce
+const TEC_OPS = new Set(['me', 'tec_leggi', 'tec_prova', 'tec_salva_bozza', 'tec_proposta_nuova', 'sb', 'tec_cucina'])   // B-86: 'sb' = monitor camerieri a voce; B-91: 'tec_cucina' = letture della cucina (sola lettura)
 
 class HttpError extends Error { constructor(public status: number, public code: string) { super(code) } }
 const deny = (code = 'unauthorized') => new HttpError(401, code)
@@ -298,6 +300,21 @@ async function act(u: User, b: any) {
   return { ok: true, event: r.data, mode: 'test' }
 }
 
+
+/* ---------- B-91: letture di Brigade 2.0 per T.E.C. — SOLA LETTURA, riassunte ---------- */
+async function tecCucina(u: User, body: any) {
+  if ((u.role as string) !== 'assistente' && u.role !== 'chef') throw forbid()
+  const as = { ...u, role: 'chef' } as any          // le stesse letture che vede lo Chef; nessuna scrittura esiste in queste funzioni
+  const cosa = String(body?.cosa || '')
+  let r: unknown
+  if (cosa === 'completezza') r = await KITCHEN.completeness(as, svc)
+  else if (cosa === 'conoscenza') r = await KITCHEN.knowledgeGaps(as, svc)
+  else if (cosa === 'checklist') r = await KITCHEN.smartChecklist(as, { station: body?.station }, svc)
+  else if (cosa === 'ufficio') r = await OFFICE.office(as, svc)
+  else throw bad('bad_cosa')
+  return { ok: true, cosa, risultato: resumi(r) }
+}
+
 /* ---------- router ---------- */
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get('origin') ?? ''
@@ -314,6 +331,7 @@ Deno.serve(async (req: Request) => {
     if ((u.role as string) === 'assistente' && !TEC_OPS.has(op)) throw forbid()
     let out: unknown
     switch (op) {
+      case 'tec_cucina': out = await tecCucina(u, body); break
       case 'tec_leggi': out = await MRE.tecLeggi(u as any, body, svc); break
       case 'tec_prova': out = await MRE.tecProva(u as any, body, svc); break
       case 'tec_salva_bozza': out = await MRE.tecSalvaBozza(u as any, body, svc); break
@@ -342,6 +360,7 @@ Deno.serve(async (req: Request) => {
       case 'mre_prepare_edit': out = await MRE.mrePrepareEdit(u, body, svc); break
       case 'mre_save_draft': out = await MRE.mreSaveDraft(u, body, svc); break
       case 'mre_discard': out = await MRE.mreDiscard(u, body); break
+      case 'mre_salva': out = await MRE.mreSalva(u, body, svc); break          // SALVA DIRETTO (lab, non installato)
       case 'mre_publish': out = await MRE.mrePublish(u, body, svc); break
       case 'mre_publish_preview': out = await MRE.mrePublishPreview(u, body, svc); break     // MR-04: only with the switch on
       case 'mre_publications': out = await MRE.mrePublications(u, body); break
@@ -357,11 +376,12 @@ Deno.serve(async (req: Request) => {
       case 'mre_match_decide': out = await MRE.mreMatchDecide(u, body, svc); break
       case 'sb': out = await SERVICE.sb(u as any, body, svc); break                       // B-86: MONITORS + Monitor 3 camerieri
       case 'mre_translate': out = await MRE.mreTranslate(u, body); break
+      case 'cc_load': case 'cc_save': case 'cc_history': case 'cc_recipe': case 'cc_import': out = await CC.cc(u as any, body, svc); break   // B-99c
       default: throw bad('bad_op')
     }
     return new Response(JSON.stringify(out), { headers: H })
   } catch (e) {
-    if (e instanceof HttpError || e instanceof MRE.MreError || e instanceof OFFICE.OfficeError || e instanceof KITCHEN.KitchenError || e instanceof SERVICE.ServiceError) return new Response(JSON.stringify({ ok: false, error: (e as any).code }), { status: (e as any).status, headers: H })
+    if (e instanceof HttpError || e instanceof MRE.MreError || e instanceof OFFICE.OfficeError || e instanceof KITCHEN.KitchenError || e instanceof SERVICE.ServiceError || e instanceof CC.CostError) return new Response(JSON.stringify({ ok: false, error: (e as any).code }), { status: (e as any).status, headers: H })
     console.error('[app-api]', (e as Error)?.message || e)
     return new Response(JSON.stringify({ ok: false, error: 'server_error' }), { status: 500, headers: H })
   }
