@@ -270,7 +270,13 @@ export async function mreIngredients(u: U, q: string, svc: any) {
   chef(u)
   const s = String(q || '').trim().slice(0, 60)
   const recs = s.length >= 2 ? must(await svc.from('recipes').select('id,title').ilike('title', '%' + s.replace(/[%_]/g, '') + '%').order('title').limit(15)) : []
-  return await lab(async tx => { const [{ r }] = await tx`select mre.ingredient_search(${s}) as r`; return { ingredients: r, recipes: recs } })
+  return await lab(async tx => {
+    const [{ r }] = await tx`select mre.ingredient_search(${s}) as r`
+    // the facts (name, price, conversions) of what was found: the editor shows a new line complete before Save
+    const ids = (r || []).map((x: any) => x.id)
+    const facts = ids.length ? ((await tx`select mre.ingredient_facts(string_to_array(${ids.join(',')}, ',')::uuid[]) as f`)[0].f || {}) : {}
+    return { ingredients: r, recipes: recs, facts }
+  })
 }
 
 /* ---------------- Chef: "Edit" on ANY recipe (B-25 16/10; step A 20/10) ----------------
