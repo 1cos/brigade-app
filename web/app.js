@@ -218,8 +218,8 @@ SCREENS.restaurant = { title: () => t('m_lab_title'), c: '--rest', render(p) {
   </div>`;
 }, after(p, active) { searchBind(active); } };
 function searchBind(active) {
-  const i = $('q'); if (!i) return;
-  if (active === 'q') { i.focus(); const v = i.value; i.setSelectionRange(v.length, v.length); }
+  const i = $('q'); if (!i || i._sb) return; i._sb = 1;   // R1.28: a field that is kept gets its one listener only once
+  if (active === 'q' && document.activeElement !== i) { i.focus(); const v = i.value; i.setSelectionRange(v.length, v.length); }
   // the home of a world starts without params
   let tm; i.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { const e = cur(); e.p = e.p || {}; e.p.q = i.value; render(true); }, 90); });   // R1.18: 220 → 90 ms, the list follows the typing
 }
@@ -412,14 +412,27 @@ function renderWorlds() {
   if ($('worlds').dataset.h !== html) { $('worlds').innerHTML = html; $('worlds').dataset.h = html; }   // same bar → not rebuilt, so a tap is never lost while data arrives
 }
 function layout() { $('main').style.top = $('top').offsetHeight + 'px'; $('main').style.bottom = $('worlds').offsetHeight + 'px'; }
+/* R1.28: the search field you are typing in is never replaced (a new field on every letter made the iPhone keyboard stutter):
+   only what is around it changes. False = not this shape, the caller rebuilds the page as before. */
+function keepField(oq, html) {
+  const pg = oq && oq.parentNode; if (!pg || pg !== $('main').firstElementChild) return false;
+  const box = document.createElement('div'); box.innerHTML = html;
+  const np = box.firstElementChild, nq = np && np.querySelector('#q'); if (!nq || nq.parentNode !== np || box.children.length !== 1) return false;
+  const kids = Array.from(np.childNodes), k = kids.indexOf(nq);
+  while (oq.previousSibling) pg.removeChild(oq.previousSibling);
+  while (oq.nextSibling) pg.removeChild(oq.nextSibling);
+  kids.slice(0, k).forEach(n => pg.insertBefore(n, oq)); kids.slice(k + 1).forEach(n => pg.appendChild(n));
+  oq.placeholder = nq.placeholder; pg.className = np.className; pg.setAttribute('style', np.getAttribute('style') || '');
+  return true;
+}
 function render(keep) {
   if (!ME) return;
   const e = cur(), sc = SCREENS[e.s] || SCREENS.today;
-  const y = $('main').scrollTop, active = document.activeElement && document.activeElement.id;
+  const y = $('main').scrollTop, active = document.activeElement && document.activeElement.id, typing = active === 'q' ? document.activeElement : null;
   let html; try { html = sc.render(e.p || {}); } catch (x) { console.error(x); html = `<div class="page">${backBtn()}<div class="err">${esc(x.message)}</div></div>`; }
   // a refresh that changes nothing does not rebuild the page: a tap landing while data arrives is never lost
   const same = keep && $('main')._h === html;
-  if (!same) { $('main').innerHTML = html; $('main')._h = html; }
+  if (!same) { if (!keepField(typing, html)) $('main').innerHTML = html; $('main')._h = html; }
   $('who').textContent = ME.name + ' · ' + t(isChef() ? 'chef' : 'staff_role');      // always who is signed in
   $('switch').textContent = t('switch_user'); $('switch').hidden = false;
   $('mode').textContent = t('test_mode');
