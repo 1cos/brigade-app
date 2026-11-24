@@ -466,6 +466,16 @@ const CC_V = Date.now();   // una pagina nuova a ogni apertura di Brigade (GitHu
 SCREENS.cpassati = { title: () => 'Food cost catering', c: '--cat', render() { return `<div class="page" style="--c:var(--cat);max-width:none">${backBtn()}<iframe src="catering_cost.html?v=${CC_V}" title="Food cost catering" style="width:calc(100% + 32px);margin:0 -16px;height:calc(100vh - 120px);min-height:560px;border:0;background:transparent"></iframe></div>`; } };
 
 /* ============ PLANNER (my shifts; the to-do planner is its own pending module) ============ */
+/* Planner: colore per tipo di turno (Max 24/11): mattina / sera / lavaggio. Il tipo si legge dal ruolo di 7shifts; se il ruolo non è riconosciuto, dall'ora di inizio (prima delle 15:00 = mattina). */
+const PL_COLOR = { morning: '#d97706', evening: '#4f46e5', dish: '#0d9488', other: '#64748b' };
+function shiftKind(s) {
+  const r = String(s.role || '');
+  if (/dish|wash|lava/i.test(r)) return 'dish';
+  if (/evening|dinner|night|close|sera/i.test(r)) return 'evening';
+  if (/morning|prep|breakfast|lunch|open|mattina/i.test(r)) return 'morning';
+  const h = Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Chicago' }).format(new Date(s.start)));
+  return h < 15 ? 'morning' : 'evening';
+}
 SCREENS.planner = { title: () => t('w_plan'), c: '--plan', render() {
   const d = need('planner', null, 5 * 60000);
   const chef = isChef(), top = head(t('next2'), chef ? t('pl_kitchen') : t('my_shifts'));
@@ -474,11 +484,12 @@ SCREENS.planner = { title: () => t('w_plan'), c: '--plan', render() {
   const day = x => {
     const label = `<div class="chap"><h2>${shortDay(x.date)}</h2><span>${x.state === 'non_ancora_pubblicato' ? t('pl_not_pub') : ''}</span></div>`;
     if (x.state === 'non_ancora_pubblicato') return `<section>${label}<div class="list"><div class="row"><span class="main"><div class="meta wtx">${t('pl_not_pub')}</div></span></div></div></section>`;
-    const rows = x.shifts.map(s => `<div class="row"><span class="main"><div class="name">${s.name ? esc(s.name) : s.open ? t('pl_open') : esc(s.role)}</div><div class="meta">${s.name ? esc(s.role) + (s.open ? ' · ' + t('pl_open') : '') : ''}${s.changed ? ' · ' + t('pl_changed') : ''}</div></span><span class="r">${tm(s.start)} – ${tm(s.end)}</span></div>`).join('');
+    const rows = x.shifts.map(s => { const k = shiftKind(s); return `<div class="row" style="border-left:6px solid ${PL_COLOR[k]}"><span class="main"><div class="name">${s.name ? esc(s.name) : s.open ? t('pl_open') : esc(s.role)}</div><div class="meta"><span style="color:${PL_COLOR[k]};font-weight:700">●</span> ${s.name ? esc(s.role) + (s.open ? ' · ' + t('pl_open') : '') : ''}${s.changed ? ' · ' + t('pl_changed') : ''}</div></span><span class="r">${tm(s.start)} – ${tm(s.end)}</span></div>`; }).join('');
     return `<section>${label}<div class="list">${rows || `<div class="row"><span class="main"><div class="meta">${t(chef || x.state === 'nessun_turno' ? 'pl_none' : 'pl_none_you')}</div></span></div>`}</div></section>`;
   };
   return `<div class="page" style="--c:var(--plan)">${top}
     ${d.linked ? '' : `<p class="note">${t('pl_unlinked')}</p>`}
+    <div class="row" style="min-height:0;gap:18px;padding:4px 2px 12px;border:0;flex-wrap:wrap">${['morning', 'evening', 'dish'].map(k => `<span style="font-size:14px;font-weight:600"><span style="color:${PL_COLOR[k]}">●</span> ${t('pl_' + k)}</span>`).join('')}</div>
     ${d.days.map(day).join('')}
     <p class="note" style="font-size:14px">${d.read_at ? t('pl_read', { t: esc(new Date(d.read_at).toLocaleString(I.dateLocale(), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })) }) : ''}</p>
   </div>`;
