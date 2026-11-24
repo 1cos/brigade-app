@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Brigade — Consenso Claude Duet</title>
+<style>
+body{font-family:-apple-system,system-ui,sans-serif;background:#f2f2f7;margin:0;padding:24px;color:#111}
+.c{max-width:420px;margin:40px auto;background:#fff;border-radius:16px;padding:24px}
+h1{font-size:20px;margin:0 0 8px} p{color:#444;line-height:1.4}
+input{width:100%;box-sizing:border-box;font-size:28px;letter-spacing:12px;text-align:center;padding:12px;border:1px solid #ccc;border-radius:12px;margin:12px 0}
+button{width:100%;font-size:17px;padding:14px;border:0;border-radius:12px;background:#111;color:#fff}
+.m{margin-top:12px;min-height:20px;color:#b00020}
+@media (prefers-color-scheme:dark){body{background:#000;color:#eee}.c{background:#1c1c1e}p{color:#bbb}input{background:#2c2c2e;color:#fff;border-color:#444}button{background:#fff;color:#000}}
+</style></head><body><div class="c">
+<h1>Collegare Claude Duet a Brigade?</h1>
+<p>Duet potrà leggere ricette, ingredienti, catering e food cost, e fare le stesse modifiche annullabili di Muse (ricette, food cost catering, monitor). Non può cancellare né toccare pagamenti, utenti o Tripleseat.</p>
+<p>Per consentire inserisci il tuo PIN.</p>
+<input id="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••">
+<button id="go">Consenti</button>
+<div class="m" id="m"></div>
+</div>
+<script>
+const API='https://ydqmumpytgrlceuinoqt.supabase.co/functions/v1/brigade-app-api';
+const MCP='https://ydqmumpytgrlceuinoqt.supabase.co/functions/v1/brigade-mcp/approve';
+const q=new URLSearchParams(location.search);
+const m=t=>document.getElementById('m').textContent=t;
+async function post(u,b,h){const r=await fetch(u,{method:'POST',headers:Object.assign({'content-type':'application/json'},h||{}),body:JSON.stringify(b)});return r.json().catch(()=>({}))}
+document.getElementById('go').onclick=async()=>{
+  const pin=document.getElementById('pin').value; m('');
+  if(!/^\d{4}$/.test(pin)){m('PIN di 4 cifre');return}
+  let id=localStorage.getItem('duet-install')||''; if(id.length<8){id=crypto.randomUUID();try{localStorage.setItem('duet-install',id)}catch(e){}}
+  const l=await post(API,{op:'login',pin:pin,install_id:id});
+  if(!l.ok){m(l.error==='cooldown'?'Troppi tentativi, riprova più tardi':'PIN non valido');return}
+  const a=await post(MCP,{client_id:q.get('client_id'),redirect_uri:q.get('redirect_uri'),state:q.get('state'),code_challenge:q.get('code_challenge')},{authorization:'Bearer '+l.token});
+  post(API,{op:'logout'},{authorization:'Bearer '+l.token});
+  if(!a.ok){m(a.error==='solo_chef'?'Serve un accesso da Chef':'Richiesta non valida, riprova da Duet');return}
+  location.href=a.redirect;
+};
+</script></body></html>
