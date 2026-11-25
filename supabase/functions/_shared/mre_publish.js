@@ -117,7 +117,9 @@ export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = un
   if (y.portion_unit) refusals.push({ code: 'unita_porzione_non_pubblicabile', msg: `Porzione in «${y.portion_unit}»: oggi bot e FC05 non leggono un'unità di porzione; serve un passo a parte` })
   // a typed portion weight makes the lot weight portion × portions (the editor leaves y.g empty): that value is WRITTEN, never emptied —
   // an empty base_weight_g with an empty base_servings leaves FC05 with no yield at all (found 25/11 on SPAGHETTI FRESH PASTA)
-  const yg = y.g == null && Number(y.portion_g) > 0 && P > 0 ? Number(y.portion_g) * P : y.g
+  // the same portion weight again (nothing typed) leaves the lot as it is: a real lot weight (Meatballs 9012 g) is never replaced by a calculated one (9000 g)
+  const pgSame = y.portion_g != null && numEq(y.portion_g, off.r.serving_weight_g)
+  const yg = y.g == null && Number(y.portion_g) > 0 && P > 0 ? (pgSame ? yb.g : Number(y.portion_g) * P) : y.g
   if (!numEq(yg, yb.g)) { setR('base_weight_g', yg ?? null); if (yg == null && Number(off.r.base_weight) > 0) setR('base_weight', null) }
   if (!numEq(y.portions, yb.portions)) {
     // MR-34 (Salmon Aioli 27/10): portions that FC05 already derives from the yield (394 g / 40 g = 9.85) are not written;
