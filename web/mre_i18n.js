@@ -225,7 +225,7 @@ window.I18N.extend(Object.fromEntries(Object.entries({
   st_offline: ['no connection', 'nessuna connessione', 'sin conexión'],
   // R1.17 (Chef 21/10 "STANDARD DI RESA, MULTILINGUA"): one recipe, one number, three languages
   y_expected: ['Expected yield', 'Resa prevista', 'Rendimiento previsto'], y_portion_w: ['Portion weight', 'Peso porzione', 'Peso por porción'],
-  y_cooked: ['cooked · standard', 'cotto · standard', 'cocido · estándar'], y_lot_w: ['Lot weight (only if it is the standard)', 'Peso del lotto (solo se è lo standard)', 'Peso del lote (solo si es el estándar)'],
+  y_unit_w: ['Weight of one {u}', 'Peso di un {u}', 'Peso de un {u}'], y_cooked: ['cooked · standard', 'cotto · standard', 'cocido · estándar'], y_lot_w: ['Lot weight (only if it is the standard)', 'Peso del lotto (solo se è lo standard)', 'Peso del lote (solo si es el estándar)'],
   y_each_cooked: ['each, cooked', 'l\'una, cotti', 'cada una, cocido'], y_derived: ['From these two numbers', 'Da questi due numeri', 'De estos dos números'],
   y_lot_derived: ['expected lot ≈ {w} kg cooked', 'lotto previsto ≈ {w} kg cotti', 'lote previsto ≈ {w} kg cocido'],
   y_real_note: ['A real lot can give a little more or less (water lost in cooking): that is normal and does not change the recipe.', 'Un lotto reale può dare un po\' di più o di meno (acqua persa in cottura): è normale e non cambia la ricetta.', 'Un lote real puede dar un poco más o menos (agua perdida al cocinar): es normal y no cambia la receta.'],

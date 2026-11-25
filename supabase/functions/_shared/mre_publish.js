@@ -48,7 +48,7 @@ export const bomUnit = l => l.kind === 'recipe' && E.normUnit(l.unit) === 'porti
 /* SALVA DIRETTO (Max 21/11): nel salvataggio diretto si rifiuta SOLO quanto i bot non sanno leggere (quantità mancante, unità davvero
    sconosciuta); ogni altro rifiuto diventa un avviso («manca»). Parole di cucina già nel vero (pinch, pizzico…) non sono sconosciute. */
 export const UNITA_CUCINA = new Set(['pinch', 'pizzico', 'drops', 'spicchi', 'foglia'])
-const HARD = new Set(['quantita_mancante', 'unita_sconosciuta', 'sottoricetta_non_in_brigade', 'titolo_mancante', 'nessuna_riga', 'titolo_esistente', 'modifier_senza_nomi_pos', 'modifier_fuori_scala'])
+const HARD = new Set(['resa_azzerata', 'quantita_mancante', 'unita_sconosciuta', 'sottoricetta_non_in_brigade', 'titolo_mancante', 'nessuna_riga', 'titolo_esistente', 'modifier_senza_nomi_pos', 'modifier_fuori_scala'])
 /** il testo dei passi come è scritto in recipe_steps (non il testo con i numeri riallineati alle righe) */
 export const storedSteps = rows => JSON.stringify((rows || []).slice().sort((a, b) => a.step_number - b.step_number).map(s => [s.title, s.title_it, s.title_es, s.instruction_it, s.instruction_en, s.instruction_es]))
 export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = unitInfoDefault, direct = false, noDerive = false }) {
@@ -115,7 +115,10 @@ export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = un
   // ---- yield → recipes fields (FC05 reads them through food_cost.recipe_yield)
   const y = doc.yield || {}, yb = base.yield || {}
   if (y.portion_unit) refusals.push({ code: 'unita_porzione_non_pubblicabile', msg: `Porzione in «${y.portion_unit}»: oggi bot e FC05 non leggono un'unità di porzione; serve un passo a parte` })
-  if (!numEq(y.g, yb.g)) { setR('base_weight_g', y.g ?? null); if (y.g == null && Number(off.r.base_weight) > 0) setR('base_weight', null) }
+  // a typed portion weight makes the lot weight portion × portions (the editor leaves y.g empty): that value is WRITTEN, never emptied —
+  // an empty base_weight_g with an empty base_servings leaves FC05 with no yield at all (found 25/11 on SPAGHETTI FRESH PASTA)
+  const yg = y.g == null && Number(y.portion_g) > 0 && P > 0 ? Number(y.portion_g) * P : y.g
+  if (!numEq(yg, yb.g)) { setR('base_weight_g', yg ?? null); if (yg == null && Number(off.r.base_weight) > 0) setR('base_weight', null) }
   if (!numEq(y.portions, yb.portions)) {
     // MR-34 (Salmon Aioli 27/10): portions that FC05 already derives from the yield (394 g / 40 g = 9.85) are not written;
     // base_servings is a whole number in Brigade, so a fraction there would be rounded (9.85 → 10) and the read-back would differ
@@ -125,11 +128,22 @@ export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = un
     else setR('base_servings', y.portions ?? null)
   }
   if (txt(y.label) !== txt(yb.label)) setR('yield_text', y.label || '')
-  if (!numEq(y.count, yb.count) || txt(y.count_unit) !== txt(yb.count_unit)) {
+  const unitChanged = txt(y.count_unit) !== txt(yb.count_unit)
+  if (!numEq(y.count, yb.count) || unitChanged) {
     if (y.count != null && !(P > 0)) refusals.push({ code: 'porzioni_mancanti', msg: 'Pezzi per lotto senza il numero di porzioni' })
-    else { setR('serving_qty', y.count != null ? Number(y.count) / P : null); setR('serving_unit', y.count != null ? y.count_unit : off.r.serving_unit) }
+    else {
+      const sq = y.count != null ? Number(y.count) / P : null
+      if (!(sq != null && Math.abs(sq - Number(off.r.serving_qty)) < 1e-6)) setR('serving_qty', sq)      // 1 vs 0.9999…: the same number is not rewritten
+      // the word in the database is kept as it is (pezzi, pz, nests…): bots read these words differently, so only an explicit change of unit writes it
+      if (unitChanged) setR('serving_unit', y.count != null ? (y.unit_raw && E.normUnit(y.unit_raw) === y.count_unit ? y.unit_raw : y.count_unit) : off.r.serving_unit)
+    }
   }
   if (y.portion_g != null && !numEq(y.portion_g, off.r.serving_weight_g)) setR('serving_weight_g', y.portion_g)
+  // weight of ONE unit (nest, piece…): stored as the weight of one portion = unit weight × units per portion; written only when the Chef changed it
+  if (y.unit_g != null && !numEq(y.unit_g, yb.unit_g) && y.portion_g == null) {
+    const per = y.count != null && P > 0 ? Number(y.count) / P : Number(off.r.serving_qty) > 0 ? Number(off.r.serving_qty) : 1
+    setR('serving_weight_g', Math.round(Number(y.unit_g) * per * 1e4) / 1e4)
+  }
   // B-191: portion when sold as a POS modifier. undefined = the Chef did not touch it; null = taken away; 0–1 = the fraction. Only on a recipe linked to POS names.
   if (y.modifier !== undefined) {
     const mNew = y.modifier == null ? null : Number(y.modifier), mOld = off.r.modifier_portion_factor == null ? null : Number(off.r.modifier_portion_factor)
@@ -142,6 +156,9 @@ export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = un
   const rNew = Object.assign({}, off.r, recipe)
   const oy = officialYield(rNew, unitInfo), ry = E.resolveDoc(doc).yield || {}
   if (oy.conflict) refusals.push({ code: 'resa_in_conflitto', msg: oy.conflict })
+  // never leave FC05 with no yield where it read one before (25/11: a typed portion weight emptied base_weight_g; the Save only warned and wrote it)
+  { const ob = officialYield(off.r, unitInfo)
+    if ((ob.portions > 0 || ob.yield_qty > 0) && !(oy.portions > 0) && !(oy.yield_qty > 0)) refusals.push({ code: 'resa_azzerata', msg: `La resa letta da FC05 (${ob.portions ?? '—'} porzioni, ${ob.yield_qty ?? '—'} g) sparirebbe con questo Salva: non si scrive` }) }
   if (!numEq(oy.portions, y.portions ?? null) && !(y.portions == null && oy.portions == null)) refusals.push({ code: 'resa_letta_diversa', msg: `FC05 leggerebbe ${oy.portions ?? 'nessuna'} porzioni invece di ${y.portions ?? 'nessuna'}` })
   if (y.g != null && !(oy.yield_dim === 'mass' && Math.abs(oy.yield_qty - Number(y.g)) < 1e-6)) refusals.push({ code: 'resa_letta_diversa', msg: `FC05 leggerebbe una resa di ${oy.yield_qty ?? 'nessun'} ${oy.yield_dim === 'mass' ? 'g' : ''} invece di ${y.g} g` })
   for (const k of ['base_weight_g', 'base_servings', 'yield_text', 'serving_qty', 'serving_unit', 'serving_weight_g', 'base_weight'])

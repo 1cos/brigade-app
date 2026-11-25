@@ -111,10 +111,17 @@ function render(p) {
   h += edit ? `<h1 class="mr-title" contenteditable="true" data-mt="title" data-mred="1">${esc(doc.title)}</h1>` : `<h1 class="mr-title">${esc(I.dn(doc.title))}</h1>`;
   const parts = [];
   const pu = k => T('pu_' + (y.portion_unit || 'portion') + (k ? '1' : ''));      // what one portion is called: portion, cup, piece
-  if (edit) {      // R1.17 (Chef 21/10 "UN NUMERO"): expected yield + standard portion weight; the lot weight only when it is itself the standard
+  const ul = y.count_unit ? (y.unit_raw || y.count_unit) : null, ul1 = ul ? ul.replace(/s$/, '') : null       // 25/11 (Chef): the unit is written once, in the recipe — nests stay nests
+  if (edit && ul) {
+    parts.push(`<span class="mr-ylab">${T('y_expected')}</span> ${Q('y:c', Number(y.count) > 0 ? nf(y.count, 1) : '—', '')} <span class="mr-muted">${esc(ul)}</span>`);
+    parts.push(`<span class="mr-ylab">${T('y_unit_w', { u: esc(ul1) })}</span> ${Q('y:ug', Number(y.unit_g) > 0 ? nf(y.unit_g, 1) : '—', 'g')}`);
+    if (!(Number(y.unit_g) > 0)) parts.push(`<span class="mr-ylab">${T('y_lot_w')}</span> ${Q('y:g', Number(y.g) > 0 ? nf(y.g, 0) : '—', 'g')}`);
+  } else if (edit) {      // R1.17 (Chef 21/10 "UN NUMERO"): expected yield + standard portion weight; the lot weight only when it is itself the standard
     parts.push(`<span class="mr-ylab">${T('y_expected')}</span> ${Q('y:p', Number(y.portions) > 0 ? nf(y.portions, 1) : '—', '')} <select data-ms="pu" class="mr-sel">${['portion', 'cup', 'pz'].map(u => `<option value="${u}" ${(y.portion_unit || 'portion') === u ? 'selected' : ''}>${T('pu_' + u)}</option>`).join('')}</select>`);
     parts.push(`<span class="mr-ylab">${T('y_portion_w')}</span> ${Q('y:pg', Number(y.portion_g) > 0 ? nf(y.portion_g, 1) : '—', 'g')} <span class="mr-muted">${T('y_cooked')}</span>`);
     if (!(Number(y.portion_g) > 0)) parts.push(`<span class="mr-ylab">${T('y_lot_w')}</span> ${Q('y:g', Number(y.g) > 0 ? nf(y.g, 0) : '—', 'g')}`);
+  } else if (ul && Number(y.count) > 0) {
+    parts.push(`${Q('y:c', nf(y.count * f, 1), '')} ${esc(Math.abs(y.count * f - 1) < 1e-9 ? ul1 : ul)}${Number(y.unit_g) > 0 ? ` · <b>${nf(y.unit_g, 1)} g</b> ${T('y_each_cooked')}` : ''}`);
   } else {
     if (Number(y.portion_g) > 0 && Number(y.portions) > 0) parts.push(`${Q('y:p', nf(y.portions * f, 1), '')} ${Math.abs(y.portions * f - 1) < 1e-9 ? pu(1) : pu()} · <b>${nf(y.portion_g, 1)} g</b> ${T('y_each_cooked')}`);
     else {
@@ -769,6 +776,7 @@ function commit(b, text) {
   const edit = H.isChef() && p.edit && WORK[p.id];
   w.err = null;
   if (edit && key === 'y:g' && !(v > 0)) { WORK[p.id].yield.g = null; touch(p); H.render(true); return; }
+  if (edit && key === 'y:ug' && !(v > 0)) { delete WORK[p.id].yield.unit_g; touch(p); H.render(true); return; }
   if (edit && key === 'y:pg' && !(v > 0)) { delete WORK[p.id].yield.portion_g; touch(p); H.render(true); return; }
   if (key === 'rp') { ui(p.id).realP = v > 0 ? v : null; H.render(true); return; }   // weight is optional: empty or 0 removes it
   if (!(v > 0) || String(text).trim() === String(b.dataset.orig || '').trim()) { H.render(true); return; }      // a tap without a new number changes nothing
@@ -777,6 +785,10 @@ function commit(b, text) {
     if (key.startsWith('l:')) { const l = doc.lines.find(x => x.id === key.slice(2)); if (l) l.qty = v; }
     else if (key === 'y:g') { const k = E().normUnit(u) || 'g'; doc.yield.g = v * ({ kg: 1000, oz: 28.3495, lb: 453.592 }[k] || 1); }
     else if (key === 'y:p') doc.yield.portions = v;
+    else if (key === 'y:c' && doc.yield.count > 0 && doc.yield.portions > 0) {      // units per lot: the units per portion stay as they are, so the portions follow
+      const y = doc.yield, per = y.count / y.portions; y.count = v; y.portions = v / per
+      y.g = Number(y.unit_g) > 0 ? v * y.unit_g : null; delete y.portion_g }
+    else if (key === 'y:ug' && doc.yield.count > 0) { const y = doc.yield; y.unit_g = v; y.g = y.count * v; delete y.portion_g }       // weight of ONE unit; the lot weight follows (written, never emptied)
     else if (key === 'y:pg') { doc.yield.portion_g = v; doc.yield.g = null; }        // one number: the lot weight is derived (portions × portion weight)
     touch(p); H.render(true); return;
   }
@@ -786,6 +798,7 @@ function commit(b, text) {
     f = E().factorFromLine(doc, l.id, v, unit, ctx); ref = `${lineName(d, l).toLowerCase()} ${nf(v, 2)} ${b.dataset.intext ? (E().dimOf(l.unit) === 'c' ? 'pz' : l.unit) : u}`; }
   else if (key === 'y:g') { f = E().factorFromYield(doc, v, u || 'g'); ref = `${T('yield').toLowerCase()} ${nf(v, 2)} ${u || 'g'}`; }
   else if (key === 'y:p') { f = E().factorFromPortions(doc, v); ref = `${nf(v, 1)} ${T('portions')}`; }
+  else if (key === 'y:c' && Number(doc.yield && doc.yield.count) > 0) { f = v / Number(doc.yield.count); ref = `${nf(v, 1)} ${doc.yield.unit_raw || doc.yield.count_unit}`; }
   else if (key === 'y:l') { f = E().factorFromBatches(v); ref = `${nf(v, 2)} ${T('batches')}`; }
   else if (key === 'real') { w.prod.real = v * ({ kg: 1000 }[u] || 1); H.render(true); return; }
   else if (key.startsWith('act:')) { w.prod.used[key.slice(4)] = v; H.render(true); return; }

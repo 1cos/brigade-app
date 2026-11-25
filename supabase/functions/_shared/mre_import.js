@@ -90,7 +90,8 @@ export function buildLabDoc({ id, r, rows, stepRows, prepRows, y, byId, imported
     schema: 1, id, title: r.title, category: r.category || null,
     yield: Object.assign({ g: y.yield_dim === 'mass' && Number(y.yield_qty) > 0 ? Number(y.yield_qty) : null, portions: Number(y.portions) > 0 ? Number(y.portions) : null, label: r.yield_text || null },
       // pieces per lot when the portion is counted in pieces (e.g. 25 portions × 2 nests = 50 nests): same rule FC05 uses (serving_qty × portions)
-      dimOf(r.serving_unit) === 'c' && Number(r.serving_qty) > 0 && Number(y.portions) > 0 ? { count: Number(y.portions) * Number(r.serving_qty), count_unit: normUnit(r.serving_unit) } : {},
+      dimOf(r.serving_unit) === 'c' && Number(r.serving_qty) > 0 && Number(y.portions) > 0 ? { count: Number(y.portions) * Number(r.serving_qty), count_unit: normUnit(r.serving_unit), unit_raw: String(r.serving_unit),
+        ...(Number(r.serving_weight_g) > 0 ? { unit_g: Number(r.serving_weight_g) / Number(r.serving_qty) } : {}) } : {},      // the word as stored (nests, pezzi, pz…) and the weight of ONE unit = portion weight / units per portion
       // B-191: portion when sold as a POS modifier (½ of the normal portion): one number on the original recipe, empty = not a modifier side
       r.modifier_portion_factor != null && Number(r.modifier_portion_factor) > 0 ? { modifier: Number(r.modifier_portion_factor) } : {}),
     has_stock: prepRows.length > 0, stock: prepRows.map(p => ({ prep_task_id: p.id, name: p.name, unit: p.unit })),

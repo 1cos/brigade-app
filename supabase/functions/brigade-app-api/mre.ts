@@ -323,7 +323,7 @@ function cleanDoc(id: string, d: any) {
   // MR-78: a lot weight that disagrees with portions × portion weight is not an error for the Chef: what he typed (portions, portion weight) wins and the lot weight is derived (no hidden number blocks the save)
   const yg = (num(y.portion_g) && num(y.portions) && num(y.g) && Math.abs(num(y.portion_g)! * num(y.portions)! - num(y.g)!) > 0.02 * num(y.g)!) ? null : num(y.g)
   return { schema: 1, id, title: str(d.title, 200) || '', category: str(d.category, 100), yield: { g: yg, portions: num(y.portions), label: str(y.label, 120), count: num(y.count), count_unit: str(y.count_unit, 20),
-      ...(num(y.portion_g) ? { portion_g: num(y.portion_g) } : {}), ...(y.portion_unit ? { portion_unit: str(y.portion_unit, 20) } : {}), ...(hist.length ? { label_hist: hist } : {}),
+      ...(num(y.portion_g) ? { portion_g: num(y.portion_g) } : {}), ...(y.unit_raw ? { unit_raw: str(y.unit_raw, 20) } : {}), ...(num(y.unit_g) ? { unit_g: num(y.unit_g) } : {}), ...(y.portion_unit ? { portion_unit: str(y.portion_unit, 20) } : {}), ...(hist.length ? { label_hist: hist } : {}),
       ...(y.modifier === null ? { modifier: null } : Number(y.modifier) > 0 && Number(y.modifier) <= 1 ? { modifier: Number(y.modifier) } : {}) },       // B-191: portion sold as a POS modifier (0–1); null = taken away
     has_stock: !!d.has_stock, stock: Array.isArray(d.stock) ? d.stock.slice(0, 10) : [], lines, steps, notes: str(d.notes, 4000) }
 }
