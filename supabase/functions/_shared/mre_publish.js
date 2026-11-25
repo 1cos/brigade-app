@@ -115,11 +115,8 @@ export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = un
   // ---- yield → recipes fields (FC05 reads them through food_cost.recipe_yield)
   const y = doc.yield || {}, yb = base.yield || {}
   if (y.portion_unit) refusals.push({ code: 'unita_porzione_non_pubblicabile', msg: `Porzione in «${y.portion_unit}»: oggi bot e FC05 non leggono un'unità di porzione; serve un passo a parte` })
-  // a typed portion weight makes the lot weight portion × portions (the editor leaves y.g empty): that value is WRITTEN, never emptied —
-  // an empty base_weight_g with an empty base_servings leaves FC05 with no yield at all (found 25/11 on SPAGHETTI FRESH PASTA)
-  // the same portion weight again (nothing typed) leaves the lot as it is: a real lot weight (Meatballs 9012 g) is never replaced by a calculated one (9000 g)
-  const pgSame = y.portion_g != null && numEq(y.portion_g, off.r.serving_weight_g)
-  const yg = y.g == null && Number(y.portion_g) > 0 && P > 0 ? (pgSame ? yb.g : Number(y.portion_g) * P) : y.g
+  // lot weight, units and weight of one unit are three free numbers (Max 25/11): none is derived from another and none is checked against another
+  const yg = y.g
   if (!numEq(yg, yb.g)) { setR('base_weight_g', yg ?? null); if (yg == null && Number(off.r.base_weight) > 0) setR('base_weight', null) }
   if (!numEq(y.portions, yb.portions)) {
     // MR-34 (Salmon Aioli 27/10): portions that FC05 already derives from the yield (394 g / 40 g = 9.85) are not written;
@@ -146,6 +143,8 @@ export function planPublish({ id, doc, off, facts = {}, byId = {}, unitInfo = un
     const per = y.count != null && P > 0 ? Number(y.count) / P : Number(off.r.serving_qty) > 0 ? Number(off.r.serving_qty) : 1
     setR('serving_weight_g', Math.round(Number(y.unit_g) * per * 1e4) / 1e4)
   }
+  // the unit weight changes while nobody wrote the number of portions: FC05 would derive it from lot ÷ weight (3500 ÷ 80) and move it. The number the Chef sees is written, so nobody divides.
+  if ((y.unit_g != null && !numEq(y.unit_g, yb.unit_g) || y.portion_g != null && !numEq(y.portion_g, off.r.serving_weight_g)) && !(Number(off.r.base_servings) > 0) && Number.isInteger(Number(y.portions)) && Number(y.portions) > 0) setR('base_servings', y.portions)
   // B-191: portion when sold as a POS modifier. undefined = the Chef did not touch it; null = taken away; 0–1 = the fraction. Only on a recipe linked to POS names.
   if (y.modifier !== undefined) {
     const mNew = y.modifier == null ? null : Number(y.modifier), mOld = off.r.modifier_portion_factor == null ? null : Number(off.r.modifier_portion_factor)

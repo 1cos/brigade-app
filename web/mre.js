@@ -786,10 +786,9 @@ function commit(b, text) {
     else if (key === 'y:g') { const k = E().normUnit(u) || 'g'; doc.yield.g = v * ({ kg: 1000, oz: 28.3495, lb: 453.592 }[k] || 1); }
     else if (key === 'y:p') doc.yield.portions = v;
     else if (key === 'y:c' && doc.yield.count > 0 && doc.yield.portions > 0) {      // units per lot: the units per portion stay as they are, so the portions follow
-      const y = doc.yield, per = y.count / y.portions; y.count = v; y.portions = v / per
-      y.g = Number(y.unit_g) > 0 ? v * y.unit_g : null; delete y.portion_g }
-    else if (key === 'y:ug' && doc.yield.count > 0) { const y = doc.yield; y.unit_g = v; y.g = y.count * v; delete y.portion_g }       // weight of ONE unit; the lot weight follows (written, never emptied)
-    else if (key === 'y:pg') { doc.yield.portion_g = v; doc.yield.g = null; }        // one number: the lot weight is derived (portions × portion weight)
+      const y = doc.yield, per = y.count / y.portions; y.count = v; y.portions = v / per }       // the lot weight is not touched: units, unit weight and lot weight are three free numbers
+    else if (key === 'y:ug' && doc.yield.count > 0) doc.yield.unit_g = v       // weight of ONE unit: free, the lot weight does not follow
+    else if (key === 'y:pg') doc.yield.portion_g = v        // free: the lot weight is not derived from it
     touch(p); H.render(true); return;
   }
   const doc = shownDoc(d, p), ctx = ctxFor(d, p.id, doc, PREVIEW);
